@@ -1,7 +1,7 @@
 """
 Work Engagement Analysis Dashboard
 ===================================
-Streamlit Cloud対応のインタラクティブダッシュボード
+Work Engagement Streamlit Cloud対応インタラクティブダッシュボード
 """
 
 import streamlit as st
@@ -56,6 +56,10 @@ PLOTLY_CHART_KWARGS = (
     else {"use_container_width": True}
 )
 
+RADAR_CHART_CONFIG = {
+    "modeBarButtonsToAdd": ["resetCameraDefault"]
+}
+
 DATAFRAME_KWARGS = (
     {"width": "stretch"}
     if "width" in inspect.signature(st.dataframe).parameters
@@ -63,7 +67,7 @@ DATAFRAME_KWARGS = (
 )
 
 METRIC_LABELS = {
-    'engagement_rating': 'エンゲージメント',
+    'engagement_rating': 'ワーク･エンゲージメント',
     'vigor_rating': '活力 (Vigor)',
     'dedication_rating': '熱意 (Dedication)',
     'absorption_rating': '没頭 (Absorption)'
@@ -118,7 +122,7 @@ def get_category_order_for_values(order_key, values):
 
 GROUPING_LABEL_MAP = {
     'なし': 'なし',
-    'department': '部別',
+    'department': '部署別',
     'group': '課別',
     'team': 'チーム別',
     'project': 'プロジェクト別',
@@ -138,7 +142,7 @@ def render_department_and_group_controls(
     col1, col2 = st.columns(2)
     with col1:
         dept_choice = st.selectbox(
-            "部を選択",
+            "部署",
             dept_choices,
             key=f"{tab_key}_department_select"
         )
@@ -150,7 +154,7 @@ def render_department_and_group_controls(
     if grouping_options:
         with col2:
             grouping_choice = st.selectbox(
-                "グループ化",
+                "グルーピング",
                 grouping_options,
                 format_func=format_func,
                 key=f"{tab_key}_grouping_select"
@@ -160,7 +164,7 @@ def render_department_and_group_controls(
 
 @st.cache_data
 def load_data(uploaded_file):
-    """新フォーマット(workengagement.xlsx)の読み込みと整形"""
+    """データファイルの読み込みと整形"""
     raw_df = pd.read_excel(uploaded_file, sheet_name='rating')
     required_cols = {'year', 'month', 'mail_address', 'name', 'factor', 'rating'}
     missing_cols = required_cols - set(raw_df.columns)
@@ -171,7 +175,7 @@ def load_data(uploaded_file):
     df['year'] = pd.to_numeric(df['year'], errors='coerce')
     df['month'] = pd.to_numeric(df['month'], errors='coerce')
     if df['year'].isna().any() or df['month'].isna().any():
-        raise ValueError("year/月の値に欠損が存在します。")
+        raise ValueError("year/monthの値に欠損が存在します。")
     df['year'] = df['year'].astype(int)
     df['month'] = df['month'].astype(int)
 
@@ -281,7 +285,7 @@ def create_time_series_chart(df, y_col, title, color_by=None):
 
 
 def create_recent_group_comparison_chart(df, metric, group_col, range_label=None):
-    """選択したグループ軸ごとの期間内データ比較バー"""
+    """選択したグループ軸ごとの期間内データ比較棒グラフ"""
     working_df = df.dropna(subset=[group_col, 'year_month_dt']).copy()
     if working_df.empty:
         fig = go.Figure()
@@ -317,7 +321,7 @@ def create_recent_group_comparison_chart(df, metric, group_col, range_label=None
 
     group_labels = {
         'section': '部門',
-        'department': '部',
+        'department': '部署',
         'group': '課',
         'team': 'チーム',
         'project': 'プロジェクト',
@@ -352,7 +356,7 @@ def create_recent_group_comparison_chart(df, metric, group_col, range_label=None
     fig.update_layout(
         xaxis_title=group_labels.get(group_col, group_col),
         yaxis_title=METRIC_LABELS.get(metric, metric),
-        legend_title='年月',
+        legend_title='年-月',
         height=480,
         bargap=0.25
     )
@@ -398,7 +402,7 @@ def create_box_plot(df, x_col, y_col, title):
 
 
 def create_group_rating_distribution(df, group_col, metric_col, range_label=None):
-    """グループ別の評価バンド構成（選択期間内）"""
+    """グループ別の評価バンド構成"""
     working = df.dropna(subset=[group_col, metric_col, 'year_month_dt']).copy()
     if working.empty:
         fig = go.Figure()
@@ -473,6 +477,7 @@ def create_group_rating_distribution(df, group_col, metric_col, range_label=None
         )
         .fillna({'count': 0})
     )
+    counts['count'] = counts['count'].astype(int)
     totals = counts.groupby([group_col, 'year_month_dt'])['count'].transform('sum')
     totals = totals.replace(0, np.nan)
     counts['ratio'] = (counts['count'] / totals * 100).fillna(0)
@@ -492,9 +497,11 @@ def create_group_rating_distribution(df, group_col, metric_col, range_label=None
             key = f"{grp}__{month_dt.strftime('%Y-%m')}"
             category_keys.append(key)
             tickvals.append(key)
-            month_num = str(int(month_dt.strftime('%m')))
-            label = month_num if idx_month > 0 else f"{month_num}\n{grp}"
-            ticktext.append(label)
+            month_text = month_dt.strftime('%Y-%m')
+            if idx_month == 0:
+                ticktext.append(f"{month_text}\n{grp}")
+            else:
+                ticktext.append(month_text)
         if idx_group != len(group_sequence) - 1:
             gap_key = f"{grp}__gap"
             category_keys.append(gap_key)
@@ -521,12 +528,13 @@ def create_group_rating_distribution(df, group_col, metric_col, range_label=None
 
     group_labels = {
         'section': '部門',
-        'department': '部',
+        'department': '部署',
         'group': '課',
         'team': 'チーム',
         'project': 'プロジェクト',
         'grade': '職位'
     }
+    grouping_label = GROUPING_LABEL_MAP.get(group_col, group_labels.get(group_col, group_col))
 
     title_text = f"{group_labels.get(group_col, group_col)}別 {METRIC_LABELS.get(metric_col, metric_col)}"
     if range_label:
@@ -548,47 +556,24 @@ def create_group_rating_distribution(df, group_col, metric_col, range_label=None
             '高い': '#5cb85c'
         },
         title=title_text,
-        custom_data=[group_col, 'month_label', 'rating_band']
+        custom_data=[group_col, 'month_label', 'rating_band', 'count']
     )
     fig.update_layout(
-        xaxis_title=group_labels.get(group_col, group_col),
+        xaxis_title=f"年月 {grouping_label}",
         yaxis_title='構成比 (%)',
         height=500,
-        legend_title='レベル'
+        legend_title='評価'
     )
     if tickvals:
         fig.update_xaxes(tickmode='array', tickvals=tickvals, ticktext=ticktext)
-    fig.update_yaxes(range=[0, 100], ticksuffix='%')
+    fig.update_yaxes(range=[0, 100], ticksuffix='%', dtick=10)
     fig.update_traces(
+        opacity=0.8,
         hovertemplate=(
             f"{group_labels.get(group_col, group_col)}: %{{customdata[0]}}<br>"
             "年月: %{customdata[1]}<br>"
-            "レベル: %{customdata[2]}<br>"
-            "構成比: %{y:.1f}%<extra></extra>"
-        )
-    )
-    return fig
-
-
-def create_scatter_plot(df, x_col, y_col, color_by, title):
-    """散布図の作成"""
-    x_label = METRIC_LABELS.get(x_col, x_col)
-    y_label = METRIC_LABELS.get(y_col, y_col)
-    fig = px.scatter(
-        df, 
-        x=x_col, 
-        y=y_col, 
-        color=color_by if color_by != 'なし' else None,
-        title=title,
-        opacity=0.6,
-        trendline='ols' if color_by == 'なし' else None
-    )
-    fig.update_layout(height=450)
-    fig.update_yaxes(range=[0, RATING_AXIS_MAX], dtick=1)
-    fig.update_traces(
-        hovertemplate=(
-            f"{x_label}: %{{x:.1f}}<br>"
-            f"{y_label}: %{{y:.1f}}<extra></extra>"
+            "評価: %{customdata[2]}<br>"
+            "件数: %{customdata[3]:.0f}人<extra></extra>"
         )
     )
     return fig
@@ -601,6 +586,7 @@ def create_radar_chart(df, group_col, title):
     grouped = df.groupby(group_col)[categories].mean()
     
     fig = go.Figure()
+    theta_labels = ['活力', '熱意', '没頭', '活力']
     
     for group_name in grouped.index:
         values = grouped.loc[group_name].tolist()
@@ -608,15 +594,21 @@ def create_radar_chart(df, group_col, title):
         
         fig.add_trace(go.Scatterpolar(
             r=values,
-            theta=['活力', '熱意', '没頭', '活力'],
+            theta=theta_labels,
             name=str(group_name),
-            fill='toself',
-            opacity=0.6,
+            mode='lines',
+            line=dict(width=3),
             hovertemplate='%{theta}: %{r:.1f}<extra></extra>'
         ))
     
     fig.update_layout(
-        polar=dict(radialaxis=dict(visible=True, range=[0, 18])),
+        polar=dict(
+            radialaxis=dict(
+                visible=True,
+                range=[0, 10],
+                dtick=1
+            )
+        ),
         title=title,
         height=500
     )
@@ -666,7 +658,7 @@ def create_individual_trend(df, individual_name):
         ))
     
     fig.update_layout(
-        title=f'{individual_name} のエンゲージメント推移',
+        title=f'{individual_name} のワーク･エンゲージメント推移',
         barmode='overlay',
         height=480,
         yaxis=dict(range=[0, RATING_AXIS_MAX], title='Score', dtick=1),
@@ -676,9 +668,9 @@ def create_individual_trend(df, individual_name):
     if 0 < len(unique_dates) <= 6:
         tickvals = [pd.Timestamp(val) for val in unique_dates]
         ticktext = [val.strftime('%Y-%m') for val in unique_dates]
-        fig.update_xaxes(tickmode='array', tickvals=tickvals, ticktext=ticktext, title='年月')
+        fig.update_xaxes(tickmode='array', tickvals=tickvals, ticktext=ticktext, title='年-月')
     else:
-        fig.update_xaxes(tickformat="%Y-%m", title='年月')
+        fig.update_xaxes(tickformat="%Y-%m", title='年-月')
     fig.update_yaxes(dtick=1)
     return fig
 
@@ -688,14 +680,14 @@ def create_individual_trend(df, individual_name):
 # =============================================================================
 
 st.markdown('<p class="main-header">📊 Work Engagement Analysis Dashboard</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-header">UWES-9ベースのワーク・エンゲージメント分析ツール</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-header">ワーク・エンゲージメント分析レポート</p>', unsafe_allow_html=True)
 
 # サイドバー: ファイルアップロード
 st.sidebar.header("📁 データアップロード")
 uploaded_file = st.sidebar.file_uploader(
-    "Excelファイルをアップロード",
+    "データファイルをアップロード",
     type=['xlsx', 'xls'],
-    help="workengagement.xlsx形式の'rating'シートを含むExcelファイルをアップロードしてください"
+    help="ワーク･エンゲージメント・データのExcelファイルをアップロードしてください"
 )
 
 if uploaded_file is not None:
@@ -744,7 +736,7 @@ if uploaded_file is not None:
 
     metric_keys = list(METRIC_LABELS.keys())
     selected_metric = st.sidebar.selectbox(
-        "指標",
+        "表示指標",
         metric_keys,
         format_func=lambda x: METRIC_LABELS.get(x, x),
         key="global_metric_select"
@@ -767,7 +759,7 @@ if uploaded_file is not None:
     
     department_options = get_options(filtered_df['department'], remove_unset=True, order_key='department')
     selected_departments = st.sidebar.multiselect(
-        "部",
+        "部署",
         department_options,
         default=department_options,
         key="filter_departments"
@@ -815,7 +807,7 @@ if uploaded_file is not None:
     if selected_grades:
         filtered_df = filtered_df[filtered_df['grade'].isin(selected_grades)]
     
-    st.sidebar.info(f"📅 期間: {selected_period_label}\n📊 フィルター後: {len(filtered_df):,}件 / {len(df):,}件")
+    st.sidebar.info(f"期間: {selected_period_label}\n有効データ: {len(filtered_df):,}件 / {len(df):,}件")
     
     tab_labels = [
         "時系列",
@@ -826,7 +818,7 @@ if uploaded_file is not None:
         "データ"
     ]
     selected_tab = st.radio(
-        "表示メニュー",
+        "レポート種別",
         tab_labels,
         horizontal=True,
         index=0,
@@ -834,7 +826,7 @@ if uploaded_file is not None:
     )
 
     if selected_tab == "時系列":
-        st.subheader("時系列トレンド分析")
+        st.subheader("時系列トレンド")
         
         ts_df, _, ts_group_choice = render_department_and_group_controls(
             filtered_df,
@@ -847,7 +839,7 @@ if uploaded_file is not None:
             fig = create_time_series_chart(
                 ts_df, 
                 selected_metric, 
-                f'{METRIC_LABELS.get(selected_metric, selected_metric)} の推移',
+                f'{METRIC_LABELS.get(selected_metric, selected_metric)}推移',
                 ts_group_choice if ts_group_choice != 'なし' else None
             )
             st.plotly_chart(fig, **PLOTLY_CHART_KWARGS)
@@ -857,31 +849,31 @@ if uploaded_file is not None:
         
         with col1:
             st.metric(
-                "エンゲージメント平均",
+                "ワーク･エンゲージメント 平均値",
                 f"{ts_df['engagement_rating'].mean():.1f}" if not ts_df.empty else "N/A",
                 f"SD: {ts_df['engagement_rating'].std():.1f}" if not ts_df.empty else "N/A"
             )
         with col2:
             st.metric(
-                "活力平均",
+                "活力 平均値",
                 f"{ts_df['vigor_rating'].mean():.1f}" if not ts_df.empty else "N/A",
                 f"SD: {ts_df['vigor_rating'].std():.1f}" if not ts_df.empty else "N/A"
             )
         with col3:
             st.metric(
-                "熱意平均",
+                "熱意 平均値",
                 f"{ts_df['dedication_rating'].mean():.1f}" if not ts_df.empty else "N/A",
                 f"SD: {ts_df['dedication_rating'].std():.1f}" if not ts_df.empty else "N/A"
             )
         with col4:
             st.metric(
-                "没頭平均",
+                "没頭 平均値",
                 f"{ts_df['absorption_rating'].mean():.1f}" if not ts_df.empty else "N/A",
                 f"SD: {ts_df['absorption_rating'].std():.1f}" if not ts_df.empty else "N/A"
             )
 
     elif selected_tab == "グループ比較":
-        st.subheader("グループ比較（期間内）")
+        st.subheader("グループ比較")
         comparison_df, _, comparison_group = render_department_and_group_controls(
             filtered_df,
             "group_comparison",
@@ -921,7 +913,7 @@ if uploaded_file is not None:
                     clean_df,
                     dist_group,
                     selected_metric,
-                    f'{METRIC_LABELS.get(selected_metric, selected_metric)} の {GROUPING_LABEL_MAP.get(dist_group, dist_group)} 別分布'
+                    f'{METRIC_LABELS.get(selected_metric, selected_metric)} {GROUPING_LABEL_MAP.get(dist_group, dist_group)}分布'
                 )
                 st.plotly_chart(fig_box, **PLOTLY_CHART_KWARGS)
             
@@ -929,7 +921,7 @@ if uploaded_file is not None:
                 dist_df,
                 x=selected_metric,
                 nbins=30,
-                title=f'{METRIC_LABELS.get(selected_metric, selected_metric)} の分布',
+                title=f'{METRIC_LABELS.get(selected_metric, selected_metric)}の分布',
                 marginal='box'
             )
             fig_hist.update_traces(
@@ -943,26 +935,26 @@ if uploaded_file is not None:
             st.plotly_chart(fig_hist, **PLOTLY_CHART_KWARGS)
 
     elif selected_tab == "評価":
-        st.subheader("比較分析")
+        st.subheader("評価別")
         
         evaluation_df, _, evaluation_group = render_department_and_group_controls(
             filtered_df,
             "evaluation",
-            grouping_options=['なし', 'department', 'group', 'team', 'project', 'grade']
+            grouping_options=['department', 'group', 'team', 'project', 'grade']
         )
         if evaluation_df.empty:
             st.info("選択された条件に該当するデータがありません。")
         else:
             analysis_type = st.radio(
-                "分析タイプ",
-                ['ヒートマップ', 'レーダーチャート', '散布図'],
+                "レポートタイプ",
+                ['評価別比率', 'レーダーチャート'],
                 horizontal=True,
                 key='analysis_type_selector'
             )
             
-            if analysis_type == 'ヒートマップ':
-                if not evaluation_group or evaluation_group == 'なし':
-                    st.info("ヒートマップにはグループ化を選択してください。")
+            if analysis_type == '評価別比率':
+                if not evaluation_group:
+                    st.info("グルーピングを選択してください。")
                 else:
                     fig_heat = create_group_rating_distribution(
                         evaluation_df,
@@ -973,42 +965,23 @@ if uploaded_file is not None:
                     st.plotly_chart(fig_heat, **PLOTLY_CHART_KWARGS)
             
             elif analysis_type == 'レーダーチャート':
-                if not evaluation_group or evaluation_group == 'なし':
-                    st.info("レーダーチャートにはグループ化を選択してください。")
+                if not evaluation_group:
+                    st.info("グルーピングを選択してください。")
                 else:
                     fig_radar = create_radar_chart(
                         evaluation_df.dropna(subset=[evaluation_group]),
                         evaluation_group,
-                        f'{GROUPING_LABEL_MAP.get(evaluation_group, evaluation_group)} 別エンゲージメント構成要素'
+                        f'{GROUPING_LABEL_MAP.get(evaluation_group, evaluation_group)}別ワーク･エンゲージメント構成要素'
                     )
-                    st.plotly_chart(fig_radar, **PLOTLY_CHART_KWARGS)
+                    st.plotly_chart(
+                        fig_radar,
+                        config=RADAR_CHART_CONFIG,
+                        **PLOTLY_CHART_KWARGS
+                    )
             
-            else:
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    scatter_x = st.selectbox(
-                        "X軸",
-                        ['vigor_rating', 'dedication_rating', 'absorption_rating'],
-                        index=0
-                    )
-                with col2:
-                    scatter_y = st.selectbox(
-                        "Y軸",
-                        ['vigor_rating', 'dedication_rating', 'absorption_rating'],
-                        index=1
-                    )
-                color_choice = evaluation_group if evaluation_group != 'なし' else 'なし'
-                fig_scatter = create_scatter_plot(
-                    evaluation_df,
-                    scatter_x,
-                    scatter_y,
-                    color_choice,
-                    f'{scatter_x} vs {scatter_y}'
-                )
-                st.plotly_chart(fig_scatter, **PLOTLY_CHART_KWARGS)
 
     elif selected_tab == "個人":
-        st.subheader("個人別エンゲージメント推移")
+        st.subheader("個人別推移")
         
         individual_df, _, individual_group_choice = render_department_and_group_controls(
             filtered_df,
@@ -1023,7 +996,7 @@ if uploaded_file is not None:
                 value_options = get_options(individual_df[individual_group_choice], order_key=individual_group_choice)
                 value_choices = ['すべて'] + value_options if value_options else ['すべて']
                 group_value_choice = st.selectbox(
-                    f"{GROUPING_LABEL_MAP.get(individual_group_choice, individual_group_choice)} を選択",
+                    f"{GROUPING_LABEL_MAP.get(individual_group_choice, individual_group_choice)}を選択",
                     value_choices,
                     key='individual_group_value'
                 )
@@ -1035,7 +1008,7 @@ if uploaded_file is not None:
             else:
                 individuals = sorted(individual_df['name'].dropna().unique().tolist())
                 selected_individual = st.selectbox(
-                    "対象者を選択",
+                    "表示対象者を選択",
                     individuals,
                     key='individual_selector'
                 )
@@ -1045,7 +1018,7 @@ if uploaded_file is not None:
                     st.plotly_chart(fig_ind, **PLOTLY_CHART_KWARGS)
                     
                     ind_data = individual_df[individual_df['name'] == selected_individual]
-                    st.subheader(f"{selected_individual} の統計サマリー")
+                    st.subheader(f"{selected_individual}の統計サマリー")
                     
                     col1, col2 = st.columns(2)
                     with col1:
@@ -1058,13 +1031,13 @@ if uploaded_file is not None:
                             last = ind_data.iloc[-1]['engagement_rating']
                             change = ((last - first) / first * 100) if first != 0 else 0
                             st.metric(
-                                "エンゲージメント変化率",
+                                "ワーク･エンゲージメント変化率",
                                 f"{change:+.1f}%",
                                 f"初回: {first:.1f} → 最新: {last:.1f}"
                             )
 
     elif selected_tab == "データ":
-        st.subheader("フィルター済みデータ")
+        st.subheader("フィルター後データ")
         
         display_cols = st.multiselect(
             "表示するカラム",
@@ -1105,25 +1078,17 @@ if uploaded_file is not None:
 
 else:
     # ファイル未アップロード時のガイダンス
-    st.info("👈 サイドバーからExcelファイルをアップロードしてください")
+    st.info("サイドバーからデータファイルをアップロードしてください")
     
     st.markdown("""
     ### 使い方
     
-    1. **データアップロード**: workengagement.xlsx形式の`rating`シートを含むExcelファイルをアップロード
-    2. **フィルター設定**: サイドバーで期間・組織などを絞り込み
-    3. **分析タブ選択**: 時系列、分布、比較、個人分析から選択
+    1. **データアップロード**: ワーク･エンゲージメントのデータファイル（Excel）をアップロード
+    2. **フィルター設定**: サイドバーで表示対象データの期間・組織などを絞り込み
+    3. **表示タブ選択**: 時系列、グループ比較、分布分析、評価別、個人別の表示分類を選択
     4. **インタラクティブ操作**: グラフ上でズーム、ホバー、凡例クリックなど
-    
-    ### 必要なデータ形式
-    
-    `rating`シートは、UWES各因子を1行ずつ格納したworkengagement.xlsx形式です。主なカラム:
-    - `year`, `month`: 時間情報
-    - `name`, `mail_address`: 個人識別
-    - `current_division`, `current_department`, `current_section`, `current_team`, `current_project`, `grade`: 組織属性
-    - `factor`, `rating`: 因子名（エンゲージメント/活力/熱意/没頭）とスコア
     """)
 
 # フッター
 st.sidebar.markdown("---")
-st.sidebar.markdown("Built with Streamlit & Plotly")
+st.sidebar.markdown("©RDPi Corposation")
