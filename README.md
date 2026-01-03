@@ -60,7 +60,9 @@ streamlit run app.py
 
 ## データ形式
 
-アップロードするExcelファイルは**workengagement.xlsx形式**（`rating`シート）を想定しています。1人×1回の回答につきUWES各因子（エンゲージメント/活力/熱意/没頭）が1行ずつ並ぶロング形式です。アプリ側で自動的にピボットし、従来の列構造に変換します。
+アップロードするExcelファイルは**EngagementMasterSS.xlsx形式**（`rating`シート）を想定しています。1人×1回の回答につきUWES各因子（エンゲージメント/活力/熱意/没頭）が1行ずつ並ぶロング形式です。アプリ側で自動的にピボットし、従来の列構造に変換します。
+
+**デフォルトファイル**: ファイルをアップロードしない場合、プロジェクトルートに`EngagementMasterSS.xlsx`が存在すれば自動的に読み込まれます。
 
 ### 必須カラム
 
@@ -77,7 +79,7 @@ streamlit run app.py
 | current_project | str | プロジェクト |
 | grade | str | 職位 |
 | factor | str | 指標名（エンゲージメント/活力/熱意/没頭） |
-| rating | float | 上記factorに対応するスコア |
+| score | float | 上記factorに対応するスコア |
 
 ## 技術スタック
 

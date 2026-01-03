@@ -12,6 +12,7 @@ from plotly.colors import sample_colorscale
 import numpy as np
 import inspect
 import json
+import os
 from pathlib import Path
 
 # ページ設定
@@ -166,7 +167,7 @@ def render_department_and_group_controls(
 def load_data(uploaded_file):
     """データファイルの読み込みと整形"""
     raw_df = pd.read_excel(uploaded_file, sheet_name='rating')
-    required_cols = {'year', 'month', 'mail_address', 'name', 'factor', 'rating'}
+    required_cols = {'year', 'month', 'mail_address', 'name', 'factor', 'score'}
     missing_cols = required_cols - set(raw_df.columns)
     if missing_cols:
         raise ValueError(f"必要なカラムが不足しています: {', '.join(sorted(missing_cols))}")
@@ -210,8 +211,8 @@ def load_data(uploaded_file):
 
     id_cols = ['year', 'month', 'mail_address', 'name', 'section', 'department', 'team', 'group', 'project', 'grade']
     pivot_df = (
-        df[id_cols + ['metric', 'rating']]
-        .pivot_table(index=id_cols, columns='metric', values='rating', aggfunc='mean')
+        df[id_cols + ['metric', 'score']]
+        .pivot_table(index=id_cols, columns='metric', values='score', aggfunc='mean')
         .reset_index()
     )
     pivot_df.columns.name = None
@@ -238,13 +239,19 @@ def create_time_series_chart(df, y_col, title, color_by=None):
         # グループ別の月次平均
         grouped = df.groupby(['year_month', color_by])[y_col].mean().reset_index()
         grouped['year_month_dt'] = pd.to_datetime(grouped['year_month'], format='%Y-%m', errors='coerce')
+
+        # カテゴリ順序の設定
+        color_values = grouped[color_by].unique().tolist()
+        color_order = get_category_order_for_values(color_by, color_values)
+
         fig = px.line(
-            grouped, 
-            x='year_month_dt', 
-            y=y_col, 
+            grouped,
+            x='year_month_dt',
+            y=y_col,
             color=color_by,
             title=title,
-            markers=True
+            markers=True,
+            category_orders={color_by: color_order}
         )
     else:
         # 全体の月次平均
@@ -582,13 +589,17 @@ def create_group_rating_distribution(df, group_col, metric_col, range_label=None
 def create_radar_chart(df, group_col, title):
     """レーダーチャートの作成"""
     categories = ['vigor_rating', 'dedication_rating', 'absorption_rating']
-    
+
     grouped = df.groupby(group_col)[categories].mean()
-    
+
+    # グループの順序を設定
+    group_values = grouped.index.tolist()
+    group_order = get_category_order_for_values(group_col, group_values)
+
     fig = go.Figure()
     theta_labels = ['活力', '熱意', '没頭', '活力']
-    
-    for group_name in grouped.index:
+
+    for group_name in group_order:
         values = grouped.loc[group_name].tolist()
         values.append(values[0])  # 閉じるため
         
@@ -690,6 +701,12 @@ uploaded_file = st.sidebar.file_uploader(
     help="ワーク･エンゲージメント・データのExcelファイルをアップロードしてください"
 )
 
+# デフォルトファイルの使用
+default_file_path = "EngagementMasterSS.xlsx"
+if uploaded_file is None and os.path.exists(default_file_path):
+    uploaded_file = default_file_path
+    st.sidebar.info(f"📋 デフォルトファイルを使用: {default_file_path}")
+
 if uploaded_file is not None:
     # データ読み込み
     try:
@@ -767,7 +784,7 @@ if uploaded_file is not None:
     if selected_departments:
         filtered_df = filtered_df[filtered_df['department'].isin(selected_departments)]
     
-    group_options = get_options(filtered_df['group'], remove_unset=True, order_key='group')
+    group_options = get_options(filtered_df['group'], remove_unset=False, order_key='group')
     selected_groups = st.sidebar.multiselect(
         "課",
         group_options,
