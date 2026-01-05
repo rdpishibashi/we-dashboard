@@ -121,13 +121,47 @@ def get_category_order_for_values(order_key, values):
     return sort_with_config(values, resolved_key)
 
 
+def sort_names_by_grade(names, reference_df):
+    """Sort individual names based on grade order, fallback to alphabetical."""
+    if not names:
+        return names
+    if reference_df is None or 'name' not in reference_df.columns or 'grade' not in reference_df.columns:
+        return sorted(names)
+    working = reference_df[['name', 'grade']].dropna(subset=['name']).copy()
+    if working.empty:
+        return sorted(names)
+    working['grade'] = working['grade'].fillna('未設定').astype(str)
+    grade_values = working['grade'].unique().tolist()
+    grade_order = get_category_order_for_values('grade', grade_values)
+    grade_rank = {grade: idx for idx, grade in enumerate(grade_order)}
+    if not grade_rank:
+        return sorted(names)
+    working['rank'] = working['grade'].map(lambda g: grade_rank.get(g, len(grade_rank)))
+    name_rank = (
+        working.groupby('name')['rank']
+        .min()
+        .to_dict()
+    )
+    deduped_names = list(dict.fromkeys(names))
+    default_rank = len(grade_rank)
+    return sorted(deduped_names, key=lambda name: (name_rank.get(name, default_rank), str(name)))
+
+
+def get_category_order_with_reference(order_key, values, reference_df):
+    if order_key == 'name':
+        return sort_names_by_grade(values, reference_df)
+    return get_category_order_for_values(order_key, values)
+
+
 GROUPING_LABEL_MAP = {
     'なし': 'なし',
     'department': '部署別',
     'group': '課別',
+    'section': '部門別',
     'team': 'チーム別',
     'project': 'プロジェクト別',
-    'grade': '職位別'
+    'grade': '職位別',
+    'name': '個人別'
 }
 
 
@@ -139,8 +173,8 @@ def render_department_and_group_controls(
     dept_options = get_options(df['department'], remove_unset=True, order_key='department')
     dept_choices = ['すべて'] + dept_options if dept_options else ['すべて']
     filtered = df.copy()
-    
-    col1, col2 = st.columns(2)
+
+    col1, col2, col3 = st.columns(3)
     with col1:
         dept_choice = st.selectbox(
             "部署",
@@ -149,18 +183,41 @@ def render_department_and_group_controls(
         )
     if dept_choice != 'すべて':
         filtered = filtered[filtered['department'] == dept_choice]
-    
+
+    section_options = get_options(
+        filtered['group'],
+        remove_unset=True,
+        order_key='group'
+    )
+    section_choices = ['すべて'] + section_options if section_options else ['すべて']
+    with col2:
+        section_choice = st.selectbox(
+            "課",
+            section_choices,
+            key=f"{tab_key}_section_select"
+        )
+    if section_choice != 'すべて':
+        filtered = filtered[filtered['group'] == section_choice]
+
     grouping_choice = None
     format_func = lambda x: GROUPING_LABEL_MAP.get(x, x)
     if grouping_options:
-        with col2:
-            grouping_choice = st.selectbox(
-                "グルーピング",
-                grouping_options,
-                format_func=format_func,
-                key=f"{tab_key}_grouping_select"
-            )
-    return filtered, dept_choice, grouping_choice
+        cleaned_grouping_options = []
+        seen = set()
+        for option in grouping_options:
+            if option in seen:
+                continue
+            cleaned_grouping_options.append(option)
+            seen.add(option)
+        if cleaned_grouping_options:
+            with col3:
+                grouping_choice = st.selectbox(
+                    "グルーピング",
+                    cleaned_grouping_options,
+                    format_func=format_func,
+                    key=f"{tab_key}_grouping_select"
+                )
+    return filtered, dept_choice, section_choice, grouping_choice
 
 
 @st.cache_data
@@ -242,7 +299,7 @@ def create_time_series_chart(df, y_col, title, color_by=None):
 
         # カテゴリ順序の設定
         color_values = grouped[color_by].unique().tolist()
-        color_order = get_category_order_for_values(color_by, color_values)
+        color_order = get_category_order_with_reference(color_by, color_values, df)
 
         fig = px.line(
             grouped,
@@ -323,7 +380,7 @@ def create_recent_group_comparison_chart(df, metric, group_col, range_label=None
     month_labels = month_orders['month_label'].tolist()
 
     group_values = summary[group_col].unique().tolist()
-    group_order = get_category_order_for_values(group_col, group_values)
+    group_order = get_category_order_with_reference(group_col, group_values, df)
     summary[group_col] = pd.Categorical(summary[group_col], categories=group_order, ordered=True)
 
     group_labels = {
@@ -332,7 +389,8 @@ def create_recent_group_comparison_chart(df, metric, group_col, range_label=None
         'group': '課',
         'team': 'チーム',
         'project': 'プロジェクト',
-        'grade': '職位'
+        'grade': '職位',
+        'name': '個人'
     }
 
     if month_labels:
@@ -383,13 +441,18 @@ def create_recent_group_comparison_chart(df, metric, group_col, range_label=None
 
 def create_box_plot(df, x_col, y_col, title):
     """ボックスプロットの作成"""
-    category_order = {x_col: get_category_order_for_values(x_col, df[x_col].dropna().astype(str).unique().tolist())}
+    category_order = {
+        x_col: get_category_order_with_reference(
+            x_col,
+            df[x_col].dropna().astype(str).unique().tolist(),
+            df
+        )
+    }
     fig = px.box(
-        df, 
-        x=x_col, 
-        y=y_col, 
+        df,
+        x=x_col,
+        y=y_col,
         title=title,
-        color=x_col,
         category_orders=category_order
     )
     fig.update_layout(
@@ -399,6 +462,9 @@ def create_box_plot(df, x_col, y_col, title):
         height=450
     )
     fig.update_traces(
+        marker_color="#4c78a8",
+        marker_line_color="#274060",
+        marker_line_width=1.5,
         hovertemplate=(
             f"{GROUPING_LABEL_MAP.get(x_col, x_col)}: %{{x}}<br>"
             f"{METRIC_LABELS.get(y_col, y_col)}: %{{y:.1f}}<extra></extra>"
@@ -450,7 +516,7 @@ def create_group_rating_distribution(df, group_col, metric_col, range_label=None
     for grp, month_dt in pair_list_raw:
         group_months.setdefault(grp, []).append(month_dt)
     group_values = list(group_months.keys())
-    group_sequence = get_category_order_for_values(group_col, group_values)
+    group_sequence = get_category_order_with_reference(group_col, group_values, df)
 
     ordered_pairs = []
     for grp in group_sequence:
@@ -539,7 +605,8 @@ def create_group_rating_distribution(df, group_col, metric_col, range_label=None
         'group': '課',
         'team': 'チーム',
         'project': 'プロジェクト',
-        'grade': '職位'
+        'grade': '職位',
+        'name': '個人'
     }
     grouping_label = GROUPING_LABEL_MAP.get(group_col, group_labels.get(group_col, group_col))
 
@@ -594,7 +661,7 @@ def create_radar_chart(df, group_col, title):
 
     # グループの順序を設定
     group_values = grouped.index.tolist()
-    group_order = get_category_order_for_values(group_col, group_values)
+    group_order = get_category_order_with_reference(group_col, group_values, df)
 
     fig = go.Figure()
     theta_labels = ['活力', '熱意', '没頭', '活力']
@@ -845,10 +912,10 @@ if uploaded_file is not None:
     if selected_tab == "時系列":
         st.subheader("時系列トレンド")
         
-        ts_df, _, ts_group_choice = render_department_and_group_controls(
+        ts_df, _, _, ts_group_choice = render_department_and_group_controls(
             filtered_df,
             "timeseries",
-            grouping_options=['なし', 'department', 'group', 'team', 'project', 'grade']
+            grouping_options=['なし', 'department', 'group', 'team', 'project', 'grade', 'name']
         )
         if ts_df.empty:
             st.info("選択された条件に該当するデータがありません。")
@@ -891,10 +958,10 @@ if uploaded_file is not None:
 
     elif selected_tab == "グループ比較":
         st.subheader("グループ比較")
-        comparison_df, _, comparison_group = render_department_and_group_controls(
+        comparison_df, _, _, comparison_group = render_department_and_group_controls(
             filtered_df,
             "group_comparison",
-            grouping_options=['department', 'group', 'team', 'project', 'grade']
+            grouping_options=['department', 'group', 'team', 'project', 'grade', 'name']
         )
         if comparison_df.empty:
             st.info("選択された条件に該当するデータがありません。")
@@ -912,10 +979,10 @@ if uploaded_file is not None:
     elif selected_tab == "分布":
         st.subheader("分布分析")
         
-        dist_df, _, dist_group = render_department_and_group_controls(
+        dist_df, _, _, dist_group = render_department_and_group_controls(
             filtered_df,
             "distribution",
-            grouping_options=['department', 'group', 'project', 'grade']
+            grouping_options=['department', 'group', 'team', 'project', 'grade', 'name']
         )
         if dist_df.empty:
             st.info("選択された条件に該当するデータがありません。")
@@ -942,6 +1009,7 @@ if uploaded_file is not None:
                 marginal='box'
             )
             fig_hist.update_traces(
+                marker_color="#4c78a8",
                 marker_line_color='white',
                 marker_line_width=1,
                 hovertemplate=(
@@ -954,10 +1022,10 @@ if uploaded_file is not None:
     elif selected_tab == "評価":
         st.subheader("評価別")
         
-        evaluation_df, _, evaluation_group = render_department_and_group_controls(
+        evaluation_df, _, _, evaluation_group = render_department_and_group_controls(
             filtered_df,
             "evaluation",
-            grouping_options=['department', 'group', 'team', 'project', 'grade']
+            grouping_options=['department', 'group', 'team', 'project', 'grade', 'name']
         )
         if evaluation_df.empty:
             st.info("選択された条件に該当するデータがありません。")
@@ -1000,10 +1068,10 @@ if uploaded_file is not None:
     elif selected_tab == "個人":
         st.subheader("個人別推移")
         
-        individual_df, _, individual_group_choice = render_department_and_group_controls(
+        individual_df, _, _, individual_group_choice = render_department_and_group_controls(
             filtered_df,
             "individual",
-            grouping_options=['なし', 'department', 'group', 'team', 'project', 'grade']
+            grouping_options=['なし', 'department', 'group', 'team', 'project', 'grade', 'name']
         )
         if individual_df.empty:
             st.info("選択された条件に該当するデータがありません。")
@@ -1011,6 +1079,8 @@ if uploaded_file is not None:
             group_value_choice = None
             if individual_group_choice and individual_group_choice != 'なし':
                 value_options = get_options(individual_df[individual_group_choice], order_key=individual_group_choice)
+                if individual_group_choice == 'name':
+                    value_options = sort_names_by_grade(value_options, individual_df)
                 value_choices = ['すべて'] + value_options if value_options else ['すべて']
                 group_value_choice = st.selectbox(
                     f"{GROUPING_LABEL_MAP.get(individual_group_choice, individual_group_choice)}を選択",
@@ -1023,7 +1093,10 @@ if uploaded_file is not None:
             if individual_df.empty:
                 st.info("選択された条件に該当するデータがありません。")
             else:
-                individuals = sorted(individual_df['name'].dropna().unique().tolist())
+                individuals = sort_names_by_grade(
+                    individual_df['name'].dropna().astype(str).unique().tolist(),
+                    individual_df
+                )
                 selected_individual = st.selectbox(
                     "表示対象者を選択",
                     individuals,
@@ -1055,7 +1128,7 @@ if uploaded_file is not None:
 
     elif selected_tab == "データ":
         st.subheader("フィルター後データ")
-        
+
         display_cols = st.multiselect(
             "表示するカラム",
             filtered_df.columns.tolist(),
