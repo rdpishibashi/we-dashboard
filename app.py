@@ -1244,14 +1244,6 @@ if uploaded_file is not None:
             height=500,
             **DATAFRAME_KWARGS
         )
-        
-        csv = filtered_df.to_csv(index=False, encoding='utf-8-sig')
-        st.download_button(
-            "📥 CSVダウンロード",
-            csv,
-            "filtered_data.csv",
-            "text/csv"
-        )
 
 else:
     # ファイル未アップロード時のガイダンス
