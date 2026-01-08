@@ -1217,23 +1217,84 @@ if uploaded_file is not None:
                     st.plotly_chart(fig_ind, **PLOTLY_CHART_KWARGS)
                     
                     ind_data = individual_df[individual_df['name'] == selected_individual]
-                    st.subheader(f"{selected_individual}の統計サマリー")
-                    
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.dataframe(
-                            ind_data[['engagement_rating', 'vigor_rating', 'dedication_rating', 'absorption_rating']].describe().round(2)
-                        )
-                    with col2:
-                        if len(ind_data) > 1:
-                            first = ind_data.iloc[0]['engagement_rating']
-                            last = ind_data.iloc[-1]['engagement_rating']
-                            change = ((last - first) / first * 100) if first != 0 else 0
-                            st.metric(
-                                "ワーク･エンゲージメント変化率",
-                                f"{change:+.1f}%",
-                                f"初回: {first:.1f} → 最新: {last:.1f}"
-                            )
+
+                    # Signal section
+                    st.subheader("シグナル")
+
+                    try:
+                        individual_signal = signal_df[
+                            (signal_df['name'] == selected_individual) &
+                            (signal_df['year_month_dt'] == end_dt)
+                        ]
+
+                        if individual_signal.empty:
+                            st.info("最新データがありません")
+                        else:
+                            # Warn about duplicates
+                            if len(individual_signal) > 1:
+                                st.warning(f"注意: {selected_individual}の{end_dt.strftime('%Y-%m')}データが{len(individual_signal)}件あります。最初のレコードを表示しています。")
+
+                            data = individual_signal.iloc[0]
+
+                            # Row 1: Engagement metrics
+                            col1, col2, col3, col4 = st.columns(4)
+                            with col1:
+                                val = data.get('engagement_rating', None)
+                                st.metric("ワーク･エンゲージメント", f"{val:.1f}" if pd.notna(val) else "N/A")
+                            with col2:
+                                val = data.get('vigor_rating', None)
+                                st.metric("活力", f"{val:.1f}" if pd.notna(val) else "N/A")
+                            with col3:
+                                val = data.get('dedication_rating', None)
+                                st.metric("熱意", f"{val:.1f}" if pd.notna(val) else "N/A")
+                            with col4:
+                                val = data.get('absorption_rating', None)
+                                st.metric("没頭", f"{val:.1f}" if pd.notna(val) else "N/A")
+
+                            # Row 2: Signal indicators
+                            col1, col2, col3, col4 = st.columns(4)
+                            with col1:
+                                val = data.get('intervention_priority', None)
+                                st.metric("介入優先度", f"{val:.0f}" if pd.notna(val) else "N/A")
+                            with col2:
+                                val = data.get('trend_refined', None)
+                                st.metric("中期トレンド", str(val) if pd.notna(val) else "N/A")
+                            with col3:
+                                val = data.get('change_tag', None)
+                                st.metric("短期変動", str(val) if pd.notna(val) else "N/A")
+                            with col4:
+                                val = data.get('stability', None)
+                                st.metric("中期安定性", str(val) if pd.notna(val) else "N/A")
+
+                            # Row 3: Strengths and weaknesses
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                with st.expander("強み・弱み（短期）", expanded=False):
+                                    strength = data.get('strength_short', '')
+                                    weakness = data.get('weakness_short', '')
+                                    if pd.notna(strength) and str(strength).strip():
+                                        st.write("**強み:**", strength)
+                                    else:
+                                        st.write("**強み:** データなし")
+                                    if pd.notna(weakness) and str(weakness).strip():
+                                        st.write("**弱み:**", weakness)
+                                    else:
+                                        st.write("**弱み:** データなし")
+                            with col2:
+                                with st.expander("強み・弱み（中期）", expanded=False):
+                                    strength = data.get('strength_mid', '')
+                                    weakness = data.get('weakness_mid', '')
+                                    if pd.notna(strength) and str(strength).strip():
+                                        st.write("**強み:**", strength)
+                                    else:
+                                        st.write("**強み:** データなし")
+                                    if pd.notna(weakness) and str(weakness).strip():
+                                        st.write("**弱み:**", weakness)
+                                    else:
+                                        st.write("**弱み:** データなし")
+
+                    except Exception as e:
+                        st.error(f"シグナルデータの取得に失敗しました: {e}")
 
     elif selected_tab == "データ":
         st.subheader("フィルター後データ")
