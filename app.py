@@ -285,7 +285,50 @@ def load_data(uploaded_file):
         pivot_df['year'].astype(str) + '-' + pivot_df['month'].astype(str).str.zfill(2)
     )
     pivot_df['year_month_dt'] = pd.to_datetime(pivot_df['year_month'], format='%Y-%m', errors='coerce')
-    return pivot_df
+
+    # Load rating2 sheet for signal data
+    try:
+        signal_raw_df = pd.read_excel(uploaded_file, sheet_name='rating2')
+    except Exception as e:
+        raise ValueError(f"rating2シートの読み込みに失敗しました: {e}")
+
+    signal_df = signal_raw_df.copy()
+    signal_df['year'] = pd.to_numeric(signal_df['year'], errors='coerce')
+    signal_df['month'] = pd.to_numeric(signal_df['month'], errors='coerce')
+    if signal_df['year'].isna().any() or signal_df['month'].isna().any():
+        raise ValueError("rating2シートのyear/monthの値に欠損が存在します。")
+    signal_df['year'] = signal_df['year'].astype(int)
+    signal_df['month'] = signal_df['month'].astype(int)
+
+    signal_df['year_month'] = (
+        signal_df['year'].astype(str) + '-' +
+        signal_df['month'].astype(str).str.zfill(2)
+    )
+    signal_df['year_month_dt'] = pd.to_datetime(
+        signal_df['year_month'], format='%Y-%m', errors='coerce'
+    )
+
+    def get_signal_column(col_name):
+        if col_name in signal_raw_df.columns:
+            return signal_raw_df[col_name]
+        return pd.Series([None] * len(signal_raw_df))
+
+    # Map to consistent column names
+    signal_df['section'] = get_signal_column('current_division')
+    signal_df['department'] = get_signal_column('current_department')
+    signal_df['group'] = get_signal_column('current_section')
+    signal_df['team'] = get_signal_column('current_team')
+    signal_df['project'] = get_signal_column('current_project')
+    signal_df['grade'] = get_signal_column('grade')
+
+    # Fill missing values for organizational columns
+    fill_cols = ['section', 'department', 'group', 'team', 'project', 'grade']
+    for col in fill_cols:
+        if col not in signal_df.columns:
+            signal_df[col] = pd.Series([None] * len(signal_df))
+        signal_df[col] = signal_df[col].fillna('未設定')
+
+    return pivot_df, signal_df
 
 
 def create_time_series_chart(df, y_col, title, color_by=None):
@@ -777,7 +820,7 @@ if uploaded_file is None and os.path.exists(default_file_path):
 if uploaded_file is not None:
     # データ読み込み
     try:
-        df = load_data(uploaded_file)
+        df, signal_df = load_data(uploaded_file)
         st.sidebar.success(f"✅ データ読み込み完了: {len(df):,}件")
     except Exception as e:
         st.error(f"データ読み込みエラー: {e}")
