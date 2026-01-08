@@ -74,6 +74,22 @@ METRIC_LABELS = {
     'absorption_rating': '没頭 (Absorption)'
 }
 
+SIGNAL_LABELS = {
+    'name': '氏名',
+    'intervention_priority': '介入優先度',
+    'trend_refined': '中期トレンド',
+    'change_tag': '短期変動',
+    'stability': '中期安定性',
+    'engagement_rating': 'ワーク･エンゲージメント',
+    'vigor_rating': '活力',
+    'dedication_rating': '熱意',
+    'absorption_rating': '没頭',
+    'strength_short': '強み（短期）',
+    'weakness_short': '弱み（短期）',
+    'strength_mid': '強み（中期）',
+    'weakness_mid': '弱み（中期）'
+}
+
 RATING_AXIS_MAX = 10.3
 
 GROUP_ORDER_FILE = Path(__file__).with_name('group_order_config.json')
@@ -794,6 +810,34 @@ def create_individual_trend(df, individual_name):
         fig.update_xaxes(tickformat="%Y-%m", title='年-月')
     fig.update_yaxes(dtick=1)
     return fig
+
+
+def get_signal_data(signal_df, filtered_df, end_dt):
+    """
+    Filter signal data to match current sidebar filters and latest wave.
+
+    Args:
+        signal_df: Full rating2 dataframe
+        filtered_df: Currently filtered rating dataframe (from sidebar filters)
+        end_dt: End date of global period filter (defines "latest wave")
+
+    Returns:
+        Filtered signal dataframe for individuals with intervention_priority > 1
+    """
+    # Filter to latest wave
+    latest_wave = signal_df[signal_df['year_month_dt'] == end_dt].copy()
+
+    # Apply same filters as main data by matching on available individuals
+    valid_names = filtered_df['name'].dropna().unique()
+    latest_wave = latest_wave[latest_wave['name'].isin(valid_names)]
+
+    # Filter to intervention priority > 1
+    signals = latest_wave[latest_wave['intervention_priority'] > 1].copy()
+
+    # Sort by priority descending
+    signals = signals.sort_values('intervention_priority', ascending=False)
+
+    return signals
 
 
 # =============================================================================
