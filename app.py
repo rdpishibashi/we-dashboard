@@ -1014,34 +1014,6 @@ if uploaded_file is not None:
                 ts_group_choice if ts_group_choice != 'なし' else None
             )
             st.plotly_chart(fig, **PLOTLY_CHART_KWARGS)
-        
-        st.subheader("期間サマリー")
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric(
-                "ワーク･エンゲージメント 平均値",
-                f"{ts_df['engagement_rating'].mean():.1f}" if not ts_df.empty else "N/A",
-                f"SD: {ts_df['engagement_rating'].std():.1f}" if not ts_df.empty else "N/A"
-            )
-        with col2:
-            st.metric(
-                "活力 平均値",
-                f"{ts_df['vigor_rating'].mean():.1f}" if not ts_df.empty else "N/A",
-                f"SD: {ts_df['vigor_rating'].std():.1f}" if not ts_df.empty else "N/A"
-            )
-        with col3:
-            st.metric(
-                "熱意 平均値",
-                f"{ts_df['dedication_rating'].mean():.1f}" if not ts_df.empty else "N/A",
-                f"SD: {ts_df['dedication_rating'].std():.1f}" if not ts_df.empty else "N/A"
-            )
-        with col4:
-            st.metric(
-                "没頭 平均値",
-                f"{ts_df['absorption_rating'].mean():.1f}" if not ts_df.empty else "N/A",
-                f"SD: {ts_df['absorption_rating'].std():.1f}" if not ts_df.empty else "N/A"
-            )
 
     elif selected_tab == "グループ比較":
         st.subheader("グループ比較")
