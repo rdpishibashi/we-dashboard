@@ -1221,6 +1221,17 @@ if uploaded_file is not None:
                     # Signal section
                     st.subheader("シグナル")
 
+                    def replace_abbreviations(text):
+                        """Replace abbreviations in strength/weakness text"""
+                        if pd.isna(text) or not str(text).strip():
+                            return "-"
+                        text = str(text)
+                        text = text.replace("データなし", "-")
+                        text = text.replace("V", "活力")
+                        text = text.replace("D", "熱意")
+                        text = text.replace("A", "没頭")
+                        return text
+
                     try:
                         individual_signal = signal_df[
                             (signal_df['name'] == selected_individual) &
@@ -1234,64 +1245,49 @@ if uploaded_file is not None:
                             if len(individual_signal) > 1:
                                 st.warning(f"注意: {selected_individual}の{end_dt.strftime('%Y-%m')}データが{len(individual_signal)}件あります。最初のレコードを表示しています。")
 
-                            data = individual_signal.iloc[0]
+                            # Select columns to display
+                            display_cols = [
+                                'engagement_rating', 'vigor_rating', 'dedication_rating', 'absorption_rating',
+                                'intervention_priority', 'trend_refined', 'change_tag', 'stability',
+                                'strength_short', 'weakness_short', 'strength_mid', 'weakness_mid'
+                            ]
 
-                            # Row 1: Engagement metrics
-                            col1, col2, col3, col4 = st.columns(4)
-                            with col1:
-                                val = data.get('engagement_rating', None)
-                                st.metric("ワーク･エンゲージメント", f"{val:.1f}" if pd.notna(val) else "N/A")
-                            with col2:
-                                val = data.get('vigor_rating', None)
-                                st.metric("活力", f"{val:.1f}" if pd.notna(val) else "N/A")
-                            with col3:
-                                val = data.get('dedication_rating', None)
-                                st.metric("熱意", f"{val:.1f}" if pd.notna(val) else "N/A")
-                            with col4:
-                                val = data.get('absorption_rating', None)
-                                st.metric("没頭", f"{val:.1f}" if pd.notna(val) else "N/A")
+                            # Create display dataframe
+                            display_signal = individual_signal[display_cols].copy()
 
-                            # Row 2: Signal indicators
-                            col1, col2, col3, col4 = st.columns(4)
-                            with col1:
-                                val = data.get('intervention_priority', None)
-                                st.metric("介入優先度", f"{val:.0f}" if pd.notna(val) else "N/A")
-                            with col2:
-                                val = data.get('trend_refined', None)
-                                st.metric("中期トレンド", str(val) if pd.notna(val) else "N/A")
-                            with col3:
-                                val = data.get('change_tag', None)
-                                st.metric("短期変動", str(val) if pd.notna(val) else "N/A")
-                            with col4:
-                                val = data.get('stability', None)
-                                st.metric("中期安定性", str(val) if pd.notna(val) else "N/A")
+                            # Process strength/weakness columns
+                            for col in ['strength_short', 'weakness_short', 'strength_mid', 'weakness_mid']:
+                                if col in display_signal.columns:
+                                    display_signal[col] = display_signal[col].apply(replace_abbreviations)
 
-                            # Row 3: Strengths and weaknesses
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                with st.expander("強み・弱み（短期）", expanded=False):
-                                    strength = data.get('strength_short', '')
-                                    weakness = data.get('weakness_short', '')
-                                    if pd.notna(strength) and str(strength).strip():
-                                        st.write("**強み:**", strength)
-                                    else:
-                                        st.write("**強み:** データなし")
-                                    if pd.notna(weakness) and str(weakness).strip():
-                                        st.write("**弱み:**", weakness)
-                                    else:
-                                        st.write("**弱み:** データなし")
-                            with col2:
-                                with st.expander("強み・弱み（中期）", expanded=False):
-                                    strength = data.get('strength_mid', '')
-                                    weakness = data.get('weakness_mid', '')
-                                    if pd.notna(strength) and str(strength).strip():
-                                        st.write("**強み:**", strength)
-                                    else:
-                                        st.write("**強み:** データなし")
-                                    if pd.notna(weakness) and str(weakness).strip():
-                                        st.write("**弱み:**", weakness)
-                                    else:
-                                        st.write("**弱み:** データなし")
+                            # Format numeric columns
+                            for col in ['engagement_rating', 'vigor_rating', 'dedication_rating', 'absorption_rating']:
+                                if col in display_signal.columns:
+                                    display_signal[col] = display_signal[col].apply(
+                                        lambda x: f"{x:.1f}" if pd.notna(x) else "-"
+                                    )
+
+                            for col in ['intervention_priority']:
+                                if col in display_signal.columns:
+                                    display_signal[col] = display_signal[col].apply(
+                                        lambda x: f"{x:.0f}" if pd.notna(x) else "-"
+                                    )
+
+                            # Handle other columns (convert to string, replace NaN with "-")
+                            for col in ['trend_refined', 'change_tag', 'stability']:
+                                if col in display_signal.columns:
+                                    display_signal[col] = display_signal[col].apply(
+                                        lambda x: str(x) if pd.notna(x) else "-"
+                                    )
+
+                            # Transpose for better display
+                            display_signal_t = display_signal.T
+                            display_signal_t.columns = ['値']
+                            display_signal_t.index = display_signal_t.index.map(
+                                lambda x: SIGNAL_LABELS.get(x, x)
+                            )
+
+                            st.dataframe(display_signal_t, use_container_width=True)
 
                     except Exception as e:
                         st.error(f"シグナルデータの取得に失敗しました: {e}")
