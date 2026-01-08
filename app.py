@@ -1008,12 +1008,37 @@ if uploaded_file is not None:
             st.info("選択された条件に該当するデータがありません。")
         else:
             fig = create_time_series_chart(
-                ts_df, 
-                selected_metric, 
+                ts_df,
+                selected_metric,
                 f'{METRIC_LABELS.get(selected_metric, selected_metric)}推移',
                 ts_group_choice if ts_group_choice != 'なし' else None
             )
             st.plotly_chart(fig, **PLOTLY_CHART_KWARGS)
+
+            # Signal section - only show when grouping by individual
+            if ts_group_choice == 'name':
+                st.subheader("シグナル（介入優先度 > 1）")
+
+                try:
+                    signals = get_signal_data(signal_df, ts_df, end_dt)
+                except Exception as e:
+                    st.error(f"シグナルデータの取得に失敗しました: {e}")
+                    signals = pd.DataFrame()  # Empty dataframe for graceful fallback
+
+                if signals.empty:
+                    st.info("シグナル対象者はいません")
+                else:
+                    display_cols = ['name', 'intervention_priority', 'trend_refined',
+                                   'change_tag', 'stability']
+
+                    # Validate columns exist
+                    missing_cols = [col for col in display_cols if col not in signals.columns]
+                    if missing_cols:
+                        st.error(f"signal データに必要なカラムがありません: {', '.join(missing_cols)}")
+                    else:
+                        display_df = signals[display_cols].copy()
+                        display_df = display_df.rename(columns=SIGNAL_LABELS)
+                        st.dataframe(display_df, use_container_width=True)
 
     elif selected_tab == "グループ比較":
         st.subheader("グループ比較")
