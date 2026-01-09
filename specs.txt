@@ -1,0 +1,33 @@
+* Please delete the CSV download functionality in the Data report type.
+* I'd like to delete the "期間サマリー" section in the "時系列" report.
+* I'd like to add a new section named "シグナル" section to the "時系列" and "グループ比較" reports.
+* The signal section is displayed when "個人別" is selected in the grouping drop-down menu.
+* The signal section displays the following data, which are stored the "rating2" sheet in the input Excel file.
+ - name: those who have an intervention_priority greater than 1 for the latest wave
+ - intervention_priority
+ - trend_refined
+ - change_tag
+ - stability
+* Regarding the "個人" report, the signal section contains the latest data shown below.
+ - engagement_rating
+ - vigor_rating
+ - dedication_rating
+ - absortion_rating
+ - intervention_priority
+ - trend_refine
+ - change_tag
+ - stability
+ - strength_short
+ - weakness_short
+ - strength_mid
+ - weakness_mid
+* I don't need "統計サマリー" in the "個人" report.
+* "The last wave" means the latest year-month specified by the global filter.
+
+* People whose indexes are shown in the signal section are who are available in the local filter and who have "the latest wave" data.
+* Japanese labels are following:
+  - trend_refined : 中期トレンド
+  - change_tag : 短期変動
+  - stability : 中期安定性
+  - others are OK
+* In addition, V, D, A should be displayed as 活力, 熱意, 没頭.

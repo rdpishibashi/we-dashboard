@@ -23,34 +23,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# カスタムCSS
-st.markdown("""
-<style>
-    .main-header {
-        font-size: 2.5rem;
-        font-weight: 700;
-        color: #1f4e79;
-        margin-bottom: 0.5rem;
-    }
-    .sub-header {
-        font-size: 1.1rem;
-        color: #666;
-        margin-bottom: 2rem;
-    }
-    .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 1.5rem;
-        border-radius: 12px;
-        color: white;
-    }
-    .stMetric {
-        background-color: #f8f9fa;
-        padding: 1rem;
-        border-radius: 8px;
-    }
-</style>
-""", unsafe_allow_html=True)
-
 PLOTLY_CHART_KWARGS = (
     {"width": "stretch"}
     if "width" in inspect.signature(st.plotly_chart).parameters
@@ -80,7 +52,7 @@ SIGNAL_LABELS = {
     'trend_refined': '中期トレンド',
     'change_tag': '短期変動',
     'stability': '中期安定性',
-    'engagement_rating': 'ワーク･エンゲージメント',
+    'engagement_rating': 'エンゲージメント',
     'vigor_rating': '活力',
     'dedication_rating': '熱意',
     'absorption_rating': '没頭',
@@ -92,8 +64,24 @@ SIGNAL_LABELS = {
 
 RATING_AXIS_MAX = 10.3
 
+# Trend color groups
+POSITIVE_TRENDS = ['上昇加速', '上昇継続', '回復期待', '回復', '復活', '上昇期待', '上昇']
+NEGATIVE_TRENDS = ['低下懸念', '悪化', '低下危機', '低下加速', '低下継続', '低下警戒', '下降']
+
+# Signal table display columns
+SIGNAL_TABLE_COLUMNS = ['name', 'intervention_priority', 'trend_refined', 'change_tag', 'stability']
+INDIVIDUAL_SIGNAL_COLUMNS = [
+    'engagement_rating', 'vigor_rating', 'dedication_rating', 'absorption_rating',
+    'intervention_priority', 'trend_refined', 'change_tag', 'stability',
+    'strength_short', 'weakness_short', 'strength_mid', 'weakness_mid'
+]
+
 GROUP_ORDER_FILE = Path(__file__).with_name('group_order_config.json')
 
+
+# =============================================================================
+# Configuration and Utility Functions
+# =============================================================================
 
 def load_group_orders():
     try:
@@ -105,6 +93,171 @@ def load_group_orders():
     except json.JSONDecodeError:
         st.warning("グループ順序設定ファイルの読み込みに失敗しました。デフォルト順序を使用します。")
         return {}
+
+
+# =============================================================================
+# Signal Data Processing Functions
+# =============================================================================
+
+def style_trend_column(df):
+    """
+    Apply color styling to 中期トレンド column based on trend value.
+
+    Args:
+        df: DataFrame with 中期トレンド column
+
+    Returns:
+        Styled DataFrame with colored trend values
+    """
+    def color_trend(val):
+        if pd.isna(val) or val == '' or val == '-':
+            return ''
+        val_str = str(val)
+        if val_str in POSITIVE_TRENDS:
+            return 'color: green'
+        elif val_str in NEGATIVE_TRENDS:
+            return 'color: red'
+        return ''
+
+    if '中期トレンド' in df.columns:
+        return df.style.applymap(color_trend, subset=['中期トレンド'])
+    return df
+
+
+def format_signal_display_columns(df):
+    """
+    Format signal dataframe columns for display.
+
+    Args:
+        df: Signal dataframe with raw column values
+
+    Returns:
+        DataFrame with formatted values
+    """
+    df = df.copy()
+
+    # Format intervention_priority as integer
+    if 'intervention_priority' in df.columns:
+        df['intervention_priority'] = df['intervention_priority'].apply(
+            lambda x: f"{x:.0f}" if pd.notna(x) else "-"
+        )
+
+    return df
+
+
+def get_signal_column_config():
+    """
+    Get column configuration for signal tables.
+
+    Returns:
+        Dictionary of column configurations
+    """
+    return {
+        "介入優先度": st.column_config.TextColumn(
+            "介入優先度",
+            width="small"
+        )
+    }
+
+
+def render_signal_table(signals, display_cols):
+    """
+    Render signal table with formatting and styling.
+
+    Args:
+        signals: Signal dataframe
+        display_cols: List of columns to display
+    """
+    if signals.empty:
+        st.info("アクション対象候補はいません")
+        return
+
+    # Validate columns exist
+    missing_cols = [col for col in display_cols if col not in signals.columns]
+    if missing_cols:
+        st.error(f"signal データに必要なカラムがありません: {', '.join(missing_cols)}")
+        return
+
+    # Prepare display dataframe
+    display_df = signals[display_cols].copy()
+    display_df = format_signal_display_columns(display_df)
+    display_df = display_df.rename(columns=SIGNAL_LABELS)
+
+    # Apply styling and display
+    styled_df = style_trend_column(display_df)
+    st.dataframe(
+        styled_df,
+        column_config=get_signal_column_config(),
+        **DATAFRAME_KWARGS
+    )
+
+
+def replace_abbreviations(text):
+    """
+    Replace abbreviations in strength/weakness text.
+
+    Args:
+        text: Text with abbreviations (V, D, A)
+
+    Returns:
+        Text with full Japanese terms
+    """
+    if pd.isna(text) or not str(text).strip():
+        return "-"
+    text = str(text)
+    text = text.replace("データなし", "-")
+    text = text.replace("V", "活力")
+    text = text.replace("D", "熱意")
+    text = text.replace("A", "没頭")
+    return text
+
+
+def format_individual_signal_data(signal_data):
+    """
+    Format individual signal data for display.
+
+    Args:
+        signal_data: Individual signal dataframe
+
+    Returns:
+        Formatted and transposed dataframe
+    """
+    display_signal = signal_data[INDIVIDUAL_SIGNAL_COLUMNS].copy()
+
+    # Process strength/weakness columns
+    for col in ['strength_short', 'weakness_short', 'strength_mid', 'weakness_mid']:
+        if col in display_signal.columns:
+            display_signal[col] = display_signal[col].apply(replace_abbreviations)
+
+    # Format rating columns with 1 decimal
+    for col in ['engagement_rating', 'vigor_rating', 'dedication_rating', 'absorption_rating']:
+        if col in display_signal.columns:
+            display_signal[col] = display_signal[col].apply(
+                lambda x: f"{x:.1f}" if pd.notna(x) else "-"
+            )
+
+    # Format intervention_priority as integer
+    if 'intervention_priority' in display_signal.columns:
+        display_signal['intervention_priority'] = display_signal['intervention_priority'].apply(
+            lambda x: f"{x:.0f}" if pd.notna(x) else "-"
+        )
+
+    # Format other columns as strings
+    for col in ['trend_refined', 'change_tag', 'stability']:
+        if col in display_signal.columns:
+            display_signal[col] = display_signal[col].apply(
+                lambda x: str(x) if pd.notna(x) else "-"
+            )
+
+    # Transpose for better display
+    display_signal_t = display_signal.T
+    display_signal_t.columns = ['値']
+    display_signal_t.index = display_signal_t.index.map(
+        lambda x: SIGNAL_LABELS.get(x, x)
+    )
+    display_signal_t.index.name = 'Index'
+
+    return display_signal_t
 
 
 GROUP_ORDER_MAP = load_group_orders()
@@ -236,6 +389,10 @@ def render_department_and_group_controls(
     return filtered, dept_choice, section_choice, grouping_choice
 
 
+# =============================================================================
+# Data Loading Functions
+# =============================================================================
+
 @st.cache_data
 def load_data(uploaded_file):
     """データファイルの読み込みと整形"""
@@ -347,6 +504,10 @@ def load_data(uploaded_file):
     return pivot_df, signal_df
 
 
+# =============================================================================
+# Chart Creation Functions
+# =============================================================================
+
 def create_time_series_chart(df, y_col, title, color_by=None):
     """時系列チャートの作成"""
     axis_title = METRIC_LABELS.get(y_col, y_col)
@@ -387,7 +548,7 @@ def create_time_series_chart(df, y_col, title, color_by=None):
         hovermode='x unified',
         height=480
     )
-    
+
     unique_dates = (
         grouped['year_month_dt']
         .dropna()
@@ -401,9 +562,16 @@ def create_time_series_chart(df, y_col, title, color_by=None):
     else:
         fig.update_xaxes(tickformat="%Y-%m")
     fig.update_yaxes(range=[0, RATING_AXIS_MAX], dtick=1)
-    fig.update_traces(
-        hovertemplate=f"{axis_title}: %{{y:.1f}}<extra></extra>"
-    )
+
+    # Update hover template based on whether grouping is used
+    if color_by and color_by != 'なし':
+        fig.update_traces(
+            hovertemplate="%{fullData.name}: %{y:.1f}<extra></extra>"
+        )
+    else:
+        fig.update_traces(
+            hovertemplate=f"{axis_title}: %{{y:.1f}}<extra></extra>"
+        )
     return fig
 
 
@@ -679,6 +847,7 @@ def create_group_rating_distribution(df, group_col, metric_col, range_label=None
         y='ratio',
         color='rating_band',
         barmode='stack',
+        text='count',
         category_orders={
             'x_key': category_keys,
             'rating_band': category_order
@@ -702,6 +871,8 @@ def create_group_rating_distribution(df, group_col, metric_col, range_label=None
     fig.update_yaxes(range=[0, 100], ticksuffix='%', dtick=10)
     fig.update_traces(
         opacity=0.8,
+        texttemplate='%{text:.0f}',
+        textposition='inside',
         hovertemplate=(
             f"{group_labels.get(group_col, group_col)}: %{{customdata[0]}}<br>"
             "年月: %{customdata[1]}<br>"
@@ -766,10 +937,10 @@ def create_individual_trend(df, individual_name):
         return go.Bar(
             x=x_values,
             y=ind_data['engagement_rating'],
-            name='Engagement',
+            name='エンゲージメント',
             marker=dict(color=color),
             opacity=1.0,
-            hovertemplate='Engagement: %{y:.1f}<extra></extra>'
+            hovertemplate='エンゲージメント: %{y:.1f}<extra></extra>'
         )
 
     try:
@@ -778,9 +949,9 @@ def create_individual_trend(df, individual_name):
         fig.add_trace(engagement_trace(engagement_fallback))
     
     line_configs = [
-        ('vigor_rating', 'Vigor', '#ff8c00'),
-        ('dedication_rating', 'Dedication', '#b22222'),
-        ('absorption_rating', 'Absorption', '#006d5b')
+        ('vigor_rating', '活力', '#ff8c00'),
+        ('dedication_rating', '熱意', '#b22222'),
+        ('absorption_rating', '没頭', '#006d5b')
     ]
     
     for metric, label, color in line_configs:
@@ -812,6 +983,45 @@ def create_individual_trend(df, individual_name):
     return fig
 
 
+def sort_signals_by_trend_and_priority(signals):
+    """
+    Sort signal data by trend group (negative first, then positive) and intervention_priority within each group.
+
+    Args:
+        signals: Signal dataframe with trend_refined and intervention_priority columns
+
+    Returns:
+        Sorted signal dataframe
+    """
+    if signals.empty:
+        return signals
+
+    def get_trend_group(trend_value):
+        """Classify trend into negative (0), neutral (1), or positive (2)."""
+        if pd.isna(trend_value):
+            return 1  # neutral
+        trend_str = str(trend_value)
+        if trend_str in NEGATIVE_TRENDS:
+            return 0  # negative group first
+        elif trend_str in POSITIVE_TRENDS:
+            return 2  # positive group last
+        return 1  # neutral in middle
+
+    signals = signals.copy()
+    signals['_trend_group'] = signals['trend_refined'].apply(get_trend_group)
+
+    # Sort by trend group (negative first), then by intervention_priority descending within each group
+    signals = signals.sort_values(
+        ['_trend_group', 'intervention_priority'],
+        ascending=[True, False]
+    )
+
+    # Drop temporary column
+    signals = signals.drop(columns=['_trend_group'])
+
+    return signals
+
+
 def get_signal_data(signal_df, filtered_df, end_dt):
     """
     Filter signal data to match current sidebar filters and latest wave.
@@ -834,8 +1044,8 @@ def get_signal_data(signal_df, filtered_df, end_dt):
     # Filter to intervention priority > 1
     signals = latest_wave[latest_wave['intervention_priority'] > 1].copy()
 
-    # Sort by priority descending
-    signals = signals.sort_values('intervention_priority', ascending=False)
+    # Sort by trend group and priority
+    signals = sort_signals_by_trend_and_priority(signals)
 
     return signals
 
@@ -844,8 +1054,8 @@ def get_signal_data(signal_df, filtered_df, end_dt):
 # メインアプリケーション
 # =============================================================================
 
-st.markdown('<p class="main-header">📊 Work Engagement Analysis Dashboard</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-header">ワーク・エンゲージメント分析レポート</p>', unsafe_allow_html=True)
+st.title("Work Engagement Analysis Dashboard")
+st.write("ワーク・エンゲージメント分析ダッシュボード")
 
 # サイドバー: ファイルアップロード
 st.sidebar.header("📁 データアップロード")
@@ -1017,28 +1227,13 @@ if uploaded_file is not None:
 
             # Signal section - only show when grouping by individual
             if ts_group_choice == 'name':
-                st.subheader("シグナル（介入優先度 > 1）")
+                st.subheader("アクション対象候補（介入優先度 > 1）")
 
                 try:
                     signals = get_signal_data(signal_df, ts_df, end_dt)
+                    render_signal_table(signals, SIGNAL_TABLE_COLUMNS)
                 except Exception as e:
                     st.error(f"シグナルデータの取得に失敗しました: {e}")
-                    signals = pd.DataFrame()  # Empty dataframe for graceful fallback
-
-                if signals.empty:
-                    st.info("シグナル対象者はいません")
-                else:
-                    display_cols = ['name', 'intervention_priority', 'trend_refined',
-                                   'change_tag', 'stability']
-
-                    # Validate columns exist
-                    missing_cols = [col for col in display_cols if col not in signals.columns]
-                    if missing_cols:
-                        st.error(f"signal データに必要なカラムがありません: {', '.join(missing_cols)}")
-                    else:
-                        display_df = signals[display_cols].copy()
-                        display_df = display_df.rename(columns=SIGNAL_LABELS)
-                        st.dataframe(display_df, use_container_width=True)
 
     elif selected_tab == "グループ比較":
         st.subheader("グループ比較")
@@ -1062,28 +1257,15 @@ if uploaded_file is not None:
 
             # Signal section - only show when grouping by individual
             if comparison_group == 'name':
-                st.subheader("シグナル（介入優先度 > 1）")
+                st.subheader("アクション対象候補（介入優先度 > 1）")
 
                 try:
                     signals = get_signal_data(signal_df, comparison_df, end_dt)
-                except Exception as e:
-                    st.error(f"シグナルデータの取得に失敗しました: {e}")
-                    signals = pd.DataFrame()  # Empty dataframe for graceful fallback
-
-                if signals.empty:
-                    st.info("シグナル対象者はいません")
-                else:
                     display_cols = ['name', 'intervention_priority', 'trend_refined',
                                    'change_tag', 'stability']
-
-                    # Validate columns exist
-                    missing_cols = [col for col in display_cols if col not in signals.columns]
-                    if missing_cols:
-                        st.error(f"signal データに必要なカラムがありません: {', '.join(missing_cols)}")
-                    else:
-                        display_df = signals[display_cols].copy()
-                        display_df = display_df.rename(columns=SIGNAL_LABELS)
-                        st.dataframe(display_df, use_container_width=True)
+                    render_signal_table(signals, display_cols)
+                except Exception as e:
+                    st.error(f"シグナルデータの取得に失敗しました: {e}")
 
     elif selected_tab == "分布":
         st.subheader("分布分析")
@@ -1221,17 +1403,6 @@ if uploaded_file is not None:
                     # Signal section
                     st.subheader("シグナル")
 
-                    def replace_abbreviations(text):
-                        """Replace abbreviations in strength/weakness text"""
-                        if pd.isna(text) or not str(text).strip():
-                            return "-"
-                        text = str(text)
-                        text = text.replace("データなし", "-")
-                        text = text.replace("V", "活力")
-                        text = text.replace("D", "熱意")
-                        text = text.replace("A", "没頭")
-                        return text
-
                     try:
                         individual_signal = signal_df[
                             (signal_df['name'] == selected_individual) &
@@ -1245,49 +1416,18 @@ if uploaded_file is not None:
                             if len(individual_signal) > 1:
                                 st.warning(f"注意: {selected_individual}の{end_dt.strftime('%Y-%m')}データが{len(individual_signal)}件あります。最初のレコードを表示しています。")
 
-                            # Select columns to display
-                            display_cols = [
-                                'engagement_rating', 'vigor_rating', 'dedication_rating', 'absorption_rating',
-                                'intervention_priority', 'trend_refined', 'change_tag', 'stability',
-                                'strength_short', 'weakness_short', 'strength_mid', 'weakness_mid'
-                            ]
-
-                            # Create display dataframe
-                            display_signal = individual_signal[display_cols].copy()
-
-                            # Process strength/weakness columns
-                            for col in ['strength_short', 'weakness_short', 'strength_mid', 'weakness_mid']:
-                                if col in display_signal.columns:
-                                    display_signal[col] = display_signal[col].apply(replace_abbreviations)
-
-                            # Format numeric columns
-                            for col in ['engagement_rating', 'vigor_rating', 'dedication_rating', 'absorption_rating']:
-                                if col in display_signal.columns:
-                                    display_signal[col] = display_signal[col].apply(
-                                        lambda x: f"{x:.1f}" if pd.notna(x) else "-"
+                            # Format and display signal data
+                            display_signal_t = format_individual_signal_data(individual_signal)
+                            st.dataframe(
+                                display_signal_t,
+                                column_config={
+                                    "Index": st.column_config.TextColumn(
+                                        "Index",
+                                        width="large"
                                     )
-
-                            for col in ['intervention_priority']:
-                                if col in display_signal.columns:
-                                    display_signal[col] = display_signal[col].apply(
-                                        lambda x: f"{x:.0f}" if pd.notna(x) else "-"
-                                    )
-
-                            # Handle other columns (convert to string, replace NaN with "-")
-                            for col in ['trend_refined', 'change_tag', 'stability']:
-                                if col in display_signal.columns:
-                                    display_signal[col] = display_signal[col].apply(
-                                        lambda x: str(x) if pd.notna(x) else "-"
-                                    )
-
-                            # Transpose for better display
-                            display_signal_t = display_signal.T
-                            display_signal_t.columns = ['値']
-                            display_signal_t.index = display_signal_t.index.map(
-                                lambda x: SIGNAL_LABELS.get(x, x)
+                                },
+                                **DATAFRAME_KWARGS
                             )
-
-                            st.dataframe(display_signal_t, use_container_width=True)
 
                     except Exception as e:
                         st.error(f"シグナルデータの取得に失敗しました: {e}")
