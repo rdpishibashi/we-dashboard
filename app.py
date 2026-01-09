@@ -10,7 +10,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.colors import sample_colorscale
 import numpy as np
-import inspect
 import json
 import os
 from pathlib import Path
@@ -23,21 +22,13 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-PLOTLY_CHART_KWARGS = (
-    {"width": "stretch"}
-    if "width" in inspect.signature(st.plotly_chart).parameters
-    else {"use_container_width": True}
-)
+PLOTLY_CHART_KWARGS = {"use_container_width": True}
 
 RADAR_CHART_CONFIG = {
     "modeBarButtonsToAdd": ["resetCameraDefault"]
 }
 
-DATAFRAME_KWARGS = (
-    {"width": "stretch"}
-    if "width" in inspect.signature(st.dataframe).parameters
-    else {"use_container_width": True}
-)
+DATAFRAME_KWARGS = {"width": "stretch"}
 
 METRIC_LABELS = {
     'engagement_rating': 'ワーク･エンゲージメント',
@@ -120,7 +111,7 @@ def style_trend_column(df):
         return ''
 
     if '中期トレンド' in df.columns:
-        return df.style.applymap(color_trend, subset=['中期トレンド'])
+        return df.style.map(color_trend, subset=['中期トレンド'])
     return df
 
 
@@ -1351,8 +1342,8 @@ if uploaded_file is not None:
                     )
                     st.plotly_chart(
                         fig_radar,
-                        config=RADAR_CHART_CONFIG,
-                        **PLOTLY_CHART_KWARGS
+                        use_container_width=True,
+                        config=RADAR_CHART_CONFIG
                     )
             
 
