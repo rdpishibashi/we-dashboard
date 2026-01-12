@@ -62,7 +62,6 @@ NEGATIVE_TRENDS = ['低下懸念', '悪化', '低下危機', '低下加速', '�
 # Signal table display columns
 SIGNAL_TABLE_COLUMNS = ['name', 'intervention_priority', 'trend_refined', 'change_tag', 'stability']
 INDIVIDUAL_SIGNAL_COLUMNS = [
-    'engagement_rating', 'vigor_rating', 'dedication_rating', 'absorption_rating',
     'intervention_priority', 'trend_refined', 'change_tag', 'stability',
     'strength_short', 'weakness_short', 'strength_mid', 'weakness_mid'
 ]
@@ -242,13 +241,6 @@ def format_individual_signal_data(signal_data):
     for col in ['strength_short', 'weakness_short', 'strength_mid', 'weakness_mid']:
         if col in display_signal.columns:
             display_signal[col] = display_signal[col].apply(replace_abbreviations)
-
-    # Format rating columns with 1 decimal
-    for col in ['engagement_rating', 'vigor_rating', 'dedication_rating', 'absorption_rating']:
-        if col in display_signal.columns:
-            display_signal[col] = display_signal[col].apply(
-                lambda x: f"{x:.1f}" if pd.notna(x) else "-"
-            )
 
     # Format intervention_priority as integer
     if 'intervention_priority' in display_signal.columns:
@@ -1604,8 +1596,35 @@ if uploaded_file is not None:
                 if selected_individual:
                     fig_ind = create_individual_trend(individual_df, selected_individual)
                     st.plotly_chart(fig_ind, **PLOTLY_CHART_KWARGS)
-                    
+
                     ind_data = individual_df[individual_df['name'] == selected_individual]
+
+                    # Key Indicators section - Wave data table
+                    st.subheader("主要な指標")
+
+                    # Select and sort wave data
+                    wave_data = ind_data.sort_values('year_month_dt')[
+                        ['year_month', 'engagement_rating', 'vigor_rating',
+                         'dedication_rating', 'absorption_rating']
+                    ].copy()
+
+                    # Format ratings with 1 decimal place
+                    for col in ['engagement_rating', 'vigor_rating', 'dedication_rating', 'absorption_rating']:
+                        if col in wave_data.columns:
+                            wave_data[col] = wave_data[col].apply(
+                                lambda x: f"{x:.1f}" if pd.notna(x) else "-"
+                            )
+
+                    # Rename columns to Japanese
+                    wave_data = wave_data.rename(columns={
+                        'year_month': '年月',
+                        'engagement_rating': 'エンゲージメント',
+                        'vigor_rating': '活力',
+                        'dedication_rating': '熱意',
+                        'absorption_rating': '没頭'
+                    })
+
+                    st.dataframe(wave_data, hide_index=True, **DATAFRAME_KWARGS)
 
                     # Signal section
                     st.subheader("シグナル")
