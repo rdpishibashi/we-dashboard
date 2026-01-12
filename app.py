@@ -69,6 +69,18 @@ INDIVIDUAL_SIGNAL_COLUMNS = [
 
 GROUP_ORDER_FILE = Path(__file__).with_name('group_order_config.json')
 
+# Rating calculation constants
+ENGAGEMENT_DIVISOR = 5.4
+COMPONENT_DIVISOR = 1.8
+
+# Rating band thresholds
+RATING_BAND_HIGH_THRESHOLD = 6.0
+RATING_BAND_LOW_THRESHOLD = 2.0
+
+# Color scale configuration
+COLOR_SCALE_START = 0.35
+COLOR_SCALE_END = 1
+
 
 # =============================================================================
 # Configuration and Utility Functions
@@ -89,6 +101,17 @@ def load_group_orders():
 # =============================================================================
 # Signal Data Processing Functions
 # =============================================================================
+
+def apply_signal_rating_calculations(signal_df):
+    """Apply rating divisor calculations to signal data."""
+    signal_df = signal_df.copy()
+    if 'engagement_rating' in signal_df.columns:
+        signal_df['engagement_rating'] = signal_df['engagement_rating'] / ENGAGEMENT_DIVISOR
+    for col in ['vigor_rating', 'dedication_rating', 'absorption_rating']:
+        if col in signal_df.columns:
+            signal_df[col] = signal_df[col] / COMPONENT_DIVISOR
+    return signal_df
+
 
 def style_trend_column(df):
     """
@@ -496,8 +519,138 @@ def load_data(uploaded_file):
 
 
 # =============================================================================
+# Statistics Calculation Functions
+# =============================================================================
+
+def format_statistics_for_display(stats_df):
+    """Format statistics dataframe for display with consistent decimal places."""
+    display_stats = stats_df.copy()
+    display_stats['平均'] = display_stats['平均'].apply(lambda x: f"{x:.2f}")
+    display_stats['傾向の傾き'] = display_stats['傾向の傾き'].apply(lambda x: f"{x:.3f}")
+    display_stats['標準偏差'] = display_stats['標準偏差'].apply(lambda x: f"{x:.2f}")
+    return display_stats
+
+
+def calculate_group_statistics(df, metric_col, group_col=None):
+    """
+    Calculate key statistics for each group in the data.
+
+    Args:
+        df: DataFrame with time series data
+        metric_col: The metric column to analyze
+        group_col: Optional grouping column (e.g., 'department', 'name')
+
+    Returns:
+        DataFrame with statistics for each group, sorted by group order
+    """
+    stats_list = []
+
+    # Determine the column name based on grouping
+    if group_col and group_col != 'なし':
+        # Get the label and remove "別" suffix
+        group_label = GROUPING_LABEL_MAP.get(group_col, 'グループ')
+        column_name = group_label.replace('別', '') if group_label != 'なし' else 'グループ'
+    else:
+        column_name = 'グループ'
+
+    if group_col and group_col != 'なし':
+        # Calculate statistics for each group
+        for group_name in df[group_col].unique():
+            group_data = df[df[group_col] == group_name].copy()
+            group_data = group_data.dropna(subset=[metric_col, 'year_month_dt'])
+
+            if len(group_data) == 0:
+                continue
+
+            # Sort by date for trend calculation
+            group_data = group_data.sort_values('year_month_dt')
+
+            # Calculate average
+            avg_value = group_data[metric_col].mean()
+
+            # Calculate standard deviation
+            std_value = group_data[metric_col].std()
+
+            # Calculate trend slope using linear regression
+            monthly_avg = group_data.groupby('year_month_dt')[metric_col].mean().reset_index()
+            if len(monthly_avg) >= 2:
+                x = np.arange(len(monthly_avg))
+                y = monthly_avg[metric_col].values
+                slope = np.polyfit(x, y, 1)[0]
+            else:
+                slope = 0.0
+
+            stats_list.append({
+                column_name: str(group_name),
+                '平均': avg_value,
+                '傾向の傾き': slope,
+                '標準偏差': std_value
+            })
+    else:
+        # Calculate statistics for entire dataset
+        clean_data = df.dropna(subset=[metric_col, 'year_month_dt']).copy()
+
+        if len(clean_data) > 0:
+            # Sort by date
+            clean_data = clean_data.sort_values('year_month_dt')
+
+            # Calculate average
+            avg_value = clean_data[metric_col].mean()
+
+            # Calculate standard deviation
+            std_value = clean_data[metric_col].std()
+
+            # Calculate trend slope
+            monthly_avg = clean_data.groupby('year_month_dt')[metric_col].mean().reset_index()
+            if len(monthly_avg) >= 2:
+                x = np.arange(len(monthly_avg))
+                y = monthly_avg[metric_col].values
+                slope = np.polyfit(x, y, 1)[0]
+            else:
+                slope = 0.0
+
+            stats_list.append({
+                column_name: '全体',
+                '平均': avg_value,
+                '傾向の傾き': slope,
+                '標準偏差': std_value
+            })
+
+    if not stats_list:
+        return pd.DataFrame()
+
+    stats_df = pd.DataFrame(stats_list)
+
+    # Sort by group order if grouping is applied
+    if group_col and group_col != 'なし':
+        group_values = stats_df[column_name].tolist()
+        group_order = get_category_order_with_reference(group_col, group_values, df)
+
+        # Create a categorical type with the proper order
+        stats_df[column_name] = pd.Categorical(
+            stats_df[column_name],
+            categories=group_order,
+            ordered=True
+        )
+        stats_df = stats_df.sort_values(column_name).reset_index(drop=True)
+
+        # Convert back to string for display
+        stats_df[column_name] = stats_df[column_name].astype(str)
+
+    return stats_df
+
+
+# =============================================================================
 # Chart Creation Functions
 # =============================================================================
+
+def _create_empty_figure(message="表示できるデータがありません", height=420):
+    """Create an empty figure with a message."""
+    fig = go.Figure()
+    fig.add_annotation(text=message, x=0.5, y=0.5, showarrow=False)
+    fig.update_layout(height=height)
+    return fig
+
 
 def create_time_series_chart(df, y_col, title, color_by=None):
     """時系列チャートの作成"""
@@ -521,24 +674,37 @@ def create_time_series_chart(df, y_col, title, color_by=None):
             markers=True,
             category_orders={color_by: color_order}
         )
+
+        # Get Japanese label for legend title and remove "別" suffix
+        legend_title = GROUPING_LABEL_MAP.get(color_by, color_by)
+        if legend_title != 'なし':
+            legend_title = legend_title.replace('別', '')
+
+        fig.update_layout(
+            xaxis_title='年月',
+            yaxis_title=axis_title,
+            hovermode='x unified',
+            height=480,
+            legend_title=legend_title
+        )
     else:
         # 全体の月次平均
         grouped = df.groupby('year_month')[y_col].mean().reset_index()
         grouped['year_month_dt'] = pd.to_datetime(grouped['year_month'], format='%Y-%m', errors='coerce')
         fig = px.line(
-            grouped, 
-            x='year_month_dt', 
+            grouped,
+            x='year_month_dt',
             y=y_col,
             title=title,
             markers=True
         )
-    
-    fig.update_layout(
-        xaxis_title='年月',
-        yaxis_title=axis_title,
-        hovermode='x unified',
-        height=480
-    )
+
+        fig.update_layout(
+            xaxis_title='年月',
+            yaxis_title=axis_title,
+            hovermode='x unified',
+            height=480
+        )
 
     unique_dates = (
         grouped['year_month_dt']
@@ -612,7 +778,7 @@ def create_recent_group_comparison_chart(df, metric, group_col, range_label=None
     }
 
     if month_labels:
-        color_positions = np.linspace(0.35, 1, len(month_labels))
+        color_positions = np.linspace(COLOR_SCALE_START, COLOR_SCALE_END, len(month_labels))
         colors = sample_colorscale('Blues', color_positions)
         color_map = {label: colors[idx] for idx, label in enumerate(month_labels)}
     else:
@@ -673,8 +839,14 @@ def create_box_plot(df, x_col, y_col, title):
         title=title,
         category_orders=category_order
     )
+
+    # Get Japanese label for x-axis and remove "別" suffix
+    x_label = GROUPING_LABEL_MAP.get(x_col, x_col)
+    if x_label != 'なし':
+        x_label = x_label.replace('別', '')
+
     fig.update_layout(
-        xaxis_title=x_col,
+        xaxis_title=x_label,
         yaxis_title=METRIC_LABELS.get(y_col, y_col),
         showlegend=False,
         height=450
@@ -696,16 +868,13 @@ def create_group_rating_distribution(df, group_col, metric_col, range_label=None
     """グループ別の評価バンド構成"""
     working = df.dropna(subset=[group_col, metric_col, 'year_month_dt']).copy()
     if working.empty:
-        fig = go.Figure()
-        fig.add_annotation(text="表示できるデータがありません", x=0.5, y=0.5, showarrow=False)
-        fig.update_layout(height=420)
-        return fig
+        return _create_empty_figure()
 
     working[group_col] = working[group_col].astype(str)
     working['rating_band'] = np.select(
         [
-            working[metric_col] >= 6.0,
-            working[metric_col] <= 2.0
+            working[metric_col] >= RATING_BAND_HIGH_THRESHOLD,
+            working[metric_col] <= RATING_BAND_LOW_THRESHOLD
         ],
         [
             '高い',
@@ -725,10 +894,7 @@ def create_group_rating_distribution(df, group_col, metric_col, range_label=None
         for _, row in group_month_pairs.iterrows()
     ]
     if not pair_list_raw:
-        fig = go.Figure()
-        fig.add_annotation(text="表示できるデータがありません", x=0.5, y=0.5, showarrow=False)
-        fig.update_layout(height=420)
-        return fig
+        return _create_empty_figure()
 
     group_months = {}
     for grp, month_dt in pair_list_raw:
@@ -743,10 +909,7 @@ def create_group_rating_distribution(df, group_col, metric_col, range_label=None
             ordered_pairs.append((grp, month_dt))
 
     if not ordered_pairs:
-        fig = go.Figure()
-        fig.add_annotation(text="表示できるデータがありません", x=0.5, y=0.5, showarrow=False)
-        fig.update_layout(height=420)
-        return fig
+        return _create_empty_figure()
 
     base_records = []
     for grp, month_dt in ordered_pairs:
@@ -812,10 +975,7 @@ def create_group_rating_distribution(df, group_col, metric_col, range_label=None
     if gap_rows:
         counts = pd.concat([counts, pd.DataFrame(gap_rows)], ignore_index=True)
     if not category_keys:
-        fig = go.Figure()
-        fig.add_annotation(text="表示できるデータがありません", x=0.5, y=0.5, showarrow=False)
-        fig.update_layout(height=420)
-        return fig
+        return _create_empty_figure()
 
     group_labels = {
         'section': '部門',
@@ -1216,6 +1376,20 @@ if uploaded_file is not None:
             )
             st.plotly_chart(fig, **PLOTLY_CHART_KWARGS)
 
+            # Display key statistics
+            st.subheader("主要な指標")
+            stats_df = calculate_group_statistics(
+                ts_df,
+                selected_metric,
+                ts_group_choice if ts_group_choice != 'なし' else None
+            )
+            if not stats_df.empty:
+                # Format the statistics for display
+                display_stats = format_statistics_for_display(stats_df)
+                st.dataframe(display_stats, **DATAFRAME_KWARGS)
+            else:
+                st.info("統計情報を計算できません。")
+
             # Signal section - only show when grouping by individual
             if ts_group_choice == 'name':
                 st.subheader("アクション対象候補（介入優先度 > 1）")
@@ -1245,6 +1419,20 @@ if uploaded_file is not None:
                 selected_period_label
             )
             st.plotly_chart(comparison_fig, **PLOTLY_CHART_KWARGS)
+
+            # Display key statistics
+            st.subheader("主要な指標")
+            stats_df = calculate_group_statistics(
+                comparison_df,
+                selected_metric,
+                comparison_group
+            )
+            if not stats_df.empty:
+                # Format the statistics for display
+                display_stats = format_statistics_for_display(stats_df)
+                st.dataframe(display_stats, **DATAFRAME_KWARGS)
+            else:
+                st.info("統計情報を計算できません。")
 
             # Signal section - only show when grouping by individual
             if comparison_group == 'name':
@@ -1283,22 +1471,50 @@ if uploaded_file is not None:
                 )
                 st.plotly_chart(fig_box, **PLOTLY_CHART_KWARGS)
             
-            fig_hist = px.histogram(
-                dist_df,
-                x=selected_metric,
-                nbins=30,
-                title=f'{METRIC_LABELS.get(selected_metric, selected_metric)}の分布',
-                marginal='box'
-            )
-            fig_hist.update_traces(
+            # Create histogram with marginal box plot and fixed 1-step bins
+            fig_hist = go.Figure()
+
+            # Add histogram with explicit bin configuration
+            fig_hist.add_trace(go.Histogram(
+                x=dist_df[selected_metric],
+                xbins=dict(
+                    start=0,
+                    end=10,
+                    size=1
+                ),
                 marker_color="#4c78a8",
                 marker_line_color='white',
                 marker_line_width=1,
                 hovertemplate=(
-                    f"{METRIC_LABELS.get(selected_metric, selected_metric)}: %{{x:.1f}}<br>"
+                    "範囲: %{x}<br>"
+                    f"{METRIC_LABELS.get(selected_metric, selected_metric)}: %{{x:.2f}}<br>"
                     "件数: %{y}<extra></extra>"
                 )
+            ))
+
+            # Add marginal box plot
+            fig_hist.add_trace(go.Box(
+                x=dist_df[selected_metric],
+                name='',
+                marker_color="#4c78a8",
+                showlegend=False,
+                yaxis='y2',
+                hovertemplate=(
+                    f"{METRIC_LABELS.get(selected_metric, selected_metric)}: %{{x:.1f}}<extra></extra>"
+                )
+            ))
+
+            fig_hist.update_layout(
+                title=f'{METRIC_LABELS.get(selected_metric, selected_metric)} ヒストグラム',
+                xaxis_title=METRIC_LABELS.get(selected_metric, selected_metric),
+                yaxis_title='件数',
+                xaxis=dict(range=[0, RATING_AXIS_MAX], dtick=1),
+                yaxis=dict(domain=[0, 0.85]),
+                yaxis2=dict(domain=[0.85, 1], showticklabels=False),
+                showlegend=False,
+                height=450
             )
+
             st.plotly_chart(fig_hist, **PLOTLY_CHART_KWARGS)
 
     elif selected_tab == "評価":
@@ -1406,6 +1622,9 @@ if uploaded_file is not None:
                             # Warn about duplicates
                             if len(individual_signal) > 1:
                                 st.warning(f"注意: {selected_individual}の{end_dt.strftime('%Y-%m')}データが{len(individual_signal)}件あります。最初のレコードを表示しています。")
+
+                            # Apply calculation to rating values
+                            individual_signal = apply_signal_rating_calculations(individual_signal)
 
                             # Format and display signal data
                             display_signal_t = format_individual_signal_data(individual_signal)
