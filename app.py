@@ -185,13 +185,21 @@ if uploaded_file is not None:
         "個人",
         "分布"
     ]
-    selected_tab = st.radio(
+
+    # Initialize tab selection on first load
+    tab_key = "main_tab_selector_v2"
+    if tab_key not in st.session_state:
+        st.session_state[tab_key] = "時系列"
+
+    st.radio(
         "レポート種別",
         tab_labels,
         horizontal=True,
-        index=0,
-        key="main_tab_selector_v2"
+        key=tab_key
     )
+
+    # Always read the selected tab from session state to ensure consistency
+    selected_tab = st.session_state[tab_key]
 
     # =============================================================================
     # 時系列 Tab
@@ -289,6 +297,12 @@ if uploaded_file is not None:
 
             try:
                 signals = get_signal_data(signal_df, ts_df, end_dt)
+
+                # Filter by privilege
+                from modules.auth import filter_by_privilege, get_current_privilege
+                current_privilege = get_current_privilege()
+                signals = filter_by_privilege(signals, current_privilege)
+
                 render_signal_table(signals, SIGNAL_TABLE_COLUMNS)
             except Exception as e:
                 st.error(f"シグナルデータの取得に失敗しました: {e}")
@@ -332,23 +346,31 @@ if uploaded_file is not None:
                             else:
                                 concern_data = concern_data.sort_values(['group', 'name', 'year_month'])
 
-                            # Display grouped by section and name
-                            current_section = None
-                            current_name = None
-                            for _, row in concern_data.iterrows():
-                                if row['group'] != current_section or row['name'] != current_name:
-                                    current_section = row['group']
-                                    current_name = row['name']
-                                    st.markdown(f"**{current_section} - {current_name}**")
-                                st.markdown(f"　{row['year_month']}")
-                                st.text(f"　{row['concern']}")
-                                st.divider()
+                            # Display nested: section -> name -> content
+                            sections = concern_data['group'].unique()
+                            for section in sections:
+                                section_data = concern_data[concern_data['group'] == section]
+                                with st.expander(f"{section}", expanded=False):
+                                    names = section_data['name'].unique()
+                                    for name in names:
+                                        name_data = section_data[section_data['name'] == name]
+                                        with st.expander(f"{name}", expanded=False):
+                                            for _, row in name_data.iterrows():
+                                                st.markdown(f"**{row['year_month']}**")
+                                                st.text(row['concern'])
+                                                st.divider()
                         else:
                             st.info("データがありません")
 
                 # Comment section - 共有したいこと
                 with st.expander("共有したいこと", expanded=False):
                     share_data = graph_comments[graph_comments['comment'].notna()].copy()
+
+                    # Filter by privilege
+                    from modules.auth import filter_by_privilege, get_current_privilege
+                    current_privilege = get_current_privilege()
+                    share_data = filter_by_privilege(share_data, current_privilege)
+
                     if not share_data.empty:
                         # Sort by section order, then name, then date
                         if section_order:
@@ -360,17 +382,19 @@ if uploaded_file is not None:
                         else:
                             share_data = share_data.sort_values(['group', 'name', 'year_month'])
 
-                        # Display grouped by section and name
-                        current_section = None
-                        current_name = None
-                        for _, row in share_data.iterrows():
-                            if row['group'] != current_section or row['name'] != current_name:
-                                current_section = row['group']
-                                current_name = row['name']
-                                st.markdown(f"**{current_section} - {current_name}**")
-                            st.markdown(f"　{row['year_month']}")
-                            st.text(f"　{row['comment']}")
-                            st.divider()
+                        # Display nested: section -> name -> content
+                        sections = share_data['group'].unique()
+                        for section in sections:
+                            section_data = share_data[share_data['group'] == section]
+                            with st.expander(f"{section}", expanded=False):
+                                names = section_data['name'].unique()
+                                for name in names:
+                                    name_data = section_data[section_data['name'] == name]
+                                    with st.expander(f"{name}", expanded=False):
+                                        for _, row in name_data.iterrows():
+                                            st.markdown(f"**{row['year_month']}**")
+                                            st.text(row['comment'])
+                                            st.divider()
                     else:
                         st.info("データがありません")
 
@@ -474,6 +498,12 @@ if uploaded_file is not None:
 
                 try:
                     signals = get_signal_data(signal_df, comparison_df, end_dt)
+
+                    # Filter by privilege
+                    from modules.auth import filter_by_privilege, get_current_privilege
+                    current_privilege = get_current_privilege()
+                    signals = filter_by_privilege(signals, current_privilege)
+
                     render_signal_table(signals, SIGNAL_TABLE_COLUMNS)
                 except Exception as e:
                     st.error(f"シグナルデータの取得に失敗しました: {e}")
@@ -517,23 +547,31 @@ if uploaded_file is not None:
                                 else:
                                     concern_data = concern_data.sort_values(['group', 'name', 'year_month'])
 
-                                # Display grouped by section and name
-                                current_section = None
-                                current_name = None
-                                for _, row in concern_data.iterrows():
-                                    if row['group'] != current_section or row['name'] != current_name:
-                                        current_section = row['group']
-                                        current_name = row['name']
-                                        st.markdown(f"**{current_section} - {current_name}**")
-                                    st.markdown(f"　{row['year_month']}")
-                                    st.text(f"　{row['concern']}")
-                                    st.divider()
+                                # Display nested: section -> name -> content
+                                sections = concern_data['group'].unique()
+                                for section in sections:
+                                    section_data = concern_data[concern_data['group'] == section]
+                                    with st.expander(f"{section}", expanded=False):
+                                        names = section_data['name'].unique()
+                                        for name in names:
+                                            name_data = section_data[section_data['name'] == name]
+                                            with st.expander(f"{name}", expanded=False):
+                                                for _, row in name_data.iterrows():
+                                                    st.markdown(f"**{row['year_month']}**")
+                                                    st.text(row['concern'])
+                                                    st.divider()
                             else:
                                 st.info("データがありません")
 
                     # Comment section - 共有したいこと
                     with st.expander("共有したいこと", expanded=False):
                         share_data = graph_comments[graph_comments['comment'].notna()].copy()
+
+                        # Filter by privilege
+                        from modules.auth import filter_by_privilege, get_current_privilege
+                        current_privilege = get_current_privilege()
+                        share_data = filter_by_privilege(share_data, current_privilege)
+
                         if not share_data.empty:
                             # Sort by section order, then name, then date
                             if section_order:
@@ -545,17 +583,19 @@ if uploaded_file is not None:
                             else:
                                 share_data = share_data.sort_values(['group', 'name', 'year_month'])
 
-                            # Display grouped by section and name
-                            current_section = None
-                            current_name = None
-                            for _, row in share_data.iterrows():
-                                if row['group'] != current_section or row['name'] != current_name:
-                                    current_section = row['group']
-                                    current_name = row['name']
-                                    st.markdown(f"**{current_section} - {current_name}**")
-                                st.markdown(f"　{row['year_month']}")
-                                st.text(f"　{row['comment']}")
-                                st.divider()
+                            # Display nested: section -> name -> content
+                            sections = share_data['group'].unique()
+                            for section in sections:
+                                section_data = share_data[share_data['group'] == section]
+                                with st.expander(f"{section}", expanded=False):
+                                    names = section_data['name'].unique()
+                                    for name in names:
+                                        name_data = section_data[section_data['name'] == name]
+                                        with st.expander(f"{name}", expanded=False):
+                                            for _, row in name_data.iterrows():
+                                                st.markdown(f"**{row['year_month']}**")
+                                                st.text(row['comment'])
+                                                st.divider()
                         else:
                             st.info("データがありません")
 
@@ -624,6 +664,12 @@ if uploaded_file is not None:
 
                 try:
                     signals = get_signal_data(signal_df, comparison_df, end_dt)
+
+                    # Filter by privilege
+                    from modules.auth import filter_by_privilege, get_current_privilege
+                    current_privilege = get_current_privilege()
+                    signals = filter_by_privilege(signals, current_privilege)
+
                     display_cols = ['name', 'group', 'intervention_priority', 'trend_refined',
                                    'change_tag', 'stability']
                     render_signal_table(signals, display_cols)
@@ -669,23 +715,31 @@ if uploaded_file is not None:
                                 else:
                                     concern_data = concern_data.sort_values(['group', 'name', 'year_month'])
 
-                                # Display grouped by section and name
-                                current_section = None
-                                current_name = None
-                                for _, row in concern_data.iterrows():
-                                    if row['group'] != current_section or row['name'] != current_name:
-                                        current_section = row['group']
-                                        current_name = row['name']
-                                        st.markdown(f"**{current_section} - {current_name}**")
-                                    st.markdown(f"　{row['year_month']}")
-                                    st.text(f"　{row['concern']}")
-                                    st.divider()
+                                # Display nested: section -> name -> content
+                                sections = concern_data['group'].unique()
+                                for section in sections:
+                                    section_data = concern_data[concern_data['group'] == section]
+                                    with st.expander(f"{section}", expanded=False):
+                                        names = section_data['name'].unique()
+                                        for name in names:
+                                            name_data = section_data[section_data['name'] == name]
+                                            with st.expander(f"{name}", expanded=False):
+                                                for _, row in name_data.iterrows():
+                                                    st.markdown(f"**{row['year_month']}**")
+                                                    st.text(row['concern'])
+                                                    st.divider()
                             else:
                                 st.info("データがありません")
 
                     # Comment section - 共有したいこと
                     with st.expander("共有したいこと", expanded=False):
                         share_data = graph_comments[graph_comments['comment'].notna()].copy()
+
+                        # Filter by privilege
+                        from modules.auth import filter_by_privilege, get_current_privilege
+                        current_privilege = get_current_privilege()
+                        share_data = filter_by_privilege(share_data, current_privilege)
+
                         if not share_data.empty:
                             # Sort by section order, then name, then date
                             if section_order:
@@ -697,17 +751,19 @@ if uploaded_file is not None:
                             else:
                                 share_data = share_data.sort_values(['group', 'name', 'year_month'])
 
-                            # Display grouped by section and name
-                            current_section = None
-                            current_name = None
-                            for _, row in share_data.iterrows():
-                                if row['group'] != current_section or row['name'] != current_name:
-                                    current_section = row['group']
-                                    current_name = row['name']
-                                    st.markdown(f"**{current_section} - {current_name}**")
-                                st.markdown(f"　{row['year_month']}")
-                                st.text(f"　{row['comment']}")
-                                st.divider()
+                            # Display nested: section -> name -> content
+                            sections = share_data['group'].unique()
+                            for section in sections:
+                                section_data = share_data[share_data['group'] == section]
+                                with st.expander(f"{section}", expanded=False):
+                                    names = section_data['name'].unique()
+                                    for name in names:
+                                        name_data = section_data[section_data['name'] == name]
+                                        with st.expander(f"{name}", expanded=False):
+                                            for _, row in name_data.iterrows():
+                                                st.markdown(f"**{row['year_month']}**")
+                                                st.text(row['comment'])
+                                                st.divider()
                         else:
                             st.info("データがありません")
 
@@ -870,7 +926,7 @@ if uploaded_file is not None:
                     )
                     st.plotly_chart(
                         fig,
-                        use_container_width=True,
+                        width='stretch',
                         config=RADAR_CHART_CONFIG
                     )
                 else:
@@ -881,7 +937,7 @@ if uploaded_file is not None:
                     )
                     st.plotly_chart(
                         fig_radar,
-                        use_container_width=True,
+                        width='stretch',
                         config=RADAR_CHART_CONFIG
                     )
 
@@ -898,6 +954,12 @@ if uploaded_file is not None:
             "individual",
             grouping_options=['なし', 'department', 'group', 'team', 'project', 'grade', 'name']
         )
+
+        # Filter by privilege - restrict to allowed groups only
+        from modules.auth import filter_by_privilege, get_current_privilege
+        current_privilege = get_current_privilege()
+        individual_df = filter_by_privilege(individual_df, current_privilege)
+
         if individual_df.empty:
             st.info("選択された条件に該当するデータがありません。")
         else:
