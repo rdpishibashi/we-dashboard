@@ -7,21 +7,44 @@ import numpy as np
 import streamlit as st
 
 
+def get_excel_password():
+    """
+    Get Excel password from Streamlit secrets.
+
+    Returns:
+        Password string or None if not configured
+    """
+    try:
+        return st.secrets.get("EXCEL_PASSWORD")
+    except (AttributeError, FileNotFoundError):
+        return None
+
+
 @st.cache_data
 def load_data(uploaded_file):
     """
     Load and preprocess data file.
+    Supports password-protected Excel files.
 
     Args:
         uploaded_file: File object or path to Excel file
 
     Returns:
-        Tuple of (pivot_df, signal_df) - rating data and signal data
+        Tuple of (pivot_df, signal_df, comment_df) - rating data, signal data, and comment data
 
     Raises:
         ValueError: If required columns are missing or data is invalid
     """
-    raw_df = pd.read_excel(uploaded_file, sheet_name='rating')
+    # Get password for protected Excel files
+    password = get_excel_password()
+
+    # Read Excel file with password if available
+    try:
+        raw_df = pd.read_excel(uploaded_file, sheet_name='rating', password=password)
+    except Exception as e:
+        if 'password' in str(e).lower():
+            raise ValueError(f"Excelファイルのパスワードが正しくありません。管理者に連絡してください。")
+        raise ValueError(f"rating シートの読み込みに失敗しました: {e}")
     required_cols = {'year', 'month', 'mail_address', 'name', 'factor', 'score'}
     missing_cols = required_cols - set(raw_df.columns)
     if missing_cols:
@@ -86,7 +109,7 @@ def load_data(uploaded_file):
 
     # Load rating2 sheet for signal data
     try:
-        signal_raw_df = pd.read_excel(uploaded_file, sheet_name='rating2')
+        signal_raw_df = pd.read_excel(uploaded_file, sheet_name='rating2', password=password)
     except Exception as e:
         raise ValueError(f"rating2シートの読み込みに失敗しました: {e}")
 
@@ -128,7 +151,7 @@ def load_data(uploaded_file):
 
     # Load comment sheet for concern and comment data
     try:
-        comment_raw_df = pd.read_excel(uploaded_file, sheet_name='comment')
+        comment_raw_df = pd.read_excel(uploaded_file, sheet_name='comment', password=password)
     except Exception as e:
         raise ValueError(f"commentシートの読み込みに失敗しました: {e}")
 
