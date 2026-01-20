@@ -11,7 +11,7 @@ RADAR_CHART_CONFIG = {
     "modeBarButtonsToAdd": ["resetCameraDefault"]
 }
 
-DATAFRAME_KWARGS = {"width": "stretch"}
+DATAFRAME_KWARGS = {"width": "stretch", "hide_index": True}
 
 # Metric labels
 METRIC_LABELS = {
@@ -23,6 +23,7 @@ METRIC_LABELS = {
 
 # Signal labels
 SIGNAL_LABELS = {
+    'group': '課',
     'name': '氏名',
     'intervention_priority': '介入優先度',
     'trend_refined': '中期トレンド',
@@ -46,7 +47,7 @@ POSITIVE_TRENDS = ['上昇加速', '上昇継続', '回復期待', '回復', '�
 NEGATIVE_TRENDS = ['低下懸念', '悪化', '低下危機', '低下加速', '低下継続', '低下警戒', '下降']
 
 # Signal table display columns
-SIGNAL_TABLE_COLUMNS = ['name', 'intervention_priority', 'trend_refined', 'change_tag', 'stability']
+SIGNAL_TABLE_COLUMNS = ['name', 'group', 'intervention_priority', 'trend_refined', 'change_tag', 'stability']
 INDIVIDUAL_SIGNAL_COLUMNS = [
     'intervention_priority', 'trend_refined', 'change_tag', 'stability',
     'strength_short', 'weakness_short', 'strength_mid', 'weakness_mid'
