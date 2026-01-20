@@ -5,7 +5,7 @@ Configuration and Constants for Work Engagement Dashboard
 from pathlib import Path
 
 # Plotly chart configuration
-PLOTLY_CHART_KWARGS = {"use_container_width": True}
+PLOTLY_CHART_KWARGS = {"width": "stretch"}
 
 RADAR_CHART_CONFIG = {
     "modeBarButtonsToAdd": ["resetCameraDefault"]
@@ -93,3 +93,21 @@ GROUP_LABELS = {
 
 # Default data file
 DEFAULT_FILE_PATH = "EngagementMasterSS.xlsx"
+
+# Privilege-based access control for 共有したいこと section
+# Maps privilege to allowed groups (None = all groups allowed)
+PRIVILEGE_GROUP_ACCESS = {
+    'admin': None,                   # Admin - all groups
+    'sd': ['ソフトウェア開発課', '製品技術課'],
+    'me': ['ソフトウェア開発課', '製品技術課'],
+    'sw': ['ソフトウェア開発課'],       # ソフトウェア開発課 manager
+    'pd': ['製品技術課'],              # 製品技術課 manager
+    'me1': ['第一設計課'],             # 第一設計課 manager
+    'me2': ['第二設計課'],             # 第二設計課 manager
+    'me3': ['第三設計課'],             # 第三設計課 manager
+    'dev': ['開発部'],
+    'dev1': ['開発部 1課', 'UTI技術発展処'], 
+    'dev2': ['開発部 2課', 'UK S1-Project'], 
+    'uti': ['開発部 1課', 'UTI技術発展処'], 
+    'uks1': ['開発部 2課', 'UK S1-Project']
+}

@@ -217,3 +217,51 @@ def render_login_ui():
                     st.error("ユーザー名またはパスワードが正しくありません")
 
     return False
+
+
+def get_allowed_groups_for_sharing(privilege: Optional[str]) -> Optional[list]:
+    """
+    Get the list of groups a privilege can access for 共有したいこと section.
+
+    Args:
+        privilege: User's privilege level
+
+    Returns:
+        None if all groups allowed, or list of specific group/department names, or empty list if no access
+    """
+    from modules.config import PRIVILEGE_GROUP_ACCESS
+
+    if privilege is None:
+        return []  # No privilege = no access
+
+    return PRIVILEGE_GROUP_ACCESS.get(privilege, [])
+
+
+def filter_by_privilege(data, privilege: Optional[str]):
+    """
+    Filter dataframe by privilege. Supports both group (課) and department (部署) filtering.
+
+    Args:
+        data: DataFrame with 'group' and 'department' columns
+        privilege: User's privilege level
+
+    Returns:
+        Filtered DataFrame
+    """
+    import pandas as pd
+
+    allowed_values = get_allowed_groups_for_sharing(privilege)
+
+    if allowed_values is None:
+        # None = all data allowed
+        return data
+    elif len(allowed_values) == 0:
+        # Empty list = no access
+        return data.iloc[0:0]
+    else:
+        # Filter by both group and department columns
+        # This allows specifying either groups (課) or departments (部署)
+        mask = data['group'].isin(allowed_values)
+        if 'department' in data.columns:
+            mask = mask | data['department'].isin(allowed_values)
+        return data[mask]
