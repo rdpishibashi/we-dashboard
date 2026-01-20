@@ -31,6 +31,7 @@ from modules.charts import (
     create_box_plot, create_group_rating_distribution, create_radar_chart,
     create_individual_trend
 )
+from modules.auth import render_login_ui, is_authenticated, has_privilege
 
 # ページ設定
 st.set_page_config(
@@ -59,6 +60,10 @@ uploaded_file = st.sidebar.file_uploader(
 if uploaded_file is None and os.path.exists(DEFAULT_FILE_PATH):
     uploaded_file = DEFAULT_FILE_PATH
     st.sidebar.info(f"📋 デフォルトファイルを使用: {DEFAULT_FILE_PATH}")
+
+# ログイン機能
+if render_login_ui():
+    st.rerun()
 
 if uploaded_file is not None:
     # データ読み込み
@@ -246,7 +251,7 @@ if uploaded_file is not None:
                         'engagement_rating': 'ワーク・エンゲージメント'
                     })
 
-                    st.dataframe(measured_data, hide_index=True, **DATAFRAME_KWARGS)
+                    st.dataframe(measured_data, **DATAFRAME_KWARGS)
                 else:
                     # No grouping - show overall average by month
                     measured_data = ts_df.groupby('year_month')['engagement_rating'].mean().reset_index()
@@ -263,31 +268,111 @@ if uploaded_file is not None:
                         'engagement_rating': 'ワーク・エンゲージメント'
                     })
 
-                    st.dataframe(measured_data, hide_index=True, **DATAFRAME_KWARGS)
+                    st.dataframe(measured_data, **DATAFRAME_KWARGS)
 
-            # Display key statistics
-            st.subheader("主要な指標")
-            stats_df = calculate_group_statistics(
-                ts_df,
-                selected_metric,
-                ts_group_choice if ts_group_choice != 'なし' else None
-            )
-            if not stats_df.empty:
-                # Format the statistics for display
-                display_stats = format_statistics_for_display(stats_df)
-                st.dataframe(display_stats, **DATAFRAME_KWARGS)
-            else:
-                st.info("統計情報を計算できません。")
+            # Display key statistics (collapsible)
+            with st.expander("主要な指標", expanded=False):
+                stats_df = calculate_group_statistics(
+                    ts_df,
+                    selected_metric,
+                    ts_group_choice if ts_group_choice != 'なし' else None
+                )
+                if not stats_df.empty:
+                    # Format the statistics for display
+                    display_stats = format_statistics_for_display(stats_df)
+                    st.dataframe(display_stats, **DATAFRAME_KWARGS)
+                else:
+                    st.info("統計情報を計算できません。")
 
-            # Signal section - only show when grouping by individual
-            if ts_group_choice == 'name':
-                st.subheader("アクション対象候補（介入優先度 > 1）")
+            # Signal section - アクション対象候補
+            st.subheader("アクション対象候補（介入優先度 > 1）")
 
-                try:
-                    signals = get_signal_data(signal_df, ts_df, end_dt)
-                    render_signal_table(signals, SIGNAL_TABLE_COLUMNS)
-                except Exception as e:
-                    st.error(f"シグナルデータの取得に失敗しました: {e}")
+            try:
+                signals = get_signal_data(signal_df, ts_df, end_dt)
+                render_signal_table(signals, SIGNAL_TABLE_COLUMNS)
+            except Exception as e:
+                st.error(f"シグナルデータの取得に失敗しました: {e}")
+
+            # Get comment data for individuals in current graph
+            valid_names = ts_df['name'].dropna().unique()
+            # Get name to group mapping from the latest data
+            name_group_map = ts_df.drop_duplicates('name').set_index('name')['group'].to_dict()
+
+            # Filter comment data by names and date range
+            graph_comments = comment_df[
+                (comment_df['mail_address'].isin(
+                    ts_df[ts_df['name'].isin(valid_names)]['mail_address'].dropna().unique()
+                )) &
+                (comment_df['year_month_dt'] >= start_dt) &
+                (comment_df['year_month_dt'] <= end_dt)
+            ].copy()
+
+            # Add name and group columns to comments
+            if not graph_comments.empty:
+                mail_to_name = ts_df.drop_duplicates('mail_address').set_index('mail_address')['name'].to_dict()
+                graph_comments['name'] = graph_comments['mail_address'].map(mail_to_name)
+                graph_comments['group'] = graph_comments['name'].map(name_group_map)
+
+                # Get section order from config
+                from modules.utils import GROUP_ORDER_MAP
+                section_order = GROUP_ORDER_MAP.get('section', [])
+
+                # Concern section - 気になった出来事や気づき (admin権限が必要)
+                if has_privilege("admin"):
+                    with st.expander("気になった出来事や気づき", expanded=False):
+                        concern_data = graph_comments[graph_comments['concern'].notna()].copy()
+                        if not concern_data.empty:
+                            # Sort by section order, then name, then date
+                            if section_order:
+                                section_order_map = {name: idx for idx, name in enumerate(section_order)}
+                                concern_data['_section_order'] = concern_data['group'].apply(
+                                    lambda x: section_order_map.get(x, len(section_order))
+                                )
+                                concern_data = concern_data.sort_values(['_section_order', 'name', 'year_month'])
+                            else:
+                                concern_data = concern_data.sort_values(['group', 'name', 'year_month'])
+
+                            # Display grouped by section and name
+                            current_section = None
+                            current_name = None
+                            for _, row in concern_data.iterrows():
+                                if row['group'] != current_section or row['name'] != current_name:
+                                    current_section = row['group']
+                                    current_name = row['name']
+                                    st.markdown(f"**{current_section} - {current_name}**")
+                                st.markdown(f"　{row['year_month']}")
+                                st.text(f"　{row['concern']}")
+                                st.divider()
+                        else:
+                            st.info("データがありません")
+
+                # Comment section - 共有したいこと
+                with st.expander("共有したいこと", expanded=False):
+                    share_data = graph_comments[graph_comments['comment'].notna()].copy()
+                    if not share_data.empty:
+                        # Sort by section order, then name, then date
+                        if section_order:
+                            section_order_map = {name: idx for idx, name in enumerate(section_order)}
+                            share_data['_section_order'] = share_data['group'].apply(
+                                lambda x: section_order_map.get(x, len(section_order))
+                            )
+                            share_data = share_data.sort_values(['_section_order', 'name', 'year_month'])
+                        else:
+                            share_data = share_data.sort_values(['group', 'name', 'year_month'])
+
+                        # Display grouped by section and name
+                        current_section = None
+                        current_name = None
+                        for _, row in share_data.iterrows():
+                            if row['group'] != current_section or row['name'] != current_name:
+                                current_section = row['group']
+                                current_name = row['name']
+                                st.markdown(f"**{current_section} - {current_name}**")
+                            st.markdown(f"　{row['year_month']}")
+                            st.text(f"　{row['comment']}")
+                            st.divider()
+                    else:
+                        st.info("データがありません")
 
     # =============================================================================
     # グループ比較 Tab
@@ -368,21 +453,112 @@ if uploaded_file is not None:
                         'engagement_rating': 'ワーク・エンゲージメント'
                     })
 
-                    st.dataframe(measured_data, hide_index=True, **DATAFRAME_KWARGS)
+                    st.dataframe(measured_data, **DATAFRAME_KWARGS)
 
-                # Display key statistics
-                st.subheader("主要な指標")
-                stats_df = calculate_group_statistics(
-                    comparison_df,
-                    selected_metric,
-                    None
-                )
-                if not stats_df.empty:
-                    # Format the statistics for display
-                    display_stats = format_statistics_for_display(stats_df)
-                    st.dataframe(display_stats, **DATAFRAME_KWARGS)
-                else:
-                    st.info("統計情報を計算できません。")
+                # Display key statistics (collapsible)
+                with st.expander("主要な指標", expanded=False):
+                    stats_df = calculate_group_statistics(
+                        comparison_df,
+                        selected_metric,
+                        None
+                    )
+                    if not stats_df.empty:
+                        # Format the statistics for display
+                        display_stats = format_statistics_for_display(stats_df)
+                        st.dataframe(display_stats, **DATAFRAME_KWARGS)
+                    else:
+                        st.info("統計情報を計算できません。")
+
+                # Signal section - アクション対象候補
+                st.subheader("アクション対象候補（介入優先度 > 1）")
+
+                try:
+                    signals = get_signal_data(signal_df, comparison_df, end_dt)
+                    render_signal_table(signals, SIGNAL_TABLE_COLUMNS)
+                except Exception as e:
+                    st.error(f"シグナルデータの取得に失敗しました: {e}")
+
+                # Get comment data for individuals in current graph
+                valid_names = comparison_df['name'].dropna().unique()
+                # Get name to group mapping from the latest data
+                name_group_map = comparison_df.drop_duplicates('name').set_index('name')['group'].to_dict()
+
+                # Filter comment data by names and date range
+                graph_comments = comment_df[
+                    (comment_df['mail_address'].isin(
+                        comparison_df[comparison_df['name'].isin(valid_names)]['mail_address'].dropna().unique()
+                    )) &
+                    (comment_df['year_month_dt'] >= start_dt) &
+                    (comment_df['year_month_dt'] <= end_dt)
+                ].copy()
+
+                # Add name and group columns to comments
+                if not graph_comments.empty:
+                    mail_to_name = comparison_df.drop_duplicates('mail_address').set_index('mail_address')['name'].to_dict()
+                    graph_comments['name'] = graph_comments['mail_address'].map(mail_to_name)
+                    graph_comments['group'] = graph_comments['name'].map(name_group_map)
+
+                    # Get section order from config
+                    from modules.utils import GROUP_ORDER_MAP
+                    section_order = GROUP_ORDER_MAP.get('section', [])
+
+                    # Concern section - 気になった出来事や気づき (admin権限が必要)
+                    if has_privilege("admin"):
+                        with st.expander("気になった出来事や気づき", expanded=False):
+                            concern_data = graph_comments[graph_comments['concern'].notna()].copy()
+                            if not concern_data.empty:
+                                # Sort by section order, then name, then date
+                                if section_order:
+                                    section_order_map = {name: idx for idx, name in enumerate(section_order)}
+                                    concern_data['_section_order'] = concern_data['group'].apply(
+                                        lambda x: section_order_map.get(x, len(section_order))
+                                    )
+                                    concern_data = concern_data.sort_values(['_section_order', 'name', 'year_month'])
+                                else:
+                                    concern_data = concern_data.sort_values(['group', 'name', 'year_month'])
+
+                                # Display grouped by section and name
+                                current_section = None
+                                current_name = None
+                                for _, row in concern_data.iterrows():
+                                    if row['group'] != current_section or row['name'] != current_name:
+                                        current_section = row['group']
+                                        current_name = row['name']
+                                        st.markdown(f"**{current_section} - {current_name}**")
+                                    st.markdown(f"　{row['year_month']}")
+                                    st.text(f"　{row['concern']}")
+                                    st.divider()
+                            else:
+                                st.info("データがありません")
+
+                    # Comment section - 共有したいこと
+                    with st.expander("共有したいこと", expanded=False):
+                        share_data = graph_comments[graph_comments['comment'].notna()].copy()
+                        if not share_data.empty:
+                            # Sort by section order, then name, then date
+                            if section_order:
+                                section_order_map = {name: idx for idx, name in enumerate(section_order)}
+                                share_data['_section_order'] = share_data['group'].apply(
+                                    lambda x: section_order_map.get(x, len(section_order))
+                                )
+                                share_data = share_data.sort_values(['_section_order', 'name', 'year_month'])
+                            else:
+                                share_data = share_data.sort_values(['group', 'name', 'year_month'])
+
+                            # Display grouped by section and name
+                            current_section = None
+                            current_name = None
+                            for _, row in share_data.iterrows():
+                                if row['group'] != current_section or row['name'] != current_name:
+                                    current_section = row['group']
+                                    current_name = row['name']
+                                    st.markdown(f"**{current_section} - {current_name}**")
+                                st.markdown(f"　{row['year_month']}")
+                                st.text(f"　{row['comment']}")
+                                st.divider()
+                        else:
+                            st.info("データがありません")
+
             else:
                 comparison_fig = create_recent_group_comparison_chart(
                     comparison_df,
@@ -427,33 +603,113 @@ if uploaded_file is not None:
                         'engagement_rating': 'ワーク・エンゲージメント'
                     })
 
-                    st.dataframe(measured_data, hide_index=True, **DATAFRAME_KWARGS)
+                    st.dataframe(measured_data, **DATAFRAME_KWARGS)
 
-                # Display key statistics
-                st.subheader("主要な指標")
-                stats_df = calculate_group_statistics(
-                    comparison_df,
-                    selected_metric,
-                    comparison_group
-                )
-                if not stats_df.empty:
-                    # Format the statistics for display
-                    display_stats = format_statistics_for_display(stats_df)
-                    st.dataframe(display_stats, **DATAFRAME_KWARGS)
-                else:
-                    st.info("統計情報を計算できません。")
+                # Display key statistics (collapsible)
+                with st.expander("主要な指標", expanded=False):
+                    stats_df = calculate_group_statistics(
+                        comparison_df,
+                        selected_metric,
+                        comparison_group
+                    )
+                    if not stats_df.empty:
+                        # Format the statistics for display
+                        display_stats = format_statistics_for_display(stats_df)
+                        st.dataframe(display_stats, **DATAFRAME_KWARGS)
+                    else:
+                        st.info("統計情報を計算できません。")
 
-                # Signal section - only show when grouping by individual
-                if comparison_group == 'name':
-                    st.subheader("アクション対象候補（介入優先度 > 1）")
+                # Signal section - アクション対象候補
+                st.subheader("アクション対象候補（介入優先度 > 1）")
 
-                    try:
-                        signals = get_signal_data(signal_df, comparison_df, end_dt)
-                        display_cols = ['name', 'intervention_priority', 'trend_refined',
-                                       'change_tag', 'stability']
-                        render_signal_table(signals, display_cols)
-                    except Exception as e:
-                        st.error(f"シグナルデータの取得に失敗しました: {e}")
+                try:
+                    signals = get_signal_data(signal_df, comparison_df, end_dt)
+                    display_cols = ['name', 'group', 'intervention_priority', 'trend_refined',
+                                   'change_tag', 'stability']
+                    render_signal_table(signals, display_cols)
+                except Exception as e:
+                    st.error(f"シグナルデータの取得に失敗しました: {e}")
+
+                # Get comment data for individuals in current graph
+                valid_names = comparison_df['name'].dropna().unique()
+                # Get name to group mapping from the latest data
+                name_group_map = comparison_df.drop_duplicates('name').set_index('name')['group'].to_dict()
+
+                # Filter comment data by names and date range
+                graph_comments = comment_df[
+                    (comment_df['mail_address'].isin(
+                        comparison_df[comparison_df['name'].isin(valid_names)]['mail_address'].dropna().unique()
+                    )) &
+                    (comment_df['year_month_dt'] >= start_dt) &
+                    (comment_df['year_month_dt'] <= end_dt)
+                ].copy()
+
+                # Add name and group columns to comments
+                if not graph_comments.empty:
+                    mail_to_name = comparison_df.drop_duplicates('mail_address').set_index('mail_address')['name'].to_dict()
+                    graph_comments['name'] = graph_comments['mail_address'].map(mail_to_name)
+                    graph_comments['group'] = graph_comments['name'].map(name_group_map)
+
+                    # Get section order from config
+                    from modules.utils import GROUP_ORDER_MAP
+                    section_order = GROUP_ORDER_MAP.get('section', [])
+
+                    # Concern section - 気になった出来事や気づき (admin権限が必要)
+                    if has_privilege("admin"):
+                        with st.expander("気になった出来事や気づき", expanded=False):
+                            concern_data = graph_comments[graph_comments['concern'].notna()].copy()
+                            if not concern_data.empty:
+                                # Sort by section order, then name, then date
+                                if section_order:
+                                    section_order_map = {name: idx for idx, name in enumerate(section_order)}
+                                    concern_data['_section_order'] = concern_data['group'].apply(
+                                        lambda x: section_order_map.get(x, len(section_order))
+                                    )
+                                    concern_data = concern_data.sort_values(['_section_order', 'name', 'year_month'])
+                                else:
+                                    concern_data = concern_data.sort_values(['group', 'name', 'year_month'])
+
+                                # Display grouped by section and name
+                                current_section = None
+                                current_name = None
+                                for _, row in concern_data.iterrows():
+                                    if row['group'] != current_section or row['name'] != current_name:
+                                        current_section = row['group']
+                                        current_name = row['name']
+                                        st.markdown(f"**{current_section} - {current_name}**")
+                                    st.markdown(f"　{row['year_month']}")
+                                    st.text(f"　{row['concern']}")
+                                    st.divider()
+                            else:
+                                st.info("データがありません")
+
+                    # Comment section - 共有したいこと
+                    with st.expander("共有したいこと", expanded=False):
+                        share_data = graph_comments[graph_comments['comment'].notna()].copy()
+                        if not share_data.empty:
+                            # Sort by section order, then name, then date
+                            if section_order:
+                                section_order_map = {name: idx for idx, name in enumerate(section_order)}
+                                share_data['_section_order'] = share_data['group'].apply(
+                                    lambda x: section_order_map.get(x, len(section_order))
+                                )
+                                share_data = share_data.sort_values(['_section_order', 'name', 'year_month'])
+                            else:
+                                share_data = share_data.sort_values(['group', 'name', 'year_month'])
+
+                            # Display grouped by section and name
+                            current_section = None
+                            current_name = None
+                            for _, row in share_data.iterrows():
+                                if row['group'] != current_section or row['name'] != current_name:
+                                    current_section = row['group']
+                                    current_name = row['name']
+                                    st.markdown(f"**{current_section} - {current_name}**")
+                                st.markdown(f"　{row['year_month']}")
+                                st.text(f"　{row['comment']}")
+                                st.divider()
+                        else:
+                            st.info("データがありません")
 
     # =============================================================================
     # 評価 Tab
@@ -723,7 +979,7 @@ if uploaded_file is not None:
                             'absorption_rating': '没頭'
                         })
 
-                        st.dataframe(wave_data, hide_index=True, **DATAFRAME_KWARGS)
+                        st.dataframe(wave_data, **DATAFRAME_KWARGS)
 
                     if individual_mail:
                         # Filter comment data by mail_address and date range
@@ -733,29 +989,28 @@ if uploaded_file is not None:
                             (comment_df['year_month_dt'] <= end_dt)
                         ].copy()
 
-                        # Concern section - 気になった出来事や気づき
-                        with st.expander("気になった出来事や気づき", expanded=False):
-                            concern_data = individual_comments[individual_comments['concern'].notna()][['year_month', 'concern']].copy()
-                            if not concern_data.empty:
-                                concern_data = concern_data.sort_values('year_month')
-                                concern_data = concern_data.rename(columns={
-                                    'year_month': '年月',
-                                    'concern': '気になった出来事や気づき'
-                                })
-                                st.dataframe(concern_data, hide_index=True, **DATAFRAME_KWARGS)
-                            else:
-                                st.info("データがありません")
+                        # Concern section - 気になった出来事や気づき (admin権限が必要)
+                        if has_privilege("admin"):
+                            with st.expander("気になった出来事や気づき", expanded=False):
+                                concern_data = individual_comments[individual_comments['concern'].notna()][['year_month', 'concern']].copy()
+                                if not concern_data.empty:
+                                    concern_data = concern_data.sort_values('year_month')
+                                    for _, row in concern_data.iterrows():
+                                        st.markdown(f"**{row['year_month']}**")
+                                        st.text(row['concern'])
+                                        st.divider()
+                                else:
+                                    st.info("データがありません")
 
-                        # Comment section - ご意見やリクエスト
-                        with st.expander("ご意見やリクエスト", expanded=False):
+                        # Comment section - 共有したいこと
+                        with st.expander("共有したいこと", expanded=False):
                             comment_data = individual_comments[individual_comments['comment'].notna()][['year_month', 'comment']].copy()
                             if not comment_data.empty:
                                 comment_data = comment_data.sort_values('year_month')
-                                comment_data = comment_data.rename(columns={
-                                    'year_month': '年月',
-                                    'comment': 'ご意見やリクエスト'
-                                })
-                                st.dataframe(comment_data, hide_index=True, **DATAFRAME_KWARGS)
+                                for _, row in comment_data.iterrows():
+                                    st.markdown(f"**{row['year_month']}**")
+                                    st.text(row['comment'])
+                                    st.divider()
                             else:
                                 st.info("データがありません")
 
@@ -780,7 +1035,7 @@ if uploaded_file is not None:
                             # Apply calculation to rating values
                             individual_signal = apply_signal_rating_calculations(individual_signal)
 
-                            # Format and display signal data
+                            # Format and display signal data (transposed table with labels in index)
                             display_signal_t = format_individual_signal_data(individual_signal)
                             st.dataframe(
                                 display_signal_t,
@@ -790,7 +1045,8 @@ if uploaded_file is not None:
                                         width="large"
                                     )
                                 },
-                                **DATAFRAME_KWARGS
+                                hide_index=False,
+                                width=DATAFRAME_KWARGS.get("width")
                             )
 
                     except Exception as e:
@@ -907,4 +1163,4 @@ else:
 
 # フッター
 st.sidebar.markdown("---")
-st.sidebar.markdown("©RDPi Corposation")
+st.sidebar.markdown("©RDPi Corporation")
