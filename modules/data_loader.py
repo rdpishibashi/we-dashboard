@@ -20,6 +20,58 @@ def get_excel_password():
         return None
 
 
+def decrypt_excel_if_needed(file_obj):
+    """
+    Decrypt Excel file if password-protected.
+
+    Args:
+        file_obj: File object or path to Excel file
+
+    Returns:
+        Decrypted file object (BytesIO) or original file object
+    """
+    import io
+    import msoffcrypto
+
+    password = get_excel_password()
+
+    if password is None:
+        # No password configured, return as-is
+        return file_obj
+
+    try:
+        # Read file into memory
+        if isinstance(file_obj, str):
+            # It's a file path
+            with open(file_obj, 'rb') as f:
+                file_data = io.BytesIO(f.read())
+        else:
+            # It's already a file object
+            file_data = io.BytesIO(file_obj.read())
+            file_obj.seek(0)  # Reset for potential retry
+
+        # Try to decrypt
+        decrypted = io.BytesIO()
+        office_file = msoffcrypto.OfficeFile(file_data)
+        office_file.load_key(password=password)
+        office_file.decrypt(decrypted)
+        decrypted.seek(0)
+
+        return decrypted
+
+    except Exception as e:
+        error_msg = str(e).lower()
+        if 'password' in error_msg or 'key' in error_msg:
+            raise ValueError(f"Excelファイルのパスワードが正しくありません。管理者に連絡してください。")
+
+        # File might not be encrypted, try returning original
+        if isinstance(file_obj, str):
+            return file_obj
+        else:
+            file_obj.seek(0)
+            return file_obj
+
+
 @st.cache_data
 def load_data(uploaded_file):
     """
@@ -35,15 +87,18 @@ def load_data(uploaded_file):
     Raises:
         ValueError: If required columns are missing or data is invalid
     """
-    # Get password for protected Excel files
-    password = get_excel_password()
-
-    # Read Excel file with password if available
+    # Decrypt file if password-protected
     try:
-        raw_df = pd.read_excel(uploaded_file, sheet_name='rating', password=password)
+        decrypted_file = decrypt_excel_if_needed(uploaded_file)
+    except ValueError:
+        raise  # Re-raise password errors
     except Exception as e:
-        if 'password' in str(e).lower():
-            raise ValueError(f"Excelファイルのパスワードが正しくありません。管理者に連絡してください。")
+        raise ValueError(f"ファイルの処理中にエラーが発生しました: {e}")
+
+    # Read Excel file
+    try:
+        raw_df = pd.read_excel(decrypted_file, sheet_name='rating', engine='openpyxl')
+    except Exception as e:
         raise ValueError(f"rating シートの読み込みに失敗しました: {e}")
     required_cols = {'year', 'month', 'mail_address', 'name', 'factor', 'score'}
     missing_cols = required_cols - set(raw_df.columns)
@@ -109,7 +164,7 @@ def load_data(uploaded_file):
 
     # Load rating2 sheet for signal data
     try:
-        signal_raw_df = pd.read_excel(uploaded_file, sheet_name='rating2', password=password)
+        signal_raw_df = pd.read_excel(decrypted_file, sheet_name='rating2', engine='openpyxl')
     except Exception as e:
         raise ValueError(f"rating2シートの読み込みに失敗しました: {e}")
 
@@ -151,7 +206,7 @@ def load_data(uploaded_file):
 
     # Load comment sheet for concern and comment data
     try:
-        comment_raw_df = pd.read_excel(uploaded_file, sheet_name='comment', password=password)
+        comment_raw_df = pd.read_excel(decrypted_file, sheet_name='comment', engine='openpyxl')
     except Exception as e:
         raise ValueError(f"commentシートの読み込みに失敗しました: {e}")
 
