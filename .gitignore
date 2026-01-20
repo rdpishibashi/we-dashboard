@@ -189,3 +189,6 @@ auth_users.json
 
 # Default data files
 EngagementMasterSS.xlsx
+
+# Mac environment
+.DS_Store
