@@ -192,3 +192,6 @@ EngagementMasterSS.xlsx
 
 # Mac environment
 .DS_Store
+
+# Streamlit secrets (contains passwords and sensitive data)
+.streamlit/secrets.toml
