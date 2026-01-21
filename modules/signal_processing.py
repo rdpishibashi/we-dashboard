@@ -178,7 +178,7 @@ def format_individual_signal_data(signal_data):
 
 def sort_signals_by_trend_and_priority(signals):
     """
-    Sort signal data by trend group, intervention_priority, and section.
+    Sort signal data by trend group, intervention_priority, and section (課).
 
     Sort order:
     1. Trend group (negative first, then neutral, then positive)
@@ -186,7 +186,7 @@ def sort_signals_by_trend_and_priority(signals):
     3. Section (課) - using configured order from group_order_config.json
 
     Args:
-        signals: Signal dataframe with group, trend_refined and intervention_priority columns
+        signals: Signal dataframe with section, trend_refined and intervention_priority columns
 
     Returns:
         Sorted signal dataframe
@@ -210,17 +210,17 @@ def sort_signals_by_trend_and_priority(signals):
     signals = signals.copy()
     signals['_trend_group'] = signals['trend_refined'].apply(get_trend_group)
 
-    # Create section order index (use 'section' key from config for 'group' column)
+    # Create section order index (use 'section' key from config for 'section' column)
     section_order = GROUP_ORDER_MAP.get('section', [])
-    if section_order and 'group' in signals.columns:
+    if section_order and 'section' in signals.columns:
         # Map section to order index, unknown sections go to end
         section_order_map = {name: idx for idx, name in enumerate(section_order)}
-        signals['_section_order'] = signals['group'].apply(
+        signals['_section_order'] = signals['section'].apply(
             lambda x: section_order_map.get(x, len(section_order))
         )
     else:
         # Fallback to alphabetical order
-        signals['_section_order'] = signals['group'] if 'group' in signals.columns else 0
+        signals['_section_order'] = signals['section'] if 'section' in signals.columns else 0
 
     # Sort by trend group, intervention_priority, then section
     signals = signals.sort_values(

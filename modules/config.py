@@ -9,18 +9,18 @@ from pathlib import Path
 # =============================================================================
 # Hierarchy: Division (部門) → Department (部署) → Section (課)
 #
-# Excel column mapping (current_* = current affiliation, * = previous affiliation):
-#   current_division   → section    (部門/Division)
+# Excel column mapping (current_* = current affiliation):
+#   current_division   → division   (部門/Division)
 #   current_department → department (部署/Department)
-#   current_section    → group      (課/Section)
+#   current_section    → section    (課/Section)
 #
 # This structure is fixed and used throughout the application.
 
 # Column names used in the application (mapped from Excel)
 ORG_COLUMNS = {
-    'division': 'section',      # 部門 - highest level
+    'division': 'division',     # 部門 - highest level
     'department': 'department', # 部署 - middle level
-    'section': 'group',         # 課 - lowest level
+    'section': 'section',       # 課 - lowest level
 }
 
 # Excel source column names (current affiliation)
@@ -31,7 +31,7 @@ ORG_EXCEL_COLUMNS = {
 }
 
 # Columns to check for privilege-based filtering (in order of hierarchy)
-ORG_FILTER_COLUMNS = ['section', 'department', 'group']
+ORG_FILTER_COLUMNS = ['division', 'department', 'section']
 
 # Plotly chart configuration
 PLOTLY_CHART_KWARGS = {"width": "stretch"}
@@ -52,7 +52,7 @@ METRIC_LABELS = {
 
 # Signal labels
 SIGNAL_LABELS = {
-    'group': '課',
+    'section': '課',
     'name': '氏名',
     'intervention_priority': '介入優先度',
     'trend_refined': '中期トレンド',
@@ -76,7 +76,7 @@ POSITIVE_TRENDS = ['上昇加速', '上昇継続', '回復期待', '回復', '�
 NEGATIVE_TRENDS = ['低下懸念', '悪化', '低下危機', '低下加速', '低下継続', '低下警戒', '下降']
 
 # Signal table display columns
-SIGNAL_TABLE_COLUMNS = ['name', 'group', 'intervention_priority', 'trend_refined', 'change_tag', 'stability']
+SIGNAL_TABLE_COLUMNS = ['name', 'section', 'intervention_priority', 'trend_refined', 'change_tag', 'stability']
 INDIVIDUAL_SIGNAL_COLUMNS = [
     'intervention_priority', 'trend_refined', 'change_tag', 'stability',
     'strength_short', 'weakness_short', 'strength_mid', 'weakness_mid'
@@ -100,9 +100,9 @@ COLOR_SCALE_END = 1
 # Grouping label map
 GROUPING_LABEL_MAP = {
     'なし': 'なし',
+    'division': '部門別',
     'department': '部署別',
-    'group': '課別',
-    'section': '部門別',
+    'section': '課別',
     'team': 'チーム別',
     'project': 'プロジェクト別',
     'grade': '職位別',
@@ -111,9 +111,9 @@ GROUPING_LABEL_MAP = {
 
 # Group labels (without 別 suffix)
 GROUP_LABELS = {
-    'section': '部門',
+    'division': '部門',
     'department': '部署',
-    'group': '課',
+    'section': '課',
     'team': 'チーム',
     'project': 'プロジェクト',
     'grade': '職位',
