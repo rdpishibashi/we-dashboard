@@ -118,9 +118,12 @@ def load_data(uploaded_file):
             return raw_df[col_name]
         return pd.Series([None] * len(raw_df))
 
-    df['section'] = get_column('current_division')
-    df['department'] = get_column('current_department')
-    df['group'] = get_column('current_section')
+    # Organizational structure mapping (current_* = current affiliation)
+    # Hierarchy: Division (部門) → Department (部署) → Section (課)
+    # See modules/config.py for ORG_COLUMNS and ORG_EXCEL_COLUMNS definitions
+    df['section'] = get_column('current_division')      # 部門 (Division)
+    df['department'] = get_column('current_department') # 部署 (Department)
+    df['group'] = get_column('current_section')         # 課 (Section)
     df['team'] = get_column('current_team')
     df['project'] = get_column('current_project')
     df['grade'] = get_column('grade')
@@ -189,10 +192,11 @@ def load_data(uploaded_file):
             return signal_raw_df[col_name]
         return pd.Series([None] * len(signal_raw_df))
 
-    # Map to consistent column names
-    signal_df['section'] = get_signal_column('current_division')
-    signal_df['department'] = get_signal_column('current_department')
-    signal_df['group'] = get_signal_column('current_section')
+    # Organizational structure mapping (same as rating sheet)
+    # Hierarchy: Division (部門) → Department (部署) → Section (課)
+    signal_df['section'] = get_signal_column('current_division')      # 部門 (Division)
+    signal_df['department'] = get_signal_column('current_department') # 部署 (Department)
+    signal_df['group'] = get_signal_column('current_section')         # 課 (Section)
     signal_df['team'] = get_signal_column('current_team')
     signal_df['project'] = get_signal_column('current_project')
     signal_df['grade'] = get_signal_column('grade')

@@ -31,7 +31,10 @@ from modules.charts import (
     create_box_plot, create_group_rating_distribution, create_radar_chart,
     create_individual_trend
 )
-from modules.auth import render_login_ui, is_authenticated, has_privilege
+from modules.auth import (
+    render_login_ui, is_authenticated, has_privilege,
+    filter_by_privilege, get_current_privilege
+)
 
 # ページ設定
 st.set_page_config(
@@ -74,6 +77,13 @@ if uploaded_file is not None:
         st.error(f"データ読み込みエラー: {e}")
         st.stop()
 
+    # Apply privilege-based filtering to all data sources (only when authenticated)
+    if is_authenticated():
+        current_privilege = get_current_privilege()
+        df = filter_by_privilege(df, current_privilege)
+        signal_df = filter_by_privilege(signal_df, current_privilege)
+        comment_df = filter_by_privilege(comment_df, current_privilege)
+
     # サイドバー: フィルター設定
     st.sidebar.header("🔍 フィルター設定")
 
@@ -88,6 +98,15 @@ if uploaded_file is not None:
 
     default_end = available_months[-1]
     default_start = available_months[max(0, len(available_months) - 6)]
+
+    # Reset period filter to last 6 months if flag is set (after login/logout)
+    if st.session_state.get("reset_period_filter", False):
+        st.session_state["filter_period"] = (
+            default_start.to_pydatetime(),
+            default_end.to_pydatetime()
+        )
+        st.session_state["reset_period_filter"] = False
+
     start_dt, end_dt = st.sidebar.slider(
         "期間",
         min_value=available_months[0].to_pydatetime(),
@@ -297,12 +316,6 @@ if uploaded_file is not None:
 
             try:
                 signals = get_signal_data(signal_df, ts_df, end_dt)
-
-                # Filter by privilege
-                from modules.auth import filter_by_privilege, get_current_privilege
-                current_privilege = get_current_privilege()
-                signals = filter_by_privilege(signals, current_privilege)
-
                 render_signal_table(signals, SIGNAL_TABLE_COLUMNS)
             except Exception as e:
                 st.error(f"シグナルデータの取得に失敗しました: {e}")
@@ -365,12 +378,6 @@ if uploaded_file is not None:
                 # Comment section - 共有したいこと
                 with st.expander("共有したいこと", expanded=False):
                     share_data = graph_comments[graph_comments['comment'].notna()].copy()
-
-                    # Filter by privilege
-                    from modules.auth import filter_by_privilege, get_current_privilege
-                    current_privilege = get_current_privilege()
-                    share_data = filter_by_privilege(share_data, current_privilege)
-
                     if not share_data.empty:
                         # Sort by section order, then name, then date
                         if section_order:
@@ -498,12 +505,6 @@ if uploaded_file is not None:
 
                 try:
                     signals = get_signal_data(signal_df, comparison_df, end_dt)
-
-                    # Filter by privilege
-                    from modules.auth import filter_by_privilege, get_current_privilege
-                    current_privilege = get_current_privilege()
-                    signals = filter_by_privilege(signals, current_privilege)
-
                     render_signal_table(signals, SIGNAL_TABLE_COLUMNS)
                 except Exception as e:
                     st.error(f"シグナルデータの取得に失敗しました: {e}")
@@ -566,12 +567,6 @@ if uploaded_file is not None:
                     # Comment section - 共有したいこと
                     with st.expander("共有したいこと", expanded=False):
                         share_data = graph_comments[graph_comments['comment'].notna()].copy()
-
-                        # Filter by privilege
-                        from modules.auth import filter_by_privilege, get_current_privilege
-                        current_privilege = get_current_privilege()
-                        share_data = filter_by_privilege(share_data, current_privilege)
-
                         if not share_data.empty:
                             # Sort by section order, then name, then date
                             if section_order:
@@ -664,12 +659,6 @@ if uploaded_file is not None:
 
                 try:
                     signals = get_signal_data(signal_df, comparison_df, end_dt)
-
-                    # Filter by privilege
-                    from modules.auth import filter_by_privilege, get_current_privilege
-                    current_privilege = get_current_privilege()
-                    signals = filter_by_privilege(signals, current_privilege)
-
                     display_cols = ['name', 'group', 'intervention_priority', 'trend_refined',
                                    'change_tag', 'stability']
                     render_signal_table(signals, display_cols)
@@ -734,12 +723,6 @@ if uploaded_file is not None:
                     # Comment section - 共有したいこと
                     with st.expander("共有したいこと", expanded=False):
                         share_data = graph_comments[graph_comments['comment'].notna()].copy()
-
-                        # Filter by privilege
-                        from modules.auth import filter_by_privilege, get_current_privilege
-                        current_privilege = get_current_privilege()
-                        share_data = filter_by_privilege(share_data, current_privilege)
-
                         if not share_data.empty:
                             # Sort by section order, then name, then date
                             if section_order:
@@ -955,11 +938,6 @@ if uploaded_file is not None:
             grouping_options=['なし', 'department', 'group', 'team', 'project', 'grade', 'name']
         )
 
-        # Filter by privilege - restrict to allowed groups only
-        from modules.auth import filter_by_privilege, get_current_privilege
-        current_privilege = get_current_privilege()
-        individual_df = filter_by_privilege(individual_df, current_privilege)
-
         if individual_df.empty:
             st.info("選択された条件に該当するデータがありません。")
         else:
@@ -970,8 +948,11 @@ if uploaded_file is not None:
                     value_options = sort_names_by_grade(value_options, individual_df)
                 value_choices = ['すべて'] + value_options if value_options else ['すべて']
 
-                # Preserve selection across period changes
                 group_value_key = 'individual_group_value'
+                # Reset to default if flag is set
+                if st.session_state.get("reset_local_filters", False):
+                    st.session_state[group_value_key] = 'すべて'
+
                 group_value_idx = 0
                 if group_value_key in st.session_state and st.session_state[group_value_key] in value_choices:
                     group_value_idx = value_choices.index(st.session_state[group_value_key])
@@ -993,8 +974,11 @@ if uploaded_file is not None:
                     individual_df
                 )
 
-                # Preserve individual selection across period changes
                 individual_key = 'individual_selector'
+                # Reset to first individual if flag is set
+                if st.session_state.get("reset_local_filters", False) and individuals:
+                    st.session_state[individual_key] = individuals[0]
+
                 individual_idx = 0
                 if individual_key in st.session_state and st.session_state[individual_key] in individuals:
                     individual_idx = individuals.index(st.session_state[individual_key])
@@ -1209,6 +1193,10 @@ if uploaded_file is not None:
             )
 
             st.plotly_chart(fig_hist, **PLOTLY_CHART_KWARGS)
+
+    # Clear reset flags after all tabs have been processed
+    if st.session_state.get("reset_local_filters", False):
+        st.session_state["reset_local_filters"] = False
 
 else:
     # ファイル未アップロード時のガイダンス

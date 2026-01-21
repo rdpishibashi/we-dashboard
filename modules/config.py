@@ -4,6 +4,35 @@ Configuration and Constants for Work Engagement Dashboard
 
 from pathlib import Path
 
+# =============================================================================
+# Organizational Structure
+# =============================================================================
+# Hierarchy: Division (部門) → Department (部署) → Section (課)
+#
+# Excel column mapping (current_* = current affiliation, * = previous affiliation):
+#   current_division   → section    (部門/Division)
+#   current_department → department (部署/Department)
+#   current_section    → group      (課/Section)
+#
+# This structure is fixed and used throughout the application.
+
+# Column names used in the application (mapped from Excel)
+ORG_COLUMNS = {
+    'division': 'section',      # 部門 - highest level
+    'department': 'department', # 部署 - middle level
+    'section': 'group',         # 課 - lowest level
+}
+
+# Excel source column names (current affiliation)
+ORG_EXCEL_COLUMNS = {
+    'division': 'current_division',
+    'department': 'current_department',
+    'section': 'current_section',
+}
+
+# Columns to check for privilege-based filtering (in order of hierarchy)
+ORG_FILTER_COLUMNS = ['section', 'department', 'group']
+
 # Plotly chart configuration
 PLOTLY_CHART_KWARGS = {"width": "stretch"}
 
@@ -98,8 +127,8 @@ DEFAULT_FILE_PATH = "EngagementMasterSS.xlsx"
 # Maps privilege to allowed groups (None = all groups allowed)
 PRIVILEGE_GROUP_ACCESS = {
     'admin': None,                   # Admin - all groups
-    'sd': ['ソフトウェア開発課', '製品技術課'],
-    'me': ['ソフトウェア開発課', '製品技術課'],
+    'sd': ['システム開発部', '機電設計部'],
+    'me': ['システム開発部', '機電設計部'],
     'sw': ['ソフトウェア開発課'],       # ソフトウェア開発課 manager
     'pd': ['製品技術課'],              # 製品技術課 manager
     'me1': ['第一設計課'],             # 第一設計課 manager

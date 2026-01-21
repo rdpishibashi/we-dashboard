@@ -165,6 +165,18 @@ def has_privilege(required_privileges: Union[list[str], str]) -> bool:
     return current_privilege in required_privileges
 
 
+def reset_filters():
+    """Reset all filter-related session state keys."""
+    # Set flags to reset filters (handled in app.py and utils.py)
+    st.session_state["reset_period_filter"] = True
+    st.session_state["reset_local_filters"] = True
+    # Reset sidebar filters by deleting keys (multiselect will use defaults)
+    sidebar_filter_keys = ["filter_sections", "filter_departments", "filter_groups"]
+    for key in sidebar_filter_keys:
+        if key in st.session_state:
+            del st.session_state[key]
+
+
 def login(username: str, privilege: Optional[str] = None):
     """
     Set the user as logged in.
@@ -176,6 +188,7 @@ def login(username: str, privilege: Optional[str] = None):
     st.session_state["authenticated"] = True
     st.session_state["current_user"] = username
     st.session_state["current_privilege"] = privilege
+    reset_filters()
 
 
 def logout():
@@ -183,6 +196,7 @@ def logout():
     st.session_state["authenticated"] = False
     st.session_state["current_user"] = None
     st.session_state["current_privilege"] = None
+    reset_filters()
 
 
 def render_login_ui():
@@ -239,16 +253,19 @@ def get_allowed_groups_for_sharing(privilege: Optional[str]) -> Optional[list]:
 
 def filter_by_privilege(data, privilege: Optional[str]):
     """
-    Filter dataframe by privilege. Supports both group (課) and department (部署) filtering.
+    Filter dataframe by privilege based on organizational hierarchy.
+
+    Checks all organizational levels (部門/section, 部署/department, 課/group)
+    and includes rows that match any of the allowed values at any level.
 
     Args:
-        data: DataFrame with 'group' and 'department' columns
+        data: DataFrame with organizational columns
         privilege: User's privilege level
 
     Returns:
-        Filtered DataFrame
+        Filtered DataFrame based on privilege, or original data if no filterable columns exist
     """
-    import pandas as pd
+    from modules.config import ORG_FILTER_COLUMNS
 
     allowed_values = get_allowed_groups_for_sharing(privilege)
 
@@ -259,9 +276,15 @@ def filter_by_privilege(data, privilege: Optional[str]):
         # Empty list = no access
         return data.iloc[0:0]
     else:
-        # Filter by both group and department columns
-        # This allows specifying either groups (課) or departments (部署)
-        mask = data['group'].isin(allowed_values)
-        if 'department' in data.columns:
-            mask = mask | data['department'].isin(allowed_values)
+        # Filter by all organizational columns (section/部門, department/部署, group/課)
+        # Includes rows that match any allowed value at any organizational level
+        mask = None
+        for col in ORG_FILTER_COLUMNS:
+            if col in data.columns:
+                col_mask = data[col].isin(allowed_values)
+                mask = col_mask if mask is None else (mask | col_mask)
+
+        # If no filterable columns exist, return data unchanged
+        if mask is None:
+            return data
         return data[mask]
