@@ -98,23 +98,19 @@ if uploaded_file is not None:
 
     default_end = available_months[-1]
     default_start = available_months[max(0, len(available_months) - 6)]
+    default_period = (default_start.to_pydatetime(), default_end.to_pydatetime())
 
-    # Reset period filter to last 6 months if flag is set (after login/logout)
-    if st.session_state.get("reset_period_filter", False):
-        st.session_state["filter_period"] = (
-            default_start.to_pydatetime(),
-            default_end.to_pydatetime()
-        )
+    # Initialize or reset period filter
+    if "filter_period" not in st.session_state:
+        st.session_state["filter_period"] = default_period
+    elif st.session_state.get("reset_period_filter", False):
+        st.session_state["filter_period"] = default_period
         st.session_state["reset_period_filter"] = False
 
     start_dt, end_dt = st.sidebar.slider(
         "期間",
         min_value=available_months[0].to_pydatetime(),
         max_value=available_months[-1].to_pydatetime(),
-        value=(
-            default_start.to_pydatetime(),
-            default_end.to_pydatetime()
-        ),
         format="YYYY-MM",
         key="filter_period"
     )
@@ -135,15 +131,15 @@ if uploaded_file is not None:
         (filtered_df['year_month_dt'] <= end_dt)
     ]
 
-    section_options = get_options(filtered_df['section'], remove_unset=True, order_key='section')
-    selected_sections = st.sidebar.multiselect(
+    division_options = get_options(filtered_df['division'], remove_unset=True, order_key='division')
+    selected_divisions = st.sidebar.multiselect(
         "部門",
-        section_options,
-        default=section_options,
-        key="filter_sections"
+        division_options,
+        default=division_options,
+        key="filter_divisions"
     )
-    if selected_sections:
-        filtered_df = filtered_df[filtered_df['section'].isin(selected_sections)]
+    if selected_divisions:
+        filtered_df = filtered_df[filtered_df['division'].isin(selected_divisions)]
 
     department_options = get_options(filtered_df['department'], remove_unset=True, order_key='department')
     selected_departments = st.sidebar.multiselect(
@@ -155,15 +151,15 @@ if uploaded_file is not None:
     if selected_departments:
         filtered_df = filtered_df[filtered_df['department'].isin(selected_departments)]
 
-    group_options = get_options(filtered_df['group'], remove_unset=False, order_key='group')
-    selected_groups = st.sidebar.multiselect(
+    section_options = get_options(filtered_df['section'], remove_unset=False, order_key='section')
+    selected_sections = st.sidebar.multiselect(
         "課",
-        group_options,
-        default=group_options,
-        key="filter_groups"
+        section_options,
+        default=section_options,
+        key="filter_sections"
     )
-    if selected_groups:
-        filtered_df = filtered_df[filtered_df['group'].isin(selected_groups)]
+    if selected_sections:
+        filtered_df = filtered_df[filtered_df['section'].isin(selected_sections)]
 
     team_options = get_options(filtered_df['team'], order_key='team')
     selected_teams = st.sidebar.multiselect(
@@ -229,7 +225,7 @@ if uploaded_file is not None:
         ts_df, _, _, ts_group_choice = render_department_and_group_controls(
             filtered_df,
             "timeseries",
-            grouping_options=['なし', 'department', 'group', 'team', 'project', 'grade', 'name']
+            grouping_options=['なし', 'department', 'section', 'team', 'project', 'grade', 'name']
         )
         if ts_df.empty:
             st.info("選択された条件に該当するデータがありません。")
@@ -322,8 +318,8 @@ if uploaded_file is not None:
 
             # Get comment data for individuals in current graph
             valid_names = ts_df['name'].dropna().unique()
-            # Get name to group mapping from the latest data
-            name_group_map = ts_df.drop_duplicates('name').set_index('name')['group'].to_dict()
+            # Get name to section mapping from the latest data
+            name_section_map = ts_df.drop_duplicates('name').set_index('name')['section'].to_dict()
 
             # Filter comment data by names and date range
             graph_comments = comment_df[
@@ -334,11 +330,11 @@ if uploaded_file is not None:
                 (comment_df['year_month_dt'] <= end_dt)
             ].copy()
 
-            # Add name and group columns to comments
+            # Add name and section columns to comments
             if not graph_comments.empty:
                 mail_to_name = ts_df.drop_duplicates('mail_address').set_index('mail_address')['name'].to_dict()
                 graph_comments['name'] = graph_comments['mail_address'].map(mail_to_name)
-                graph_comments['group'] = graph_comments['name'].map(name_group_map)
+                graph_comments['section'] = graph_comments['name'].map(name_section_map)
 
                 # Get section order from config
                 from modules.utils import GROUP_ORDER_MAP
@@ -352,17 +348,17 @@ if uploaded_file is not None:
                             # Sort by section order, then name, then date
                             if section_order:
                                 section_order_map = {name: idx for idx, name in enumerate(section_order)}
-                                concern_data['_section_order'] = concern_data['group'].apply(
+                                concern_data['_section_order'] = concern_data['section'].apply(
                                     lambda x: section_order_map.get(x, len(section_order))
                                 )
                                 concern_data = concern_data.sort_values(['_section_order', 'name', 'year_month'])
                             else:
-                                concern_data = concern_data.sort_values(['group', 'name', 'year_month'])
+                                concern_data = concern_data.sort_values(['section', 'name', 'year_month'])
 
                             # Display nested: section -> name -> content
-                            sections = concern_data['group'].unique()
+                            sections = concern_data['section'].unique()
                             for section in sections:
-                                section_data = concern_data[concern_data['group'] == section]
+                                section_data = concern_data[concern_data['section'] == section]
                                 with st.expander(f"{section}", expanded=False):
                                     names = section_data['name'].unique()
                                     for name in names:
@@ -382,17 +378,17 @@ if uploaded_file is not None:
                         # Sort by section order, then name, then date
                         if section_order:
                             section_order_map = {name: idx for idx, name in enumerate(section_order)}
-                            share_data['_section_order'] = share_data['group'].apply(
+                            share_data['_section_order'] = share_data['section'].apply(
                                 lambda x: section_order_map.get(x, len(section_order))
                             )
                             share_data = share_data.sort_values(['_section_order', 'name', 'year_month'])
                         else:
-                            share_data = share_data.sort_values(['group', 'name', 'year_month'])
+                            share_data = share_data.sort_values(['section', 'name', 'year_month'])
 
                         # Display nested: section -> name -> content
-                        sections = share_data['group'].unique()
+                        sections = share_data['section'].unique()
                         for section in sections:
-                            section_data = share_data[share_data['group'] == section]
+                            section_data = share_data[share_data['section'] == section]
                             with st.expander(f"{section}", expanded=False):
                                 names = section_data['name'].unique()
                                 for name in names:
@@ -413,7 +409,7 @@ if uploaded_file is not None:
         comparison_df, _, _, comparison_group = render_department_and_group_controls(
             filtered_df,
             "group_comparison",
-            grouping_options=['なし', 'department', 'group', 'team', 'project', 'grade', 'name']
+            grouping_options=['なし', 'department', 'section', 'team', 'project', 'grade', 'name']
         )
         if comparison_df.empty:
             st.info("選択された条件に該当するデータがありません。")
@@ -511,8 +507,8 @@ if uploaded_file is not None:
 
                 # Get comment data for individuals in current graph
                 valid_names = comparison_df['name'].dropna().unique()
-                # Get name to group mapping from the latest data
-                name_group_map = comparison_df.drop_duplicates('name').set_index('name')['group'].to_dict()
+                # Get name to section mapping from the latest data
+                name_section_map = comparison_df.drop_duplicates('name').set_index('name')['section'].to_dict()
 
                 # Filter comment data by names and date range
                 graph_comments = comment_df[
@@ -523,11 +519,11 @@ if uploaded_file is not None:
                     (comment_df['year_month_dt'] <= end_dt)
                 ].copy()
 
-                # Add name and group columns to comments
+                # Add name and section columns to comments
                 if not graph_comments.empty:
                     mail_to_name = comparison_df.drop_duplicates('mail_address').set_index('mail_address')['name'].to_dict()
                     graph_comments['name'] = graph_comments['mail_address'].map(mail_to_name)
-                    graph_comments['group'] = graph_comments['name'].map(name_group_map)
+                    graph_comments['section'] = graph_comments['name'].map(name_section_map)
 
                     # Get section order from config
                     from modules.utils import GROUP_ORDER_MAP
@@ -541,17 +537,17 @@ if uploaded_file is not None:
                                 # Sort by section order, then name, then date
                                 if section_order:
                                     section_order_map = {name: idx for idx, name in enumerate(section_order)}
-                                    concern_data['_section_order'] = concern_data['group'].apply(
+                                    concern_data['_section_order'] = concern_data['section'].apply(
                                         lambda x: section_order_map.get(x, len(section_order))
                                     )
                                     concern_data = concern_data.sort_values(['_section_order', 'name', 'year_month'])
                                 else:
-                                    concern_data = concern_data.sort_values(['group', 'name', 'year_month'])
+                                    concern_data = concern_data.sort_values(['section', 'name', 'year_month'])
 
                                 # Display nested: section -> name -> content
-                                sections = concern_data['group'].unique()
+                                sections = concern_data['section'].unique()
                                 for section in sections:
-                                    section_data = concern_data[concern_data['group'] == section]
+                                    section_data = concern_data[concern_data['section'] == section]
                                     with st.expander(f"{section}", expanded=False):
                                         names = section_data['name'].unique()
                                         for name in names:
@@ -571,17 +567,17 @@ if uploaded_file is not None:
                             # Sort by section order, then name, then date
                             if section_order:
                                 section_order_map = {name: idx for idx, name in enumerate(section_order)}
-                                share_data['_section_order'] = share_data['group'].apply(
+                                share_data['_section_order'] = share_data['section'].apply(
                                     lambda x: section_order_map.get(x, len(section_order))
                                 )
                                 share_data = share_data.sort_values(['_section_order', 'name', 'year_month'])
                             else:
-                                share_data = share_data.sort_values(['group', 'name', 'year_month'])
+                                share_data = share_data.sort_values(['section', 'name', 'year_month'])
 
                             # Display nested: section -> name -> content
-                            sections = share_data['group'].unique()
+                            sections = share_data['section'].unique()
                             for section in sections:
-                                section_data = share_data[share_data['group'] == section]
+                                section_data = share_data[share_data['section'] == section]
                                 with st.expander(f"{section}", expanded=False):
                                     names = section_data['name'].unique()
                                     for name in names:
@@ -659,7 +655,7 @@ if uploaded_file is not None:
 
                 try:
                     signals = get_signal_data(signal_df, comparison_df, end_dt)
-                    display_cols = ['name', 'group', 'intervention_priority', 'trend_refined',
+                    display_cols = ['name', 'section', 'intervention_priority', 'trend_refined',
                                    'change_tag', 'stability']
                     render_signal_table(signals, display_cols)
                 except Exception as e:
@@ -667,8 +663,8 @@ if uploaded_file is not None:
 
                 # Get comment data for individuals in current graph
                 valid_names = comparison_df['name'].dropna().unique()
-                # Get name to group mapping from the latest data
-                name_group_map = comparison_df.drop_duplicates('name').set_index('name')['group'].to_dict()
+                # Get name to section mapping from the latest data
+                name_section_map = comparison_df.drop_duplicates('name').set_index('name')['section'].to_dict()
 
                 # Filter comment data by names and date range
                 graph_comments = comment_df[
@@ -679,11 +675,11 @@ if uploaded_file is not None:
                     (comment_df['year_month_dt'] <= end_dt)
                 ].copy()
 
-                # Add name and group columns to comments
+                # Add name and section columns to comments
                 if not graph_comments.empty:
                     mail_to_name = comparison_df.drop_duplicates('mail_address').set_index('mail_address')['name'].to_dict()
                     graph_comments['name'] = graph_comments['mail_address'].map(mail_to_name)
-                    graph_comments['group'] = graph_comments['name'].map(name_group_map)
+                    graph_comments['section'] = graph_comments['name'].map(name_section_map)
 
                     # Get section order from config
                     from modules.utils import GROUP_ORDER_MAP
@@ -697,17 +693,17 @@ if uploaded_file is not None:
                                 # Sort by section order, then name, then date
                                 if section_order:
                                     section_order_map = {name: idx for idx, name in enumerate(section_order)}
-                                    concern_data['_section_order'] = concern_data['group'].apply(
+                                    concern_data['_section_order'] = concern_data['section'].apply(
                                         lambda x: section_order_map.get(x, len(section_order))
                                     )
                                     concern_data = concern_data.sort_values(['_section_order', 'name', 'year_month'])
                                 else:
-                                    concern_data = concern_data.sort_values(['group', 'name', 'year_month'])
+                                    concern_data = concern_data.sort_values(['section', 'name', 'year_month'])
 
                                 # Display nested: section -> name -> content
-                                sections = concern_data['group'].unique()
+                                sections = concern_data['section'].unique()
                                 for section in sections:
-                                    section_data = concern_data[concern_data['group'] == section]
+                                    section_data = concern_data[concern_data['section'] == section]
                                     with st.expander(f"{section}", expanded=False):
                                         names = section_data['name'].unique()
                                         for name in names:
@@ -727,17 +723,17 @@ if uploaded_file is not None:
                             # Sort by section order, then name, then date
                             if section_order:
                                 section_order_map = {name: idx for idx, name in enumerate(section_order)}
-                                share_data['_section_order'] = share_data['group'].apply(
+                                share_data['_section_order'] = share_data['section'].apply(
                                     lambda x: section_order_map.get(x, len(section_order))
                                 )
                                 share_data = share_data.sort_values(['_section_order', 'name', 'year_month'])
                             else:
-                                share_data = share_data.sort_values(['group', 'name', 'year_month'])
+                                share_data = share_data.sort_values(['section', 'name', 'year_month'])
 
                             # Display nested: section -> name -> content
-                            sections = share_data['group'].unique()
+                            sections = share_data['section'].unique()
                             for section in sections:
-                                section_data = share_data[share_data['group'] == section]
+                                section_data = share_data[share_data['section'] == section]
                                 with st.expander(f"{section}", expanded=False):
                                     names = section_data['name'].unique()
                                     for name in names:
@@ -759,7 +755,7 @@ if uploaded_file is not None:
         evaluation_df, _, _, evaluation_group = render_department_and_group_controls(
             filtered_df,
             "evaluation",
-            grouping_options=['なし', 'department', 'group', 'team', 'project', 'grade', 'name']
+            grouping_options=['なし', 'department', 'section', 'team', 'project', 'grade', 'name']
         )
         if evaluation_df.empty:
             st.info("選択された条件に該当するデータがありません。")
@@ -935,7 +931,7 @@ if uploaded_file is not None:
         individual_df, _, _, individual_group_choice = render_department_and_group_controls(
             filtered_df,
             "individual",
-            grouping_options=['なし', 'department', 'group', 'team', 'project', 'grade', 'name']
+            grouping_options=['なし', 'department', 'section', 'team', 'project', 'grade', 'name']
         )
 
         if individual_df.empty:
@@ -1107,7 +1103,7 @@ if uploaded_file is not None:
         dist_df, _, _, dist_group = render_department_and_group_controls(
             filtered_df,
             "distribution",
-            grouping_options=['なし', 'department', 'group', 'team', 'project', 'grade', 'name']
+            grouping_options=['なし', 'department', 'section', 'team', 'project', 'grade', 'name']
         )
         if dist_df.empty:
             st.info("選択された条件に該当するデータがありません。")

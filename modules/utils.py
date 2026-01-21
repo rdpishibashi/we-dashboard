@@ -23,10 +23,8 @@ def load_group_orders():
 # Load group order map at module level
 GROUP_ORDER_MAP = load_group_orders()
 
-# Group order aliases
-GROUP_ORDER_ALIASES = {
-    'group': 'section'
-}
+# Group order aliases (for backward compatibility if needed)
+GROUP_ORDER_ALIASES = {}
 
 
 def resolve_order_key(order_key):
@@ -99,7 +97,7 @@ def get_options(series, remove_unset=False, order_key=None):
 
 def render_department_and_group_controls(df, tab_key, grouping_options):
     """
-    Render department, group (section), and grouping controls.
+    Render department, section (課), and grouping controls.
 
     Args:
         df: DataFrame to filter
@@ -142,9 +140,9 @@ def render_department_and_group_controls(df, tab_key, grouping_options):
         filtered = filtered[filtered['department'] == dept_choice]
 
     section_options = get_options(
-        filtered['group'],
+        filtered['section'],
         remove_unset=True,
-        order_key='group'
+        order_key='section'
     )
     section_choices = ['すべて'] + section_options if section_options else ['すべて']
     with col2:
@@ -160,7 +158,7 @@ def render_department_and_group_controls(df, tab_key, grouping_options):
             key=section_key
         )
     if section_choice != 'すべて':
-        filtered = filtered[filtered['group'] == section_choice]
+        filtered = filtered[filtered['section'] == section_choice]
 
     grouping_choice = None
     format_func = lambda x: GROUPING_LABEL_MAP.get(x, x)

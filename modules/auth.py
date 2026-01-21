@@ -170,9 +170,23 @@ def reset_filters():
     # Set flags to reset filters (handled in app.py and utils.py)
     st.session_state["reset_period_filter"] = True
     st.session_state["reset_local_filters"] = True
-    # Reset sidebar filters by deleting keys (multiselect will use defaults)
-    sidebar_filter_keys = ["filter_sections", "filter_departments", "filter_groups"]
+    # Reset ALL sidebar filters by deleting keys (multiselect will use defaults)
+    sidebar_filter_keys = [
+        "filter_divisions", "filter_departments", "filter_sections",
+        "filter_teams", "filter_projects", "filter_grades"
+    ]
     for key in sidebar_filter_keys:
+        if key in st.session_state:
+            del st.session_state[key]
+    # Reset local tab filters
+    tab_prefixes = ["timeseries", "group_comparison", "evaluation", "individual", "distribution"]
+    for prefix in tab_prefixes:
+        for suffix in ["_department_select", "_section_select", "_grouping_select"]:
+            key = f"{prefix}{suffix}"
+            if key in st.session_state:
+                del st.session_state[key]
+    # Reset individual tab specific keys
+    for key in ["individual_group_value", "individual_selector"]:
         if key in st.session_state:
             del st.session_state[key]
 
@@ -255,7 +269,7 @@ def filter_by_privilege(data, privilege: Optional[str]):
     """
     Filter dataframe by privilege based on organizational hierarchy.
 
-    Checks all organizational levels (部門/section, 部署/department, 課/group)
+    Checks all organizational levels (部門/division, 部署/department, 課/section)
     and includes rows that match any of the allowed values at any level.
 
     Args:
@@ -276,7 +290,7 @@ def filter_by_privilege(data, privilege: Optional[str]):
         # Empty list = no access
         return data.iloc[0:0]
     else:
-        # Filter by all organizational columns (section/部門, department/部署, group/課)
+        # Filter by all organizational columns (division/部門, department/部署, section/課)
         # Includes rows that match any allowed value at any organizational level
         mask = None
         for col in ORG_FILTER_COLUMNS:
