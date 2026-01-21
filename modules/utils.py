@@ -113,10 +113,17 @@ def render_department_and_group_controls(df, tab_key, grouping_options):
     dept_choices = ['すべて'] + dept_options if dept_options else ['すべて']
     filtered = df.copy()
 
-    # Initialize session state for this tab if not exists
+    # Session state keys for this tab
     dept_key = f"{tab_key}_department_select"
     section_key = f"{tab_key}_section_select"
     grouping_key = f"{tab_key}_grouping_select"
+
+    # Reset local filters to default if flag is set (after login/logout)
+    if st.session_state.get("reset_local_filters", False):
+        st.session_state[dept_key] = 'すべて'
+        st.session_state[section_key] = 'すべて'
+        if grouping_options:
+            st.session_state[grouping_key] = grouping_options[0]
 
     col1, col2, col3 = st.columns(3)
     with col1:
