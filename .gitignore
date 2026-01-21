@@ -188,7 +188,7 @@ cython_debug/
 auth_users.json
 
 # Default data files
-EngagementMasterSS.xlsx
+EngagementMasterSS*.xlsx
 
 # Mac environment
 .DS_Store
