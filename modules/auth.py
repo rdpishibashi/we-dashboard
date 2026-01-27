@@ -265,31 +265,42 @@ def get_allowed_groups_for_sharing(privilege: Optional[str]) -> Optional[list]:
     return PRIVILEGE_GROUP_ACCESS.get(privilege, [])
 
 
-def filter_by_privilege(data, privilege: Optional[str]):
+def filter_by_privilege(data, privilege: Optional[str], tab: Optional[str] = None):
     """
     Filter dataframe by privilege based on organizational hierarchy.
 
     Checks all organizational levels (部門/division, 部署/department, 課/section)
     and includes rows that match any of the allowed values at any level.
 
+    Uses PrivilegeManager for data scope resolution, with tab-specific scoping
+    for section managers who have different access per tab.
+
     Args:
         data: DataFrame with organizational columns
         privilege: User's privilege level
+        tab: Optional tab name for tab-specific data scoping
 
     Returns:
         Filtered DataFrame based on privilege, or original data if no filterable columns exist
     """
     from modules.config import ORG_FILTER_COLUMNS
+    from modules.privilege_manager import get_privilege_manager
 
-    allowed_values = get_allowed_groups_for_sharing(privilege)
+    pm = get_privilege_manager()
+    scope = pm.get_data_scope(privilege, tab)
 
-    if allowed_values is None:
-        # None = all data allowed
+    if scope.type == 'all':
+        # Full access - no filtering needed
         return data
-    elif len(allowed_values) == 0:
-        # Empty list = no access
+    elif scope.type == 'none':
+        # No access - return empty dataframe
         return data.iloc[0:0]
-    else:
+    elif scope.type == 'organization':
+        allowed_values = scope.values
+        if not allowed_values:
+            # No values specified - return empty
+            return data.iloc[0:0]
+
         # Filter by all organizational columns (division/部門, department/部署, section/課)
         # Includes rows that match any allowed value at any organizational level
         mask = None
@@ -302,3 +313,69 @@ def filter_by_privilege(data, privilege: Optional[str]):
         if mask is None:
             return data
         return data[mask]
+    else:
+        # Unknown scope type - fall back to legacy behavior
+        allowed_values = get_allowed_groups_for_sharing(privilege)
+
+        if allowed_values is None:
+            return data
+        elif len(allowed_values) == 0:
+            return data.iloc[0:0]
+        else:
+            mask = None
+            for col in ORG_FILTER_COLUMNS:
+                if col in data.columns:
+                    col_mask = data[col].isin(allowed_values)
+                    mask = col_mask if mask is None else (mask | col_mask)
+
+            if mask is None:
+                return data
+            return data[mask]
+
+
+def filter_by_section_scope(data, privilege: Optional[str], section: str):
+    """
+    Filter dataframe by privilege based on section-specific scope.
+
+    Each UI section (計測値, 主な指標, アクション対象候補, 共有したいこと) can have
+    different data access rules defined in the section_scope configuration.
+
+    Args:
+        data: DataFrame with organizational columns
+        privilege: User's privilege level
+        section: Section name (計測値, 主な指標, アクション対象候補, 共有したいこと)
+
+    Returns:
+        Filtered DataFrame based on section scope
+    """
+    from modules.config import ORG_FILTER_COLUMNS
+    from modules.privilege_manager import get_privilege_manager
+
+    pm = get_privilege_manager()
+    scope = pm.get_section_scope(privilege, section)
+
+    if scope.type == 'all':
+        # Full access - no filtering needed
+        return data
+    elif scope.type == 'none':
+        # No access - return empty dataframe
+        return data.iloc[0:0]
+    elif scope.type == 'organization':
+        allowed_values = scope.values
+        if not allowed_values:
+            # No values specified - return empty
+            return data.iloc[0:0]
+
+        # Filter by all organizational columns
+        mask = None
+        for col in ORG_FILTER_COLUMNS:
+            if col in data.columns:
+                col_mask = data[col].isin(allowed_values)
+                mask = col_mask if mask is None else (mask | col_mask)
+
+        if mask is None:
+            return data
+        return data[mask]
+    else:
+        # Unknown scope type - return empty for safety
+        return data.iloc[0:0]
