@@ -7,6 +7,41 @@ import streamlit as st
 from .config import GROUP_ORDER_FILE, GROUPING_LABEL_MAP
 
 
+def sync_multiselect_with_options(session_key: str, available_options: list, prev_options_key: str) -> list:
+    """
+    Synchronize multiselect selection with available options.
+    Removes unavailable options and adds newly available ones.
+
+    This solves the cascading filter bug where:
+    1. User removes a department -> sections removed from options
+    2. Streamlit removes those sections from selection
+    3. User adds department back -> sections available but NOT selected
+
+    Args:
+        session_key: The session state key for the current selection
+        available_options: Currently available options based on parent filter
+        prev_options_key: Session state key to store previous options for comparison
+
+    Returns:
+        Updated selection list
+    """
+    current_selection = st.session_state.get(session_key, available_options)
+    prev_options = st.session_state.get(prev_options_key, [])
+
+    # Remove options that are no longer available
+    valid_selection = [opt for opt in current_selection if opt in available_options]
+
+    # Add newly available options (options that weren't previously available)
+    new_options = [opt for opt in available_options if opt not in prev_options]
+    updated_selection = valid_selection + new_options
+
+    # Store current options for next comparison
+    st.session_state[prev_options_key] = available_options
+    st.session_state[session_key] = updated_selection
+
+    return updated_selection
+
+
 def load_group_orders():
     """Load group order configuration from JSON file."""
     try:
@@ -185,3 +220,80 @@ def render_department_and_group_controls(df, tab_key, grouping_options):
                     key=grouping_key
                 )
     return filtered, dept_choice, section_choice, grouping_choice
+
+
+def filter_grades_for_grouping(privilege: str, grades: list) -> list:
+    """
+    Filter grades based on privilege for 職位別 grouping.
+
+    Members can only see non-manager grades.
+
+    Args:
+        privilege: User's privilege identifier
+        grades: List of all available grades
+
+    Returns:
+        Filtered list of grades visible to the user
+    """
+    from modules.privilege_manager import get_privilege_manager
+
+    pm = get_privilege_manager()
+    return pm.filter_grades(privilege, grades)
+
+
+def get_section_aliases_for_display(privilege: str, tab: str) -> list:
+    """
+    Get section aliases for display in 課別 grouping.
+
+    Args:
+        privilege: User's privilege identifier
+        tab: Current tab name
+
+    Returns:
+        List of section alias dicts with display_name and members
+    """
+    from modules.privilege_manager import get_privilege_manager
+
+    pm = get_privilege_manager()
+    return pm.get_section_aliases(privilege, tab)
+
+
+def apply_section_aliases(df, privilege: str, tab: str):
+    """
+    Apply section aliases to a dataframe for 課別 grouping.
+
+    Replaces individual section names with their combined alias display names
+    based on the user's privilege and current tab.
+
+    Args:
+        df: DataFrame with a 'section' column
+        privilege: User's privilege identifier
+        tab: Current tab name
+
+    Returns:
+        DataFrame with section names replaced by aliases where applicable
+    """
+    if 'section' not in df.columns:
+        return df
+
+    aliases = get_section_aliases_for_display(privilege, tab)
+    if not aliases:
+        return df
+
+    # Build mapping from member sections to alias display name
+    section_mapping = {}
+    for alias in aliases:
+        display_name = alias.get('display_name')
+        members = alias.get('members', [])
+        for member in members:
+            section_mapping[member] = display_name
+
+    if not section_mapping:
+        return df
+
+    # Apply mapping to section column
+    result = df.copy()
+    result['section'] = result['section'].apply(
+        lambda x: section_mapping.get(x, x) if x else x
+    )
+    return result
