@@ -475,21 +475,24 @@ if uploaded_file is not None:
                                     share_data['_section_order'] = share_data['section'].apply(
                                         lambda x: section_order_map.get(x, len(section_order))
                                     )
-                                    share_data = share_data.sort_values(['_section_order', 'name', 'year_month'])
+                                    share_data = share_data.sort_values(['_section_order', 'name', 'year_month'], ascending=[True, True, False])
                                 else:
-                                    share_data = share_data.sort_values(['section', 'name', 'year_month'])
+                                    share_data = share_data.sort_values(['section', 'name', 'year_month'], ascending=[True, True, False])
 
-                                # Display nested: section -> (name ->) content
+                                # Display nested: section -> (year_month or name) -> content
                                 sections = share_data['section'].unique()
                                 for section in sections:
                                     section_data = share_data[share_data['section'] == section]
                                     with st.expander(f"{section}", expanded=False):
                                         if anonymize_names:
-                                            # Show comments without names
-                                            for _, row in section_data.iterrows():
-                                                st.markdown(f"**{row['year_month']}**")
-                                                st.text(row['comment'])
-                                                st.divider()
+                                            # Show comments grouped by year_month (without names)
+                                            year_months = section_data['year_month'].unique()
+                                            for ym in year_months:
+                                                ym_data = section_data[section_data['year_month'] == ym]
+                                                with st.expander(f"{ym}", expanded=False):
+                                                    for _, row in ym_data.iterrows():
+                                                        st.text(row['comment'])
+                                                        st.divider()
                                         else:
                                             # Show comments with names
                                             names = section_data['name'].unique()
@@ -713,9 +716,9 @@ if uploaded_file is not None:
                                         share_data['_section_order'] = share_data['section'].apply(
                                             lambda x: section_order_map.get(x, len(section_order))
                                         )
-                                        share_data = share_data.sort_values(['_section_order', 'name', 'year_month'])
+                                        share_data = share_data.sort_values(['_section_order', 'name', 'year_month'], ascending=[True, True, False])
                                     else:
-                                        share_data = share_data.sort_values(['section', 'name', 'year_month'])
+                                        share_data = share_data.sort_values(['section', 'name', 'year_month'], ascending=[True, True, False])
 
                                     # Display nested: section -> (name ->) content
                                     sections = share_data['section'].unique()
@@ -723,11 +726,14 @@ if uploaded_file is not None:
                                         section_data = share_data[share_data['section'] == section]
                                         with st.expander(f"{section}", expanded=False):
                                             if anonymize_names:
-                                                # Show comments without names
-                                                for _, row in section_data.iterrows():
-                                                    st.markdown(f"**{row['year_month']}**")
-                                                    st.text(row['comment'])
-                                                    st.divider()
+                                                # Show comments grouped by year_month (without names)
+                                                year_months = section_data['year_month'].unique()
+                                                for ym in year_months:
+                                                    ym_data = section_data[section_data['year_month'] == ym]
+                                                    with st.expander(f"{ym}", expanded=False):
+                                                        for _, row in ym_data.iterrows():
+                                                            st.text(row['comment'])
+                                                            st.divider()
                                             else:
                                                 # Show comments with names
                                                 names = section_data['name'].unique()
@@ -891,9 +897,9 @@ if uploaded_file is not None:
                                         share_data['_section_order'] = share_data['section'].apply(
                                             lambda x: section_order_map.get(x, len(section_order))
                                         )
-                                        share_data = share_data.sort_values(['_section_order', 'name', 'year_month'])
+                                        share_data = share_data.sort_values(['_section_order', 'name', 'year_month'], ascending=[True, True, False])
                                     else:
-                                        share_data = share_data.sort_values(['section', 'name', 'year_month'])
+                                        share_data = share_data.sort_values(['section', 'name', 'year_month'], ascending=[True, True, False])
 
                                     # Display nested: section -> (name ->) content
                                     sections = share_data['section'].unique()
@@ -901,11 +907,14 @@ if uploaded_file is not None:
                                         section_data = share_data[share_data['section'] == section]
                                         with st.expander(f"{section}", expanded=False):
                                             if anonymize_names:
-                                                # Show comments without names
-                                                for _, row in section_data.iterrows():
-                                                    st.markdown(f"**{row['year_month']}**")
-                                                    st.text(row['comment'])
-                                                    st.divider()
+                                                # Show comments grouped by year_month (without names)
+                                                year_months = section_data['year_month'].unique()
+                                                for ym in year_months:
+                                                    ym_data = section_data[section_data['year_month'] == ym]
+                                                    with st.expander(f"{ym}", expanded=False):
+                                                        for _, row in ym_data.iterrows():
+                                                            st.text(row['comment'])
+                                                            st.divider()
                                             else:
                                                 # Show comments with names
                                                 names = section_data['name'].unique()
@@ -1260,7 +1269,7 @@ if uploaded_file is not None:
                             with st.expander("共有したいこと", expanded=False):
                                 comment_data = individual_comments[individual_comments['comment'].notna()][['year_month', 'comment']].copy()
                                 if not comment_data.empty:
-                                    comment_data = comment_data.sort_values('year_month')
+                                    comment_data = comment_data.sort_values('year_month', ascending=False)
                                     for _, row in comment_data.iterrows():
                                         st.markdown(f"**{row['year_month']}**")
                                         st.text(row['comment'])
