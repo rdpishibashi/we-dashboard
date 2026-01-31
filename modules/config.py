@@ -135,8 +135,8 @@ PRIVILEGE_GROUP_ACCESS = {
     'me2': ['第二設計課'],             # 第二設計課 manager
     'me3': ['第三設計課'],             # 第三設計課 manager
     'dev': ['開発部'],
-    'dev1': ['開発部 1課', 'UTI技術発展処'], 
-    'dev2': ['開発部 2課', 'UK S1-Project'], 
-    'uti': ['開発部 1課', 'UTI技術発展処'], 
-    'uks1': ['開発部 2課', 'UK S1-Project']
+    'dev1': ['開発部'],
+    'dev2': ['開発部'],
+    'uti': ['開発部'],
+    'uks': ['開発部']
 }
