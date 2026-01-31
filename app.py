@@ -133,67 +133,117 @@ if uploaded_file is not None:
         (filtered_df['year_month_dt'] <= end_dt)
     ]
 
+    # Helper function to synchronize filter selection with available options
+    def sync_filter_selection(key: str, options: list) -> None:
+        """
+        Update session state to ensure selection only contains valid options.
+        When available options change (due to parent filter change), reset to all options.
+        """
+        options_key = f"_options_{key}"
+        prev_options = st.session_state.get(options_key, None)
+
+        if key not in st.session_state:
+            # First time - initialize to all options
+            st.session_state[key] = list(options)
+        elif prev_options is not None and set(prev_options) != set(options):
+            # Options changed (parent filter changed) - reset to all new options
+            st.session_state[key] = list(options)
+        else:
+            # Options same - just filter out any invalid selections
+            current = st.session_state[key]
+            valid = [item for item in current if item in options]
+            if valid:
+                st.session_state[key] = valid
+            else:
+                # All selections became invalid - reset to all
+                st.session_state[key] = list(options)
+
+        # Store current options for next comparison
+        st.session_state[options_key] = list(options)
+
+    # Division filter
     division_options = get_options(filtered_df['division'], remove_unset=True, order_key='division')
+    sync_filter_selection("filter_divisions", division_options)
     selected_divisions = st.sidebar.multiselect(
         "部門",
         division_options,
-        default=division_options,
         key="filter_divisions"
     )
     if selected_divisions:
         filtered_df = filtered_df[filtered_df['division'].isin(selected_divisions)]
 
+    # Department filter
     department_options = get_options(filtered_df['department'], remove_unset=True, order_key='department')
+    sync_filter_selection("filter_departments", department_options)
     selected_departments = st.sidebar.multiselect(
         "部署",
         department_options,
-        default=department_options,
         key="filter_departments"
     )
     if selected_departments:
         filtered_df = filtered_df[filtered_df['department'].isin(selected_departments)]
 
+    # Section filter
     section_options = get_options(filtered_df['section'], remove_unset=False, order_key='section')
+    sync_filter_selection("filter_sections", section_options)
     selected_sections = st.sidebar.multiselect(
         "課",
         section_options,
-        default=section_options,
         key="filter_sections"
     )
     if selected_sections:
         filtered_df = filtered_df[filtered_df['section'].isin(selected_sections)]
 
+    # Team filter
     team_options = get_options(filtered_df['team'], order_key='team')
+    sync_filter_selection("filter_teams", team_options)
     selected_teams = st.sidebar.multiselect(
         "チーム",
         team_options,
-        default=team_options,
         key="filter_teams"
     )
     if selected_teams:
         filtered_df = filtered_df[filtered_df['team'].isin(selected_teams)]
 
+    # Project filter
     project_options = get_options(filtered_df['project'], order_key='project')
+    sync_filter_selection("filter_projects", project_options)
     selected_projects = st.sidebar.multiselect(
         "プロジェクト",
         project_options,
-        default=project_options,
         key="filter_projects"
     )
     if selected_projects:
         filtered_df = filtered_df[filtered_df['project'].isin(selected_projects)]
 
+    # Grade filter
     grade_options = get_options(filtered_df['grade'], order_key='grade')
+    sync_filter_selection("filter_grades", grade_options)
     selected_grades = st.sidebar.multiselect(
         "職位",
         grade_options,
-        default=grade_options,
         key="filter_grades"
     )
     if selected_grades:
         filtered_df = filtered_df[filtered_df['grade'].isin(selected_grades)]
 
     st.sidebar.info(f"期間: {selected_period_label}\n有効データ: {len(filtered_df):,}件 / {len(df):,}件")
+
+    # Apply global filters to signal_df and comment_df
+    # Filter by date range
+    filtered_signal_df = signal_df[
+        (signal_df['year_month_dt'] >= start_dt) &
+        (signal_df['year_month_dt'] <= end_dt)
+    ].copy()
+    filtered_comment_df = comment_df[
+        (comment_df['year_month_dt'] >= start_dt) &
+        (comment_df['year_month_dt'] <= end_dt)
+    ].copy()
+
+    # Filter by organization hierarchy (using mail_address to match filtered_df)
+    valid_mail_addresses = filtered_df['mail_address'].dropna().unique()
+    filtered_signal_df = filtered_signal_df[filtered_signal_df['mail_address'].isin(valid_mail_addresses)]
+    filtered_comment_df = filtered_comment_df[filtered_comment_df['mail_address'].isin(valid_mail_addresses)]
 
     # Define tabs and grouping options based on privilege
     if is_authenticated() and current_privilege:
@@ -227,7 +277,7 @@ if uploaded_file is not None:
         # Apply per-tab data scope filtering
         tab_scope = privilege_mgr.get_data_scope_for_tab(current_privilege, "時系列") if current_privilege else None
         tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope)
-        tab_signal_df = filter_dataframe_by_scope(signal_df, tab_scope)
+        tab_signal_df = filter_dataframe_by_scope(filtered_signal_df, tab_scope)
 
         ts_df, _, _, ts_group_choice = render_department_and_group_controls(
             tab_filtered_df,
@@ -357,7 +407,7 @@ if uploaded_file is not None:
 
                 # Apply section scope filtering for 共有したいこと
                 share_scope = privilege_mgr.get_section_scope(current_privilege, "共有したいこと")
-                share_comment_df = filter_dataframe_by_scope(comment_df, share_scope)
+                share_comment_df = filter_dataframe_by_scope(filtered_comment_df, share_scope)
 
                 # Filter comment data by names and date range
                 graph_comments = share_comment_df[
@@ -460,7 +510,7 @@ if uploaded_file is not None:
         # Apply per-tab data scope filtering
         tab_scope = privilege_mgr.get_data_scope_for_tab(current_privilege, "グループ比較") if current_privilege else None
         tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope)
-        tab_signal_df = filter_dataframe_by_scope(signal_df, tab_scope)
+        tab_signal_df = filter_dataframe_by_scope(filtered_signal_df, tab_scope)
 
         comparison_df, _, _, comparison_group = render_department_and_group_controls(
             tab_filtered_df,
@@ -595,7 +645,7 @@ if uploaded_file is not None:
 
                     # Apply section scope filtering for 共有したいこと
                     share_scope = privilege_mgr.get_section_scope(current_privilege, "共有したいこと")
-                    share_comment_df = filter_dataframe_by_scope(comment_df, share_scope)
+                    share_comment_df = filter_dataframe_by_scope(filtered_comment_df, share_scope)
 
                     # Filter comment data by names and date range
                     graph_comments = share_comment_df[
@@ -773,7 +823,7 @@ if uploaded_file is not None:
 
                     # Apply section scope filtering for 共有したいこと
                     share_scope = privilege_mgr.get_section_scope(current_privilege, "共有したいこと")
-                    share_comment_df = filter_dataframe_by_scope(comment_df, share_scope)
+                    share_comment_df = filter_dataframe_by_scope(filtered_comment_df, share_scope)
 
                     # Filter comment data by names and date range
                     graph_comments = share_comment_df[
@@ -1074,7 +1124,7 @@ if uploaded_file is not None:
         # Apply per-tab data scope filtering
         tab_scope = privilege_mgr.get_data_scope_for_tab(current_privilege, "個人") if current_privilege else None
         tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope)
-        tab_signal_df = filter_dataframe_by_scope(signal_df, tab_scope)
+        tab_signal_df = filter_dataframe_by_scope(filtered_signal_df, tab_scope)
 
         individual_df, _, _, individual_group_choice = render_department_and_group_controls(
             tab_filtered_df,
@@ -1186,10 +1236,8 @@ if uploaded_file is not None:
 
                     if individual_mail:
                         # Filter comment data by mail_address and date range
-                        individual_comments = comment_df[
-                            (comment_df['mail_address'] == individual_mail) &
-                            (comment_df['year_month_dt'] >= start_dt) &
-                            (comment_df['year_month_dt'] <= end_dt)
+                        individual_comments = filtered_comment_df[
+                            (filtered_comment_df['mail_address'] == individual_mail)
                         ].copy()
 
                         # Concern section - 気になった出来事や気づき (feature access check)
