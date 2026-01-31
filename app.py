@@ -33,7 +33,11 @@ from modules.charts import (
 )
 from modules.auth import (
     render_login_ui, is_authenticated, has_privilege,
-    filter_by_privilege, get_current_privilege
+    get_current_privilege
+)
+from modules.privilege_manager import (
+    get_privilege_manager, filter_dataframe_by_scope, apply_section_aliases,
+    filter_dataframe_by_grade, anonymize_dataframe
 )
 
 # ページ設定
@@ -77,12 +81,10 @@ if uploaded_file is not None:
         st.error(f"データ読み込みエラー: {e}")
         st.stop()
 
-    # Apply privilege-based filtering to all data sources (only when authenticated)
-    if is_authenticated():
-        current_privilege = get_current_privilege()
-        df = filter_by_privilege(df, current_privilege)
-        signal_df = filter_by_privilege(signal_df, current_privilege)
-        comment_df = filter_by_privilege(comment_df, current_privilege)
+    # Get privilege manager for per-tab filtering
+    privilege_mgr = get_privilege_manager()
+    # Use 'anonymous' privilege when not authenticated
+    current_privilege = get_current_privilege() if is_authenticated() else 'anonymous'
 
     # サイドバー: フィルター設定
     st.sidebar.header("🔍 フィルター設定")
@@ -193,16 +195,12 @@ if uploaded_file is not None:
 
     st.sidebar.info(f"期間: {selected_period_label}\n有効データ: {len(filtered_df):,}件 / {len(df):,}件")
 
-    # Define tabs - hide 個人 tab when not authenticated
-    if is_authenticated():
-        tab_labels = ["時系列", "グループ比較", "評価", "個人", "分布"]
+    # Define tabs and grouping options based on privilege
+    if is_authenticated() and current_privilege:
+        tab_labels = privilege_mgr.get_allowed_tabs(current_privilege)
+        base_grouping_options = privilege_mgr.get_allowed_groupings(current_privilege)
     else:
         tab_labels = ["時系列", "グループ比較", "評価", "分布"]
-
-    # Define grouping options - hide grade and name when not authenticated
-    if is_authenticated():
-        base_grouping_options = ['なし', 'department', 'section', 'team', 'project', 'grade', 'name']
-    else:
         base_grouping_options = ['なし', 'department', 'section', 'team', 'project']
 
     # Initialize tab selection on first load
@@ -226,11 +224,37 @@ if uploaded_file is not None:
     if selected_tab == "時系列":
         st.subheader("時系列トレンド")
 
+        # Apply per-tab data scope filtering
+        tab_scope = privilege_mgr.get_data_scope_for_tab(current_privilege, "時系列") if current_privilege else None
+        tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope)
+        tab_signal_df = filter_dataframe_by_scope(signal_df, tab_scope)
+
         ts_df, _, _, ts_group_choice = render_department_and_group_controls(
-            filtered_df,
+            tab_filtered_df,
             "timeseries",
             grouping_options=base_grouping_options
         )
+
+        # Apply additional grouping scope filtering
+        if current_privilege and ts_group_choice:
+            grouping_scope = privilege_mgr.get_grouping_scope(current_privilege, ts_group_choice)
+            ts_df = filter_dataframe_by_scope(ts_df, grouping_scope)
+            tab_signal_df = filter_dataframe_by_scope(tab_signal_df, grouping_scope)
+
+            # Apply grade filtering when grouping by 'grade'
+            if ts_group_choice == 'grade':
+                grade_filter = privilege_mgr.get_grade_filter_for_grouping(current_privilege, ts_group_choice)
+                if grade_filter:
+                    ts_df = filter_dataframe_by_grade(ts_df, grade_filter)
+                    tab_signal_df = filter_dataframe_by_grade(tab_signal_df, grade_filter)
+
+            # Apply section aliases when grouping by 'section'
+            if ts_group_choice == 'section':
+                alias_mapping = privilege_mgr.get_section_aliases(current_privilege, "時系列")
+                if alias_mapping:
+                    ts_df = apply_section_aliases(ts_df, alias_mapping)
+                    tab_signal_df = apply_section_aliases(tab_signal_df, alias_mapping)
+
         if ts_df.empty:
             st.info("選択された条件に該当するデータがありません。")
         else:
@@ -313,26 +337,35 @@ if uploaded_file is not None:
 
             # Signal section - アクション対象候補 (認証時のみ表示)
             if is_authenticated():
-                st.subheader("アクション対象候補（介入優先度 > 1）")
+                # Apply section scope filtering for アクション対象候補
+                action_scope = privilege_mgr.get_section_scope(current_privilege, "アクション対象候補")
+                action_signal_df = filter_dataframe_by_scope(tab_signal_df, action_scope)
 
-                try:
-                    signals = get_signal_data(signal_df, ts_df, end_dt)
-                    render_signal_table(signals, SIGNAL_TABLE_COLUMNS)
-                except Exception as e:
-                    st.error(f"シグナルデータの取得に失敗しました: {e}")
+                if action_scope is None or len(action_scope) > 0:
+                    st.subheader("アクション対象候補（介入優先度 > 1）")
+
+                    try:
+                        signals = get_signal_data(action_signal_df, ts_df, end_dt)
+                        render_signal_table(signals, SIGNAL_TABLE_COLUMNS)
+                    except Exception as e:
+                        st.error(f"シグナルデータの取得に失敗しました: {e}")
 
                 # Get comment data for individuals in current graph
                 valid_names = ts_df['name'].dropna().unique()
                 # Get name to section mapping from the latest data
                 name_section_map = ts_df.drop_duplicates('name').set_index('name')['section'].to_dict()
 
+                # Apply section scope filtering for 共有したいこと
+                share_scope = privilege_mgr.get_section_scope(current_privilege, "共有したいこと")
+                share_comment_df = filter_dataframe_by_scope(comment_df, share_scope)
+
                 # Filter comment data by names and date range
-                graph_comments = comment_df[
-                    (comment_df['mail_address'].isin(
+                graph_comments = share_comment_df[
+                    (share_comment_df['mail_address'].isin(
                         ts_df[ts_df['name'].isin(valid_names)]['mail_address'].dropna().unique()
                     )) &
-                    (comment_df['year_month_dt'] >= start_dt) &
-                    (comment_df['year_month_dt'] <= end_dt)
+                    (share_comment_df['year_month_dt'] >= start_dt) &
+                    (share_comment_df['year_month_dt'] <= end_dt)
                 ].copy()
 
                 # Add name and section columns to comments
@@ -345,8 +378,8 @@ if uploaded_file is not None:
                     from modules.utils import GROUP_ORDER_MAP
                     section_order = GROUP_ORDER_MAP.get('section', [])
 
-                    # Concern section - 気になった出来事や気づき (admin権限が必要)
-                    if has_privilege("admin"):
+                    # Concern section - 気になった出来事や気づき (feature access check)
+                    if privilege_mgr.has_feature_access(current_privilege, "気になった出来事や気づき"):
                         with st.expander("気になった出来事や気づき", expanded=False):
                             concern_data = graph_comments[graph_comments['concern'].notna()].copy()
                             if not concern_data.empty:
@@ -376,46 +409,85 @@ if uploaded_file is not None:
                             else:
                                 st.info("データがありません")
 
-                    # Comment section - 共有したいこと
-                    with st.expander("共有したいこと", expanded=False):
-                        share_data = graph_comments[graph_comments['comment'].notna()].copy()
-                        if not share_data.empty:
-                            # Sort by section order, then name, then date
-                            if section_order:
-                                section_order_map = {name: idx for idx, name in enumerate(section_order)}
-                                share_data['_section_order'] = share_data['section'].apply(
-                                    lambda x: section_order_map.get(x, len(section_order))
-                                )
-                                share_data = share_data.sort_values(['_section_order', 'name', 'year_month'])
-                            else:
-                                share_data = share_data.sort_values(['section', 'name', 'year_month'])
+                    # Comment section - 共有したいこと (feature access check)
+                    if privilege_mgr.has_feature_access(current_privilege, "共有したいこと") and (share_scope is None or len(share_scope) > 0):
+                        with st.expander("共有したいこと", expanded=False):
+                            share_data = graph_comments[graph_comments['comment'].notna()].copy()
+                            if not share_data.empty:
+                                # Check if names should be anonymized
+                                anonymize_names = privilege_mgr.should_anonymize_section(current_privilege, "共有したいこと")
 
-                            # Display nested: section -> name -> content
-                            sections = share_data['section'].unique()
-                            for section in sections:
-                                section_data = share_data[share_data['section'] == section]
-                                with st.expander(f"{section}", expanded=False):
-                                    names = section_data['name'].unique()
-                                    for name in names:
-                                        name_data = section_data[section_data['name'] == name]
-                                        with st.expander(f"{name}", expanded=False):
-                                            for _, row in name_data.iterrows():
+                                # Sort by section order, then name, then date
+                                if section_order:
+                                    section_order_map = {name: idx for idx, name in enumerate(section_order)}
+                                    share_data['_section_order'] = share_data['section'].apply(
+                                        lambda x: section_order_map.get(x, len(section_order))
+                                    )
+                                    share_data = share_data.sort_values(['_section_order', 'name', 'year_month'])
+                                else:
+                                    share_data = share_data.sort_values(['section', 'name', 'year_month'])
+
+                                # Display nested: section -> (name ->) content
+                                sections = share_data['section'].unique()
+                                for section in sections:
+                                    section_data = share_data[share_data['section'] == section]
+                                    with st.expander(f"{section}", expanded=False):
+                                        if anonymize_names:
+                                            # Show comments without names
+                                            for _, row in section_data.iterrows():
                                                 st.markdown(f"**{row['year_month']}**")
                                                 st.text(row['comment'])
                                                 st.divider()
-                        else:
-                            st.info("データがありません")
+                                        else:
+                                            # Show comments with names
+                                            names = section_data['name'].unique()
+                                            for name in names:
+                                                name_data = section_data[section_data['name'] == name]
+                                                with st.expander(f"{name}", expanded=False):
+                                                    for _, row in name_data.iterrows():
+                                                        st.markdown(f"**{row['year_month']}**")
+                                                        st.text(row['comment'])
+                                                        st.divider()
+                            else:
+                                st.info("データがありません")
 
     # =============================================================================
     # グループ比較 Tab
     # =============================================================================
     elif selected_tab == "グループ比較":
         st.subheader("グループ比較")
+
+        # Apply per-tab data scope filtering
+        tab_scope = privilege_mgr.get_data_scope_for_tab(current_privilege, "グループ比較") if current_privilege else None
+        tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope)
+        tab_signal_df = filter_dataframe_by_scope(signal_df, tab_scope)
+
         comparison_df, _, _, comparison_group = render_department_and_group_controls(
-            filtered_df,
+            tab_filtered_df,
             "group_comparison",
             grouping_options=base_grouping_options
         )
+
+        # Apply additional grouping scope filtering
+        if current_privilege and comparison_group:
+            grouping_scope = privilege_mgr.get_grouping_scope(current_privilege, comparison_group)
+            comparison_df = filter_dataframe_by_scope(comparison_df, grouping_scope)
+            tab_signal_df = filter_dataframe_by_scope(tab_signal_df, grouping_scope)
+
+            # Apply grade filtering when grouping by 'grade'
+            if comparison_group == 'grade':
+                grade_filter = privilege_mgr.get_grade_filter_for_grouping(current_privilege, comparison_group)
+                if grade_filter:
+                    comparison_df = filter_dataframe_by_grade(comparison_df, grade_filter)
+                    tab_signal_df = filter_dataframe_by_grade(tab_signal_df, grade_filter)
+
+            # Apply section aliases when grouping by 'section'
+            if comparison_group == 'section':
+                alias_mapping = privilege_mgr.get_section_aliases(current_privilege, "グループ比較")
+                if alias_mapping:
+                    comparison_df = apply_section_aliases(comparison_df, alias_mapping)
+                    tab_signal_df = apply_section_aliases(tab_signal_df, alias_mapping)
+
         if comparison_df.empty:
             st.info("選択された条件に該当するデータがありません。")
         else:
@@ -503,26 +575,35 @@ if uploaded_file is not None:
 
                 # Signal section - アクション対象候補 (認証時のみ表示)
                 if is_authenticated():
-                    st.subheader("アクション対象候補（介入優先度 > 1）")
+                    # Apply section scope filtering for アクション対象候補
+                    action_scope = privilege_mgr.get_section_scope(current_privilege, "アクション対象候補")
+                    action_signal_df = filter_dataframe_by_scope(tab_signal_df, action_scope)
 
-                    try:
-                        signals = get_signal_data(signal_df, comparison_df, end_dt)
-                        render_signal_table(signals, SIGNAL_TABLE_COLUMNS)
-                    except Exception as e:
-                        st.error(f"シグナルデータの取得に失敗しました: {e}")
+                    if action_scope is None or len(action_scope) > 0:
+                        st.subheader("アクション対象候補（介入優先度 > 1）")
+
+                        try:
+                            signals = get_signal_data(action_signal_df, comparison_df, end_dt)
+                            render_signal_table(signals, SIGNAL_TABLE_COLUMNS)
+                        except Exception as e:
+                            st.error(f"シグナルデータの取得に失敗しました: {e}")
 
                     # Get comment data for individuals in current graph
                     valid_names = comparison_df['name'].dropna().unique()
                     # Get name to section mapping from the latest data
                     name_section_map = comparison_df.drop_duplicates('name').set_index('name')['section'].to_dict()
 
+                    # Apply section scope filtering for 共有したいこと
+                    share_scope = privilege_mgr.get_section_scope(current_privilege, "共有したいこと")
+                    share_comment_df = filter_dataframe_by_scope(comment_df, share_scope)
+
                     # Filter comment data by names and date range
-                    graph_comments = comment_df[
-                        (comment_df['mail_address'].isin(
+                    graph_comments = share_comment_df[
+                        (share_comment_df['mail_address'].isin(
                             comparison_df[comparison_df['name'].isin(valid_names)]['mail_address'].dropna().unique()
                         )) &
-                        (comment_df['year_month_dt'] >= start_dt) &
-                        (comment_df['year_month_dt'] <= end_dt)
+                        (share_comment_df['year_month_dt'] >= start_dt) &
+                        (share_comment_df['year_month_dt'] <= end_dt)
                     ].copy()
 
                     # Add name and section columns to comments
@@ -535,8 +616,8 @@ if uploaded_file is not None:
                         from modules.utils import GROUP_ORDER_MAP
                         section_order = GROUP_ORDER_MAP.get('section', [])
 
-                        # Concern section - 気になった出来事や気づき (admin権限が必要)
-                        if has_privilege("admin"):
+                        # Concern section - 気になった出来事や気づき (feature access check)
+                        if privilege_mgr.has_feature_access(current_privilege, "気になった出来事や気づき"):
                             with st.expander("気になった出来事や気づき", expanded=False):
                                 concern_data = graph_comments[graph_comments['concern'].notna()].copy()
                                 if not concern_data.empty:
@@ -566,35 +647,47 @@ if uploaded_file is not None:
                                 else:
                                     st.info("データがありません")
 
-                        # Comment section - 共有したいこと
-                        with st.expander("共有したいこと", expanded=False):
-                            share_data = graph_comments[graph_comments['comment'].notna()].copy()
-                            if not share_data.empty:
-                                # Sort by section order, then name, then date
-                                if section_order:
-                                    section_order_map = {name: idx for idx, name in enumerate(section_order)}
-                                    share_data['_section_order'] = share_data['section'].apply(
-                                        lambda x: section_order_map.get(x, len(section_order))
-                                    )
-                                    share_data = share_data.sort_values(['_section_order', 'name', 'year_month'])
-                                else:
-                                    share_data = share_data.sort_values(['section', 'name', 'year_month'])
+                        # Comment section - 共有したいこと (feature access check)
+                        if privilege_mgr.has_feature_access(current_privilege, "共有したいこと") and (share_scope is None or len(share_scope) > 0):
+                            with st.expander("共有したいこと", expanded=False):
+                                share_data = graph_comments[graph_comments['comment'].notna()].copy()
+                                if not share_data.empty:
+                                    # Check if names should be anonymized
+                                    anonymize_names = privilege_mgr.should_anonymize_section(current_privilege, "共有したいこと")
 
-                                # Display nested: section -> name -> content
-                                sections = share_data['section'].unique()
-                                for section in sections:
-                                    section_data = share_data[share_data['section'] == section]
-                                    with st.expander(f"{section}", expanded=False):
-                                        names = section_data['name'].unique()
-                                        for name in names:
-                                            name_data = section_data[section_data['name'] == name]
-                                            with st.expander(f"{name}", expanded=False):
-                                                for _, row in name_data.iterrows():
+                                    # Sort by section order, then name, then date
+                                    if section_order:
+                                        section_order_map = {name: idx for idx, name in enumerate(section_order)}
+                                        share_data['_section_order'] = share_data['section'].apply(
+                                            lambda x: section_order_map.get(x, len(section_order))
+                                        )
+                                        share_data = share_data.sort_values(['_section_order', 'name', 'year_month'])
+                                    else:
+                                        share_data = share_data.sort_values(['section', 'name', 'year_month'])
+
+                                    # Display nested: section -> (name ->) content
+                                    sections = share_data['section'].unique()
+                                    for section in sections:
+                                        section_data = share_data[share_data['section'] == section]
+                                        with st.expander(f"{section}", expanded=False):
+                                            if anonymize_names:
+                                                # Show comments without names
+                                                for _, row in section_data.iterrows():
                                                     st.markdown(f"**{row['year_month']}**")
                                                     st.text(row['comment'])
                                                     st.divider()
-                            else:
-                                st.info("データがありません")
+                                            else:
+                                                # Show comments with names
+                                                names = section_data['name'].unique()
+                                                for name in names:
+                                                    name_data = section_data[section_data['name'] == name]
+                                                    with st.expander(f"{name}", expanded=False):
+                                                        for _, row in name_data.iterrows():
+                                                            st.markdown(f"**{row['year_month']}**")
+                                                            st.text(row['comment'])
+                                                            st.divider()
+                                else:
+                                    st.info("データがありません")
 
             else:
                 comparison_fig = create_recent_group_comparison_chart(
@@ -658,28 +751,37 @@ if uploaded_file is not None:
 
                 # Signal section - アクション対象候補 (認証時のみ表示)
                 if is_authenticated():
-                    st.subheader("アクション対象候補（介入優先度 > 1）")
+                    # Apply section scope filtering for アクション対象候補
+                    action_scope = privilege_mgr.get_section_scope(current_privilege, "アクション対象候補")
+                    action_signal_df = filter_dataframe_by_scope(tab_signal_df, action_scope)
 
-                    try:
-                        signals = get_signal_data(signal_df, comparison_df, end_dt)
-                        display_cols = ['name', 'section', 'intervention_priority', 'trend_refined',
-                                       'change_tag', 'stability']
-                        render_signal_table(signals, display_cols)
-                    except Exception as e:
-                        st.error(f"シグナルデータの取得に失敗しました: {e}")
+                    if action_scope is None or len(action_scope) > 0:
+                        st.subheader("アクション対象候補（介入優先度 > 1）")
+
+                        try:
+                            signals = get_signal_data(action_signal_df, comparison_df, end_dt)
+                            display_cols = ['name', 'section', 'intervention_priority', 'trend_refined',
+                                           'change_tag', 'stability']
+                            render_signal_table(signals, display_cols)
+                        except Exception as e:
+                            st.error(f"シグナルデータの取得に失敗しました: {e}")
 
                     # Get comment data for individuals in current graph
                     valid_names = comparison_df['name'].dropna().unique()
                     # Get name to section mapping from the latest data
                     name_section_map = comparison_df.drop_duplicates('name').set_index('name')['section'].to_dict()
 
+                    # Apply section scope filtering for 共有したいこと
+                    share_scope = privilege_mgr.get_section_scope(current_privilege, "共有したいこと")
+                    share_comment_df = filter_dataframe_by_scope(comment_df, share_scope)
+
                     # Filter comment data by names and date range
-                    graph_comments = comment_df[
-                        (comment_df['mail_address'].isin(
+                    graph_comments = share_comment_df[
+                        (share_comment_df['mail_address'].isin(
                             comparison_df[comparison_df['name'].isin(valid_names)]['mail_address'].dropna().unique()
                         )) &
-                        (comment_df['year_month_dt'] >= start_dt) &
-                        (comment_df['year_month_dt'] <= end_dt)
+                        (share_comment_df['year_month_dt'] >= start_dt) &
+                        (share_comment_df['year_month_dt'] <= end_dt)
                     ].copy()
 
                     # Add name and section columns to comments
@@ -692,8 +794,8 @@ if uploaded_file is not None:
                         from modules.utils import GROUP_ORDER_MAP
                         section_order = GROUP_ORDER_MAP.get('section', [])
 
-                        # Concern section - 気になった出来事や気づき (admin権限が必要)
-                        if has_privilege("admin"):
+                        # Concern section - 気になった出来事や気づき (feature access check)
+                        if privilege_mgr.has_feature_access(current_privilege, "気になった出来事や気づき"):
                             with st.expander("気になった出来事や気づき", expanded=False):
                                 concern_data = graph_comments[graph_comments['concern'].notna()].copy()
                                 if not concern_data.empty:
@@ -723,35 +825,47 @@ if uploaded_file is not None:
                                 else:
                                     st.info("データがありません")
 
-                        # Comment section - 共有したいこと
-                        with st.expander("共有したいこと", expanded=False):
-                            share_data = graph_comments[graph_comments['comment'].notna()].copy()
-                            if not share_data.empty:
-                                # Sort by section order, then name, then date
-                                if section_order:
-                                    section_order_map = {name: idx for idx, name in enumerate(section_order)}
-                                    share_data['_section_order'] = share_data['section'].apply(
-                                        lambda x: section_order_map.get(x, len(section_order))
-                                    )
-                                    share_data = share_data.sort_values(['_section_order', 'name', 'year_month'])
-                                else:
-                                    share_data = share_data.sort_values(['section', 'name', 'year_month'])
+                        # Comment section - 共有したいこと (feature access check)
+                        if privilege_mgr.has_feature_access(current_privilege, "共有したいこと") and (share_scope is None or len(share_scope) > 0):
+                            with st.expander("共有したいこと", expanded=False):
+                                share_data = graph_comments[graph_comments['comment'].notna()].copy()
+                                if not share_data.empty:
+                                    # Check if names should be anonymized
+                                    anonymize_names = privilege_mgr.should_anonymize_section(current_privilege, "共有したいこと")
 
-                                # Display nested: section -> name -> content
-                                sections = share_data['section'].unique()
-                                for section in sections:
-                                    section_data = share_data[share_data['section'] == section]
-                                    with st.expander(f"{section}", expanded=False):
-                                        names = section_data['name'].unique()
-                                        for name in names:
-                                            name_data = section_data[section_data['name'] == name]
-                                            with st.expander(f"{name}", expanded=False):
-                                                for _, row in name_data.iterrows():
+                                    # Sort by section order, then name, then date
+                                    if section_order:
+                                        section_order_map = {name: idx for idx, name in enumerate(section_order)}
+                                        share_data['_section_order'] = share_data['section'].apply(
+                                            lambda x: section_order_map.get(x, len(section_order))
+                                        )
+                                        share_data = share_data.sort_values(['_section_order', 'name', 'year_month'])
+                                    else:
+                                        share_data = share_data.sort_values(['section', 'name', 'year_month'])
+
+                                    # Display nested: section -> (name ->) content
+                                    sections = share_data['section'].unique()
+                                    for section in sections:
+                                        section_data = share_data[share_data['section'] == section]
+                                        with st.expander(f"{section}", expanded=False):
+                                            if anonymize_names:
+                                                # Show comments without names
+                                                for _, row in section_data.iterrows():
                                                     st.markdown(f"**{row['year_month']}**")
                                                     st.text(row['comment'])
                                                     st.divider()
-                            else:
-                                st.info("データがありません")
+                                            else:
+                                                # Show comments with names
+                                                names = section_data['name'].unique()
+                                                for name in names:
+                                                    name_data = section_data[section_data['name'] == name]
+                                                    with st.expander(f"{name}", expanded=False):
+                                                        for _, row in name_data.iterrows():
+                                                            st.markdown(f"**{row['year_month']}**")
+                                                            st.text(row['comment'])
+                                                            st.divider()
+                                else:
+                                    st.info("データがありません")
 
     # =============================================================================
     # 評価 Tab
@@ -759,11 +873,33 @@ if uploaded_file is not None:
     elif selected_tab == "評価":
         st.subheader("評価別")
 
+        # Apply per-tab data scope filtering
+        tab_scope = privilege_mgr.get_data_scope_for_tab(current_privilege, "評価") if current_privilege else None
+        tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope)
+
         evaluation_df, _, _, evaluation_group = render_department_and_group_controls(
-            filtered_df,
+            tab_filtered_df,
             "evaluation",
             grouping_options=base_grouping_options
         )
+
+        # Apply additional grouping scope filtering
+        if current_privilege and evaluation_group:
+            grouping_scope = privilege_mgr.get_grouping_scope(current_privilege, evaluation_group)
+            evaluation_df = filter_dataframe_by_scope(evaluation_df, grouping_scope)
+
+            # Apply grade filtering when grouping by 'grade'
+            if evaluation_group == 'grade':
+                grade_filter = privilege_mgr.get_grade_filter_for_grouping(current_privilege, evaluation_group)
+                if grade_filter:
+                    evaluation_df = filter_dataframe_by_grade(evaluation_df, grade_filter)
+
+            # Apply section aliases when grouping by 'section'
+            if evaluation_group == 'section':
+                alias_mapping = privilege_mgr.get_section_aliases(current_privilege, "評価")
+                if alias_mapping:
+                    evaluation_df = apply_section_aliases(evaluation_df, alias_mapping)
+
         if evaluation_df.empty:
             st.info("選択された条件に該当するデータがありません。")
         else:
@@ -935,11 +1071,29 @@ if uploaded_file is not None:
 
         from modules.utils import sort_names_by_grade
 
+        # Apply per-tab data scope filtering
+        tab_scope = privilege_mgr.get_data_scope_for_tab(current_privilege, "個人") if current_privilege else None
+        tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope)
+        tab_signal_df = filter_dataframe_by_scope(signal_df, tab_scope)
+
         individual_df, _, _, individual_group_choice = render_department_and_group_controls(
-            filtered_df,
+            tab_filtered_df,
             "individual",
             grouping_options=base_grouping_options
         )
+
+        # Apply additional grouping scope filtering
+        if current_privilege and individual_group_choice:
+            grouping_scope = privilege_mgr.get_grouping_scope(current_privilege, individual_group_choice)
+            individual_df = filter_dataframe_by_scope(individual_df, grouping_scope)
+            tab_signal_df = filter_dataframe_by_scope(tab_signal_df, grouping_scope)
+
+            # Apply grade filtering when grouping by 'grade'
+            if individual_group_choice == 'grade':
+                grade_filter = privilege_mgr.get_grade_filter_for_grouping(current_privilege, individual_group_choice)
+                if grade_filter:
+                    individual_df = filter_dataframe_by_grade(individual_df, grade_filter)
+                    tab_signal_df = filter_dataframe_by_grade(tab_signal_df, grade_filter)
 
         if individual_df.empty:
             st.info("選択された条件に該当するデータがありません。")
@@ -1038,8 +1192,8 @@ if uploaded_file is not None:
                             (comment_df['year_month_dt'] <= end_dt)
                         ].copy()
 
-                        # Concern section - 気になった出来事や気づき (admin権限が必要)
-                        if has_privilege("admin"):
+                        # Concern section - 気になった出来事や気づき (feature access check)
+                        if privilege_mgr.has_feature_access(current_privilege, "気になった出来事や気づき"):
                             with st.expander("気になった出来事や気づき", expanded=False):
                                 concern_data = individual_comments[individual_comments['concern'].notna()][['year_month', 'concern']].copy()
                                 if not concern_data.empty:
@@ -1051,17 +1205,18 @@ if uploaded_file is not None:
                                 else:
                                     st.info("データがありません")
 
-                        # Comment section - 共有したいこと
-                        with st.expander("共有したいこと", expanded=False):
-                            comment_data = individual_comments[individual_comments['comment'].notna()][['year_month', 'comment']].copy()
-                            if not comment_data.empty:
-                                comment_data = comment_data.sort_values('year_month')
-                                for _, row in comment_data.iterrows():
-                                    st.markdown(f"**{row['year_month']}**")
-                                    st.text(row['comment'])
-                                    st.divider()
-                            else:
-                                st.info("データがありません")
+                        # Comment section - 共有したいこと (feature access check)
+                        if privilege_mgr.has_feature_access(current_privilege, "共有したいこと"):
+                            with st.expander("共有したいこと", expanded=False):
+                                comment_data = individual_comments[individual_comments['comment'].notna()][['year_month', 'comment']].copy()
+                                if not comment_data.empty:
+                                    comment_data = comment_data.sort_values('year_month')
+                                    for _, row in comment_data.iterrows():
+                                        st.markdown(f"**{row['year_month']}**")
+                                        st.text(row['comment'])
+                                        st.divider()
+                                else:
+                                    st.info("データがありません")
 
                     # Signal section
                     st.subheader("シグナル")
@@ -1069,9 +1224,9 @@ if uploaded_file is not None:
                     try:
                         # Filter signal data for the selected individual up to end_dt
                         # Signal calculations use data from the beginning up to the end date
-                        individual_signal = signal_df[
-                            (signal_df['name'] == selected_individual) &
-                            (signal_df['year_month_dt'] == end_dt)
+                        individual_signal = tab_signal_df[
+                            (tab_signal_df['name'] == selected_individual) &
+                            (tab_signal_df['year_month_dt'] == end_dt)
                         ]
 
                         if individual_signal.empty:
@@ -1107,11 +1262,33 @@ if uploaded_file is not None:
     elif selected_tab == "分布":
         st.subheader("分布分析")
 
+        # Apply per-tab data scope filtering
+        tab_scope = privilege_mgr.get_data_scope_for_tab(current_privilege, "分布") if current_privilege else None
+        tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope)
+
         dist_df, _, _, dist_group = render_department_and_group_controls(
-            filtered_df,
+            tab_filtered_df,
             "distribution",
             grouping_options=base_grouping_options
         )
+
+        # Apply additional grouping scope filtering
+        if current_privilege and dist_group:
+            grouping_scope = privilege_mgr.get_grouping_scope(current_privilege, dist_group)
+            dist_df = filter_dataframe_by_scope(dist_df, grouping_scope)
+
+            # Apply grade filtering when grouping by 'grade'
+            if dist_group == 'grade':
+                grade_filter = privilege_mgr.get_grade_filter_for_grouping(current_privilege, dist_group)
+                if grade_filter:
+                    dist_df = filter_dataframe_by_grade(dist_df, grade_filter)
+
+            # Apply section aliases when grouping by 'section'
+            if dist_group == 'section':
+                alias_mapping = privilege_mgr.get_section_aliases(current_privilege, "分布")
+                if alias_mapping:
+                    dist_df = apply_section_aliases(dist_df, alias_mapping)
+
         if dist_df.empty:
             st.info("選択された条件に該当するデータがありません。")
         else:
