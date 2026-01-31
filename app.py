@@ -161,71 +161,73 @@ if uploaded_file is not None:
         # Store current options for next comparison
         st.session_state[options_key] = list(options)
 
-    # Division filter
-    division_options = get_options(filtered_df['division'], remove_unset=True, order_key='division')
-    sync_filter_selection("filter_divisions", division_options)
-    selected_divisions = st.sidebar.multiselect(
-        "部門",
-        division_options,
-        key="filter_divisions"
-    )
-    if selected_divisions:
-        filtered_df = filtered_df[filtered_df['division'].isin(selected_divisions)]
+    # Organization filters in collapsible section
+    with st.sidebar.expander("組織フィルター", expanded=False):
+        # Division filter
+        division_options = get_options(filtered_df['division'], remove_unset=True, order_key='division')
+        sync_filter_selection("filter_divisions", division_options)
+        selected_divisions = st.multiselect(
+            "部門",
+            division_options,
+            key="filter_divisions"
+        )
+        if selected_divisions:
+            filtered_df = filtered_df[filtered_df['division'].isin(selected_divisions)]
 
-    # Department filter
-    department_options = get_options(filtered_df['department'], remove_unset=True, order_key='department')
-    sync_filter_selection("filter_departments", department_options)
-    selected_departments = st.sidebar.multiselect(
-        "部署",
-        department_options,
-        key="filter_departments"
-    )
-    if selected_departments:
-        filtered_df = filtered_df[filtered_df['department'].isin(selected_departments)]
+        # Department filter
+        department_options = get_options(filtered_df['department'], remove_unset=True, order_key='department')
+        sync_filter_selection("filter_departments", department_options)
+        selected_departments = st.multiselect(
+            "部署",
+            department_options,
+            key="filter_departments"
+        )
+        if selected_departments:
+            filtered_df = filtered_df[filtered_df['department'].isin(selected_departments)]
 
-    # Section filter
-    section_options = get_options(filtered_df['section'], remove_unset=False, order_key='section')
-    sync_filter_selection("filter_sections", section_options)
-    selected_sections = st.sidebar.multiselect(
-        "課",
-        section_options,
-        key="filter_sections"
-    )
-    if selected_sections:
-        filtered_df = filtered_df[filtered_df['section'].isin(selected_sections)]
+        # Section filter
+        section_options = get_options(filtered_df['section'], remove_unset=False, order_key='section')
+        sync_filter_selection("filter_sections", section_options)
+        selected_sections = st.multiselect(
+            "課",
+            section_options,
+            key="filter_sections"
+        )
+        if selected_sections:
+            filtered_df = filtered_df[filtered_df['section'].isin(selected_sections)]
 
-    # Team filter
-    team_options = get_options(filtered_df['team'], order_key='team')
-    sync_filter_selection("filter_teams", team_options)
-    selected_teams = st.sidebar.multiselect(
-        "チーム",
-        team_options,
-        key="filter_teams"
-    )
-    if selected_teams:
-        filtered_df = filtered_df[filtered_df['team'].isin(selected_teams)]
+        # Team filter
+        team_options = get_options(filtered_df['team'], order_key='team')
+        sync_filter_selection("filter_teams", team_options)
+        selected_teams = st.multiselect(
+            "チーム",
+            team_options,
+            key="filter_teams"
+        )
+        if selected_teams:
+            filtered_df = filtered_df[filtered_df['team'].isin(selected_teams)]
 
-    # Project filter
-    project_options = get_options(filtered_df['project'], order_key='project')
-    sync_filter_selection("filter_projects", project_options)
-    selected_projects = st.sidebar.multiselect(
-        "プロジェクト",
-        project_options,
-        key="filter_projects"
-    )
-    if selected_projects:
-        filtered_df = filtered_df[filtered_df['project'].isin(selected_projects)]
+        # Project filter
+        project_options = get_options(filtered_df['project'], order_key='project')
+        sync_filter_selection("filter_projects", project_options)
+        selected_projects = st.multiselect(
+            "プロジェクト",
+            project_options,
+            key="filter_projects"
+        )
+        if selected_projects:
+            filtered_df = filtered_df[filtered_df['project'].isin(selected_projects)]
 
-    # Grade filter
-    grade_options = get_options(filtered_df['grade'], order_key='grade')
-    sync_filter_selection("filter_grades", grade_options)
-    selected_grades = st.sidebar.multiselect(
-        "職位",
-        grade_options,
-        key="filter_grades"
-    )
-    if selected_grades:
-        filtered_df = filtered_df[filtered_df['grade'].isin(selected_grades)]
+        # Grade filter
+        grade_options = get_options(filtered_df['grade'], order_key='grade')
+        sync_filter_selection("filter_grades", grade_options)
+        selected_grades = st.multiselect(
+            "職位",
+            grade_options,
+            key="filter_grades"
+        )
+        if selected_grades:
+            filtered_df = filtered_df[filtered_df['grade'].isin(selected_grades)]
 
     st.sidebar.info(f"期間: {selected_period_label}\n有効データ: {len(filtered_df):,}件 / {len(df):,}件")
 
