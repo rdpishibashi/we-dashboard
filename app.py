@@ -2,6 +2,39 @@
 Work Engagement Analysis Dashboard
 ===================================
 Work Engagement Streamlit Cloud対応インタラクティブダッシュボード
+
+ARCHITECTURE OVERVIEW
+=====================
+This dashboard displays work engagement survey data with privilege-based access control.
+
+Data Sources:
+- df: Main engagement data (ratings, demographics per person per month)
+- signal_df: Calculated signal metrics (trend, intervention priority)
+- comment_df: Free-text comments (concern, things to share)
+
+Filter Hierarchy:
+1. Global filters (sidebar) → applied to all DataFrames
+   - Period (year_month)
+   - Organization (division → department → section → team → project → grade)
+
+2. Per-tab privilege filtering → based on user's privilege class
+   - Tab visibility (which tabs user can see)
+   - Tab data scope (which data rows visible in tab)
+   - Grouping options (which grouping dimensions allowed)
+   - Section scope (per-feature section restrictions)
+   - Anonymization (hide personal names in comments)
+
+3. Local filters (within each tab)
+   - Grouping selection (部署別, 課別, etc.)
+   - Individual selection (個人 tab)
+
+Key Patterns:
+- sync_filter_selection(): Hierarchical filter synchronization
+- filter_dataframe_by_scope(): Apply privilege-based data restrictions
+- filter_dataframe_by_grade(): Apply grade-level filtering
+- apply_section_aliases(): Rename/aggregate section values
+
+See CLAUDE.md and docs/TECHNICAL_ARCHITECTURE.md for detailed documentation.
 """
 
 import streamlit as st
@@ -133,37 +166,70 @@ if uploaded_file is not None:
         (filtered_df['year_month_dt'] <= end_dt)
     ]
 
-    # Helper function to synchronize filter selection with available options
+    # =============================================================================
+    # HIERARCHICAL FILTER SYNCHRONIZATION
+    # =============================================================================
+    # Problem: Filters have parent-child relationships (部門→部署→課→チーム→プロジェクト→職位)
+    # When parent filter changes, child filter options change, but Streamlit's
+    # multiselect persists old selections in session_state, causing stale data.
+    #
+    # Solution: sync_filter_selection() runs BEFORE each multiselect to:
+    # 1. Detect if available options changed (parent filter changed)
+    # 2. If changed: reset selection to all new options
+    # 3. If same: keep user's selection, just remove invalid items
+    #
+    # Key insight: We compare PREVIOUS options with CURRENT options to detect
+    # parent changes, not the selection itself. This distinguishes between:
+    # - User manually deselecting an item (options same, selection different)
+    # - Parent filter causing option removal (options different)
+    # =============================================================================
+
     def sync_filter_selection(key: str, options: list) -> None:
         """
-        Update session state to ensure selection only contains valid options.
-        When available options change (due to parent filter change), reset to all options.
+        Synchronize filter selection with available options.
+
+        Why this is needed:
+        - Streamlit's multiselect with `key` persists selection in session_state
+        - The `default` parameter only works on FIRST render
+        - When parent filter changes, child options change but selection is stale
+
+        Logic:
+        - Track previous options in session_state[f"_options_{key}"]
+        - If options changed → parent filter changed → reset to all options
+        - If options same → user changed this filter → keep valid selections
         """
         options_key = f"_options_{key}"
         prev_options = st.session_state.get(options_key, None)
 
         if key not in st.session_state:
-            # First time - initialize to all options
+            # First render - initialize to all options (select all by default)
             st.session_state[key] = list(options)
         elif prev_options is not None and set(prev_options) != set(options):
-            # Options changed (parent filter changed) - reset to all new options
+            # Options changed = parent filter changed
+            # Reset to all new options so user sees all available items
             st.session_state[key] = list(options)
         else:
-            # Options same - just filter out any invalid selections
+            # Options unchanged = user changed THIS filter directly
+            # Keep their selection, but remove any items that became invalid
             current = st.session_state[key]
             valid = [item for item in current if item in options]
             if valid:
                 st.session_state[key] = valid
             else:
-                # All selections became invalid - reset to all
+                # Edge case: all selections invalid - reset to all
                 st.session_state[key] = list(options)
 
-        # Store current options for next comparison
+        # Store current options for comparison on next render
         st.session_state[options_key] = list(options)
 
-    # Organization filters in collapsible section
+    # Organization filters in collapsible section (reduces sidebar clutter)
+    # Pattern for each filter:
+    # 1. Get options from ALREADY-FILTERED df (so child sees only parent's items)
+    # 2. sync_filter_selection() updates session_state BEFORE widget renders
+    # 3. multiselect reads from session_state (not default param after first render)
+    # 4. Apply filter to df for next level
     with st.sidebar.expander("組織フィルター", expanded=False):
-        # Division filter
+        # Division filter (top of hierarchy)
         division_options = get_options(filtered_df['division'], remove_unset=True, order_key='division')
         sync_filter_selection("filter_divisions", division_options)
         selected_divisions = st.multiselect(
@@ -231,7 +297,23 @@ if uploaded_file is not None:
 
     st.sidebar.info(f"期間: {selected_period_label}\n有効データ: {len(filtered_df):,}件 / {len(df):,}件")
 
-    # Apply global filters to signal_df and comment_df
+    # =============================================================================
+    # MULTI-DATAFRAME FILTERING
+    # =============================================================================
+    # Problem: Data comes from three separate DataFrames:
+    # - df: Main engagement data (ratings, demographics)
+    # - signal_df: Calculated signal metrics (trend, priority)
+    # - comment_df: Free-text comments (concern, share)
+    #
+    # Global filters (period, organization) must be applied consistently
+    # to ALL three DataFrames, otherwise reports show inconsistent data.
+    #
+    # Solution: Filter all DataFrames using:
+    # 1. Date range (year_month_dt between start_dt and end_dt)
+    # 2. Organization (via mail_address - filter signal/comment to only include
+    #    people whose mail_address appears in the filtered main df)
+    # =============================================================================
+
     # Filter by date range
     filtered_signal_df = signal_df[
         (signal_df['year_month_dt'] >= start_dt) &
@@ -273,10 +355,38 @@ if uploaded_file is not None:
     # =============================================================================
     # 時系列 Tab
     # =============================================================================
+    # PRIVILEGE FILTERING ARCHITECTURE (applies to all tabs)
+    # =========================================================
+    # Each tab applies multiple layers of privilege-based filtering:
+    #
+    # Layer 1: Tab-level data scope (tab_scope)
+    #   - Restricts which data rows are visible in the entire tab
+    #   - Example: "member" class can only see their own section's data
+    #
+    # Layer 2: Grouping scope (grouping_scope)
+    #   - Restricts data when grouped by a specific dimension (section, grade)
+    #   - Example: "member" class may see only specific grades when grouping by grade
+    #
+    # Layer 3: Grade filtering (grade_filter)
+    #   - When grouping by 'grade', restricts to non-manager grades
+    #   - Example: "non_managers" feature hides manager grades
+    #
+    # Layer 4: Section aliases (alias_mapping)
+    #   - Renames section values for display (aggregation/privacy)
+    #   - Example: Combine "機器G" and "装置G" into "開発課"
+    #
+    # Layer 5: Section scope for specific features (action_scope, share_scope)
+    #   - Per-section filtering for アクション対象候補, 共有したいこと
+    #   - Example: Show comments only for user's own section
+    #
+    # Layer 6: Feature anonymization (anonymize_names)
+    #   - Hides personal names in comment display
+    #   - Example: "member" class sees comments grouped by date, not name
+    # =========================================================
     if selected_tab == "時系列":
         st.subheader("時系列トレンド")
 
-        # Apply per-tab data scope filtering
+        # Layer 1: Apply per-tab data scope filtering
         tab_scope = privilege_mgr.get_data_scope_for_tab(current_privilege, "時系列") if current_privilege else None
         tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope)
         tab_signal_df = filter_dataframe_by_scope(filtered_signal_df, tab_scope)
@@ -287,20 +397,25 @@ if uploaded_file is not None:
             grouping_options=base_grouping_options
         )
 
-        # Apply additional grouping scope filtering
+        # Layer 2-4: Apply grouping-specific scope filtering
         if current_privilege and ts_group_choice:
+            # Layer 2: Grouping scope - restricts data based on selected grouping dimension
             grouping_scope = privilege_mgr.get_grouping_scope(current_privilege, ts_group_choice)
             ts_df = filter_dataframe_by_scope(ts_df, grouping_scope)
             tab_signal_df = filter_dataframe_by_scope(tab_signal_df, grouping_scope)
 
-            # Apply grade filtering when grouping by 'grade'
+            # Layer 3: Grade filtering - applies only when grouping by 'grade'
+            # Configured in privileges.yaml under data_scope_by_grouping.grade.grades
+            # Example: non_managers = ["担当", "主任", "係長"] excludes manager grades
             if ts_group_choice == 'grade':
                 grade_filter = privilege_mgr.get_grade_filter_for_grouping(current_privilege, ts_group_choice)
                 if grade_filter:
                     ts_df = filter_dataframe_by_grade(ts_df, grade_filter)
                     tab_signal_df = filter_dataframe_by_grade(tab_signal_df, grade_filter)
 
-            # Apply section aliases when grouping by 'section'
+            # Layer 4: Section aliases - renames section values for aggregation/privacy
+            # Configured in privileges.yaml under section_scope.aliases
+            # Example: {"機器G": "開発課", "装置G": "開発課"} combines two groups
             if ts_group_choice == 'section':
                 alias_mapping = privilege_mgr.get_section_aliases(current_privilege, "時系列")
                 if alias_mapping:
@@ -387,9 +502,23 @@ if uploaded_file is not None:
                 else:
                     st.info("統計情報を計算できません。")
 
-            # Signal section - アクション対象候補 (認証時のみ表示)
+            # =====================================================================
+            # SECTION-SPECIFIC FEATURE FILTERING
+            # =====================================================================
+            # Some features (アクション対象候補, 共有したいこと) have per-section scope
+            # restrictions in addition to tab-level filtering.
+            #
+            # Layer 5: Section scope filtering
+            # - Configured in privileges.yaml under section_scope
+            # - Returns list of allowed section values, or None (all sections)
+            # - Empty list [] means feature is hidden entirely for this privilege
+            #
+            # Note: section_scope is checked per feature, not globally, because:
+            # - User may see アクション対象候補 for all sections
+            # - But only see 共有したいこと for their own section
+            # =====================================================================
             if is_authenticated():
-                # Apply section scope filtering for アクション対象候補
+                # Layer 5a: Section scope for アクション対象候補
                 action_scope = privilege_mgr.get_section_scope(current_privilege, "アクション対象候補")
                 action_signal_df = filter_dataframe_by_scope(tab_signal_df, action_scope)
 
@@ -407,7 +536,7 @@ if uploaded_file is not None:
                 # Get name to section mapping from the latest data
                 name_section_map = ts_df.drop_duplicates('name').set_index('name')['section'].to_dict()
 
-                # Apply section scope filtering for 共有したいこと
+                # Layer 5b: Section scope for 共有したいこと
                 share_scope = privilege_mgr.get_section_scope(current_privilege, "共有したいこと")
                 share_comment_df = filter_dataframe_by_scope(filtered_comment_df, share_scope)
 
@@ -462,11 +591,27 @@ if uploaded_file is not None:
                                 st.info("データがありません")
 
                     # Comment section - 共有したいこと (feature access check)
+                    # =====================================================================
+                    # COMMENT ANONYMIZATION LOGIC
+                    # =====================================================================
+                    # For "member" class privileges, personal names must be hidden.
+                    # Configured in privileges.yaml under section_scope with anonymize: true
+                    #
+                    # When anonymized:
+                    # - Comments grouped by year_month instead of by name
+                    # - Display hierarchy: section → year_month → comments
+                    # - Sorted newest first (descending by year_month)
+                    #
+                    # When NOT anonymized:
+                    # - Comments grouped by name
+                    # - Display hierarchy: section → name → comments (with date header)
+                    # - Sorted newest first within each person
+                    # =====================================================================
                     if privilege_mgr.has_feature_access(current_privilege, "共有したいこと") and (share_scope is None or len(share_scope) > 0):
                         with st.expander("共有したいこと", expanded=False):
                             share_data = graph_comments[graph_comments['comment'].notna()].copy()
                             if not share_data.empty:
-                                # Check if names should be anonymized
+                                # Layer 6: Check if names should be anonymized
                                 anonymize_names = privilege_mgr.should_anonymize_section(current_privilege, "共有したいこと")
 
                                 # Sort by section order, then name, then date
