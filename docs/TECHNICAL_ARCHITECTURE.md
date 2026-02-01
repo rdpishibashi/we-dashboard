@@ -29,15 +29,22 @@ WE-Dashboard/
 │   ├── config.py             # 設定・定数
 │   ├── data_loader.py        # データ読み込み
 │   ├── encryption.py         # 暗号化ユーティリティ
+│   ├── privilege_manager.py  # 権限ベースフィルタリング（NEW）
 │   ├── signal_processing.py  # シグナルデータ処理
 │   ├── statistics.py         # 統計計算
 │   └── utils.py              # ユーティリティ関数
-├── docs/                     # ドキュメント
+├── config/
+│   └── privileges.yaml       # 権限設定（自動生成）
+├── tools/
+│   └── generate_privileges_yaml.py  # 権限YAML生成ツール
+├── docs/
+│   └── privileges_configuration.md  # 権限設定（ソースオブトゥルース）
 ├── auth_users.json           # 認証情報（開発用）
 ├── auth_users.dat            # 認証情報（本番用・エンコード済）
 ├── group_order_config.json   # グループ順序設定
 ├── convert_auth.py           # 認証ファイル変換ツール
 ├── encrypt_data.py           # データ暗号化ツール
+├── CLAUDE.md                 # プロジェクトコンテキスト（Claude用）
 └── requirements.txt          # 依存パッケージ
 ```
 
@@ -260,6 +267,42 @@ WE-Dashboard/
 | `calculate_group_statistics()` | グループ別統計計算（平均/傾き/標準偏差） |
 | `format_statistics_for_display()` | 表示用フォーマット |
 
+### 3.9 modules/privilege_manager.py（権限管理モジュール）
+
+`config/privileges.yaml`を読み込み、権限ベースのデータフィルタリングを提供します。
+
+**主要クラス・関数:**
+
+| 名前 | 説明 |
+|------|------|
+| `PrivilegeManager` | シングルトンパターンの権限管理クラス |
+| `get_data_scope_for_tab()` | タブ別データスコープ取得 |
+| `get_grouping_scope()` | グルーピング別データスコープ取得 |
+| `get_grade_filter_for_grouping()` | 職位フィルター値取得 |
+| `should_anonymize_section()` | セクション匿名化判定 |
+| `get_section_aliases()` | セクションエイリアス取得 |
+| `filter_dataframe_by_scope()` | スコープによるDataFrameフィルタリング |
+| `filter_dataframe_by_grade()` | 職位によるDataFrameフィルタリング |
+
+**権限設定の階層:**
+```
+docs/privileges_configuration.md  ← ソースオブトゥルース（Markdown表形式）
+        ↓ (generate_privileges_yaml.py)
+config/privileges.yaml            ← 生成された設定ファイル
+        ↓ (privilege_manager.py)
+アプリケーション                   ← 実行時フィルタリング
+```
+
+**権限クラス:**
+| クラス | 対象ユーザー | 特徴 |
+|--------|--------------|------|
+| `admin` | 管理者 | 全データアクセス可 |
+| `anonymous` | 未認証 | データアクセス不可 |
+| `department_head` | sd, me, dev | 部署レベルアクセス |
+| `section_manager` | sw, pd, me1-3等 | 課レベルアクセス |
+| `member` | soft, prod等 | 制限付き、職位フィルタあり |
+| `member_no_grade_filter` | develop1-2 | 制限付き、職位フィルタなし |
+
 ---
 
 ## 4. セッション状態管理
@@ -379,6 +422,9 @@ plotly
 openpyxl
 numpy
 msoffcrypto-tool
+pyyaml          # 権限設定YAML読み込み用
+cryptography
+statsmodels
 ```
 
 ---
@@ -387,7 +433,15 @@ msoffcrypto-tool
 
 | 日付 | 変更内容 |
 |------|----------|
-| 2026-01-21 | 初版作成 |
-| 2026-01-21 | グルーピングフィルターの修正（フィルターリセット機構追加） |
-| 2026-01-21 | 組織カラム名のリファクタリング（section→division, group→section） |
-| 2026-01-21 | 未認証ユーザー向け機能制限（個人タブ、職位/個人グルーピング、アクション対象候補、共有したいこと非表示） |
+| 2025-01-21 | 初版作成 |
+| 2025-01-21 | グルーピングフィルターの修正（フィルターリセット機構追加） |
+| 2025-01-21 | 組織カラム名のリファクタリング（section→division, group→section） |
+| 2025-01-21 | 未認証ユーザー向け機能制限（個人タブ、職位/個人グルーピング、アクション対象候補、共有したいこと非表示） |
+| 2025-01-31 | privilege_manager.py追加（YAML設定ベースの権限管理） |
+| 2025-01-31 | グローバルフィルター階層同期機能追加（sync_filter_selection） |
+| 2025-01-31 | signal_df, comment_dfへのグローバルフィルター適用修正 |
+| 2025-01-31 | 組織フィルターを折りたたみ可能に変更 |
+| 2025-01-31 | 職位フィルター（非管理職）機能追加 |
+| 2025-01-31 | コメント匿名化機能追加（共有したいこと） |
+| 2025-01-31 | コメント表示を年月降順（最新が上）に変更 |
+| 2025-01-31 | 匿名化時のコメントを年月でグループ化 |
