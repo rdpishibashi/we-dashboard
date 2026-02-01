@@ -6,18 +6,28 @@ Converts auth_users.json to auth_users.dat (Base64-encoded pickle format)
 for deployment to Streamlit Cloud.
 
 Usage:
-    python convert_auth.py                       # Convert JSON to DAT
-    python convert_auth.py -a/--add-user         # Add a new user interactively
-    python convert_auth.py -c/--change-password  # Change password for existing user
-    python convert_auth.py -p/--change-privilege # Change privilege for existing user
-    python convert_auth.py -s/--show             # Show current users with privileges
+    python convert_auth.py                       # Interactive menu (recommended)
+    python convert_auth.py -a/--add-user         # Add a new user directly
+    python convert_auth.py -c/--change-password  # Change password directly
+    python convert_auth.py -p/--change-privilege # Change privilege directly
+    python convert_auth.py -s/--show             # Show current users
     python convert_auth.py -d/--decode           # Decode DAT back to readable format
 
-Workflow for Deployment
-    1. Edit auth_users.json or use --add-user to add users
-    2. Run python convert_auth.py to create auth_users.dat
-    3. Commit auth_users.dat (not .json) to repository
-    4. Deploy to Streamlit Cloud
+Interactive Menu Options:
+    1. Convert JSON to DAT (for deployment)
+    2. Add a new user
+    3. Change password for existing user
+    4. Change privilege for existing user
+    5. Show current users
+    6. Decode DAT file (for debugging)
+    0. Exit
+
+Workflow for Deployment:
+    1. Run python convert_auth.py (interactive menu)
+    2. Select option 2 to add users, or edit auth_users.json manually
+    3. Select option 1 to create auth_users.dat
+    4. Commit auth_users.dat (not .json) to repository
+    5. Deploy to Streamlit Cloud
 """
 
 import json
@@ -257,6 +267,50 @@ def change_privilege():
     print("Run 'python convert_auth.py' to update the .dat file for deployment.")
 
 
+def interactive_menu():
+    """Show interactive menu and execute selected operation in a loop."""
+    while True:
+        print()
+        print("Authentication File Management")
+        print("=" * 40)
+        print()
+        print("Select an operation:")
+        print("  1. Convert JSON to DAT (for deployment)")
+        print("  2. Add a new user")
+        print("  3. Change password for existing user")
+        print("  4. Change privilege for existing user")
+        print("  5. Show current users")
+        print("  6. Decode DAT file (for debugging)")
+        print("  0. Exit")
+        print()
+
+        choice = input("Enter choice [0-6]: ").strip()
+
+        if choice == '1':
+            print()
+            convert_to_dat()
+        elif choice == '2':
+            print()
+            add_user()
+        elif choice == '3':
+            print()
+            change_password()
+        elif choice == '4':
+            print()
+            change_privilege()
+        elif choice == '5':
+            print()
+            show_users()
+        elif choice == '6':
+            print()
+            decode_dat()
+        elif choice == '0':
+            print("Exiting.")
+            break
+        else:
+            print(f"Invalid choice: '{choice}'")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Convert auth_users.json to auth_users.dat for Streamlit Cloud"
@@ -289,6 +343,7 @@ def main():
 
     args = parser.parse_args()
 
+    # If any specific option is given, execute it directly
     if args.add_user:
         add_user()
     elif args.change_password:
@@ -300,7 +355,8 @@ def main():
     elif args.decode:
         decode_dat()
     else:
-        convert_to_dat()
+        # No options given - show interactive menu
+        interactive_menu()
 
 
 if __name__ == "__main__":
