@@ -437,6 +437,42 @@ class PrivilegeManager:
         """
         return len(self.get_section_aliases(privilege, tab)) > 0
 
+    def get_team_section_overrides(self, privilege: str, tab: str) -> list:
+        """
+        Get team section overrides that apply for a privilege/tab combination.
+
+        Team section overrides allow members to be grouped into a virtual section
+        based on their team column value, overriding their original section.
+
+        Args:
+            privilege: User's privilege identifier
+            tab: Tab name (時系列, グループ比較, 評価, 分布)
+
+        Returns:
+            List of override configs that should be applied, each containing:
+            - match_team: team value to match
+            - display_section: section name to use
+            - exclude_sections: sections to exclude from final result
+        """
+        team_overrides = self._config.get('team_section_overrides', {})
+        result = []
+
+        for override_id, override_config in team_overrides.items():
+            visible_to = override_config.get('visible_to', [])
+            visible_in_tabs = override_config.get('visible_in_tabs', [])
+
+            # Check if this override applies to the privilege and tab
+            # "all" is a special keyword that matches any privilege
+            privilege_match = 'all' in visible_to or privilege in visible_to
+            if privilege_match and tab in visible_in_tabs:
+                result.append({
+                    'match_team': override_config.get('match_team'),
+                    'display_section': override_config.get('display_section'),
+                    'exclude_sections': override_config.get('exclude_sections', [])
+                })
+
+        return result
+
     def get_effective_scope(self, privilege: str, tab: str, grouping: str) -> Optional[list]:
         """
         Get the effective data scope combining tab and grouping restrictions.
@@ -565,6 +601,54 @@ def apply_section_aliases(df, alias_mapping: dict, section_column: str = 'sectio
     result[section_column] = result[section_column].map(
         lambda x: alias_mapping.get(x, x)
     )
+    return result
+
+
+def apply_team_section_overrides(df, overrides: list,
+                                  team_column: str = 'team',
+                                  section_column: str = 'section'):
+    """
+    Apply team-based section overrides to a dataframe.
+
+    Members with matching team values have their section overridden to a virtual section.
+    Sections in exclude_sections are removed from the result.
+
+    Args:
+        df: DataFrame with team and section columns
+        overrides: List of override configs from get_team_section_overrides()
+        team_column: Name of team column (default: 'team')
+        section_column: Name of section column (default: 'section')
+
+    Returns:
+        DataFrame with section values overridden and excluded sections removed
+    """
+    if not overrides or df.empty:
+        return df
+
+    if section_column not in df.columns:
+        return df
+
+    result = df.copy()
+
+    # Collect all sections to exclude
+    all_exclude_sections = set()
+
+    for override in overrides:
+        match_team = override.get('match_team')
+        display_section = override.get('display_section')
+        exclude_sections = override.get('exclude_sections', [])
+
+        all_exclude_sections.update(exclude_sections)
+
+        if match_team and display_section and team_column in result.columns:
+            # Override section for matching team members
+            mask = result[team_column] == match_team
+            result.loc[mask, section_column] = display_section
+
+    # Exclude specified sections
+    if all_exclude_sections:
+        result = result[~result[section_column].isin(all_exclude_sections)]
+
     return result
 
 

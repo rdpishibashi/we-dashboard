@@ -40,6 +40,16 @@
 - **In tabs**: 時系列, グループ比較, 評価, 分布
 
 
+## Team Section Overrides
+
+### マネジメント
+- **Match**: team = Management
+- **Display as section**: マネジメント
+- **Visible to**: all
+- **In tabs**: 時系列, グループ比較, 評価, 分布
+- **Exclude sections**: 未設定
+
+
 ## Data Scope by Grouping local filter
 
 | Privilege | なし | 部署別・課別・チーム別・プロジェクト別 | 職位別 | 個人別 |

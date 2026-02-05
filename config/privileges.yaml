@@ -58,6 +58,22 @@ section_aliases:
     - 評価
     - 分布
 
+# Team-based section overrides for 課別 grouping
+# Members matching the team value are moved to a virtual section
+team_section_overrides:
+  マネジメント:
+    match_team: Management
+    display_section: マネジメント
+    visible_to:
+    - all
+    visible_in_tabs:
+    - 時系列
+    - グループ比較
+    - 評価
+    - 分布
+    exclude_sections:
+    - 未設定
+
 # Privilege class definitions
 privileges:
   admin:
