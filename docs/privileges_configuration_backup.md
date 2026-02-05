@@ -45,7 +45,7 @@
 ### マネジメント
 - **Match**: team = Management
 - **Display as section**: マネジメント
-- **Visible to**: all
+- **Visible to**: sd, sw, pd, me, me1, me2, me3, dev, dev1, dev2, uti, uks
 - **In tabs**: 時系列, グループ比較, 評価, 分布
 - **Exclude sections**: 未設定
 

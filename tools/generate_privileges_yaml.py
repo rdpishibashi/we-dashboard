@@ -147,6 +147,52 @@ def parse_section_aliases(content: str) -> dict:
     return aliases
 
 
+def parse_team_section_overrides(content: str) -> dict:
+    """Parse Team Section Overrides section from markdown.
+
+    This feature allows members to be grouped into a virtual section based on
+    their team column value, overriding their original section assignment.
+    """
+    overrides = {}
+
+    # Find the Team Section Overrides section
+    overrides_match = re.search(r'## Team Section Overrides\s*\n([\s\S]*?)(?=\n## |\Z)', content)
+    if not overrides_match:
+        return overrides
+
+    overrides_content = overrides_match.group(1)
+
+    # Parse each override block - with optional Exclude sections line
+    override_blocks = re.findall(
+        r'### ([^\n]+)\n'
+        r'- \*\*Match\*\*: team = ([^\n]+)\n'
+        r'- \*\*Display as section\*\*: ([^\n]+)\n'
+        r'- \*\*Visible to\*\*: ([^\n]+)\n'
+        r'- \*\*In tabs\*\*: ([^\n]+)\n'
+        r'(?:- \*\*Exclude sections\*\*: ([^\n]+)\n)?',
+        overrides_content
+    )
+
+    for match in override_blocks:
+        override_name, team_match, display_section, visible_to, visible_in_tabs, exclude_sections = match
+        override_id = override_name.strip()
+
+        overrides[override_id] = {
+            'match_team': team_match.strip(),
+            'display_section': display_section.strip(),
+            'visible_to': [v.strip() for v in visible_to.split(',')],
+            'visible_in_tabs': [t.strip() for t in visible_in_tabs.split(',')],
+        }
+
+        # Only add exclude_sections if it's not empty
+        if exclude_sections and exclude_sections.strip():
+            overrides[override_id]['exclude_sections'] = [
+                e.strip() for e in exclude_sections.split(',')
+            ]
+
+    return overrides
+
+
 def parse_scope_value(value: str) -> tuple[str, list[str], bool]:
     """
     Parse a scope value from the markdown table.
@@ -578,6 +624,7 @@ def generate_yaml_content(md_content: str) -> str:
     section_data = parse_markdown_table(md_content, r'## Data Scope by Section')
     grouping_data = parse_markdown_table(md_content, r'## Data Scope by Grouping local filter')
     aliases = parse_section_aliases(md_content)
+    team_overrides = parse_team_section_overrides(md_content)
 
     # Build scope mappings per privilege
     privilege_tab_scope = {}
@@ -636,6 +683,9 @@ def generate_yaml_content(md_content: str) -> str:
 
     # Section aliases
     yaml_data['section_aliases'] = aliases
+
+    # Team section overrides
+    yaml_data['team_section_overrides'] = team_overrides
 
     # Base privilege classes
     yaml_data['privileges'] = generate_base_privileges()
@@ -714,6 +764,7 @@ def generate_yaml_with_comments(data: dict) -> str:
     sections = [
         ('grade_groups', '# Grade groups for filtering'),
         ('section_aliases', '# Section aliases for grouped display in 課別 grouping\n# Note: dev (department head) sees individual sections, NOT combined aliases\n# All section managers in 開発部 (dev1, dev2, uti, uks1) see BOTH combined aliases'),
+        ('team_section_overrides', '# Team-based section overrides for 課別 grouping\n# Members matching the team value are moved to a virtual section'),
         ('privileges', '# Privilege class definitions'),
         ('user_privileges', '# User to privilege mapping with specific data scopes'),
     ]

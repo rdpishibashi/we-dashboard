@@ -70,7 +70,7 @@ from modules.auth import (
 )
 from modules.privilege_manager import (
     get_privilege_manager, filter_dataframe_by_scope, apply_section_aliases,
-    filter_dataframe_by_grade, anonymize_dataframe
+    filter_dataframe_by_grade, anonymize_dataframe, apply_team_section_overrides
 )
 
 # ページ設定
@@ -165,6 +165,17 @@ if uploaded_file is not None:
         (filtered_df['year_month_dt'] >= start_dt) &
         (filtered_df['year_month_dt'] <= end_dt)
     ]
+
+    # =============================================================================
+    # TEAM SECTION OVERRIDE FOR GLOBAL FILTERS
+    # =============================================================================
+    # Apply team section overrides early so "マネジメント" appears in the section filter.
+    # This transforms members with team="Management" to section="マネジメント".
+    # The override is privilege-based, so only authorized users see this option.
+    # =============================================================================
+    global_team_overrides = privilege_mgr.get_team_section_overrides(current_privilege, "時系列")
+    if global_team_overrides:
+        filtered_df = apply_team_section_overrides(filtered_df, global_team_overrides)
 
     # =============================================================================
     # HIERARCHICAL FILTER SYNCHRONIZATION
@@ -329,6 +340,10 @@ if uploaded_file is not None:
     filtered_signal_df = filtered_signal_df[filtered_signal_df['mail_address'].isin(valid_mail_addresses)]
     filtered_comment_df = filtered_comment_df[filtered_comment_df['mail_address'].isin(valid_mail_addresses)]
 
+    # Apply team section override to signal_df as well (it has section column)
+    if global_team_overrides:
+        filtered_signal_df = apply_team_section_overrides(filtered_signal_df, global_team_overrides)
+
     # Define tabs and grouping options based on privilege
     if is_authenticated() and current_privilege:
         tab_labels = privilege_mgr.get_allowed_tabs(current_privilege)
@@ -421,6 +436,12 @@ if uploaded_file is not None:
                 if alias_mapping:
                     ts_df = apply_section_aliases(ts_df, alias_mapping)
                     tab_signal_df = apply_section_aliases(tab_signal_df, alias_mapping)
+
+                # Layer 4b: Team section overrides - moves members to virtual sections based on team
+                team_overrides = privilege_mgr.get_team_section_overrides(current_privilege, "時系列")
+                if team_overrides:
+                    ts_df = apply_team_section_overrides(ts_df, team_overrides)
+                    tab_signal_df = apply_team_section_overrides(tab_signal_df, team_overrides)
 
         if ts_df.empty:
             st.info("選択された条件に該当するデータがありません。")
@@ -562,17 +583,26 @@ if uploaded_file is not None:
                     # Concern section - 気になった出来事や気づき (feature access check)
                     if privilege_mgr.has_feature_access(current_privilege, "気になった出来事や気づき"):
                         with st.expander("気になった出来事や気づき", expanded=False):
+                            concern_period = st.radio(
+                                "表示期間",
+                                ["全期間", "直近1ヶ月"],
+                                index=1,
+                                horizontal=True,
+                                key="ts_concern_period"
+                            )
                             concern_data = graph_comments[graph_comments['concern'].notna()].copy()
+                            if concern_period == "直近1ヶ月":
+                                concern_data = concern_data[concern_data['year_month_dt'] == end_dt]
                             if not concern_data.empty:
-                                # Sort by section order, then name, then date
+                                # Sort by section order, then name, then date (descending for latest first)
                                 if section_order:
                                     section_order_map = {name: idx for idx, name in enumerate(section_order)}
                                     concern_data['_section_order'] = concern_data['section'].apply(
                                         lambda x: section_order_map.get(x, len(section_order))
                                     )
-                                    concern_data = concern_data.sort_values(['_section_order', 'name', 'year_month'])
+                                    concern_data = concern_data.sort_values(['_section_order', 'name', 'year_month'], ascending=[True, True, False])
                                 else:
-                                    concern_data = concern_data.sort_values(['section', 'name', 'year_month'])
+                                    concern_data = concern_data.sort_values(['section', 'name', 'year_month'], ascending=[True, True, False])
 
                                 # Display nested: section -> name -> content
                                 sections = concern_data['section'].unique()
@@ -582,7 +612,7 @@ if uploaded_file is not None:
                                         names = section_data['name'].unique()
                                         for name in names:
                                             name_data = section_data[section_data['name'] == name]
-                                            with st.expander(f"{name}", expanded=False):
+                                            with st.expander(f"{name}", expanded=True):
                                                 for _, row in name_data.iterrows():
                                                     st.markdown(f"**{row['year_month']}**")
                                                     st.text(row['concern'])
@@ -609,7 +639,16 @@ if uploaded_file is not None:
                     # =====================================================================
                     if privilege_mgr.has_feature_access(current_privilege, "共有したいこと") and (share_scope is None or len(share_scope) > 0):
                         with st.expander("共有したいこと", expanded=False):
+                            share_period = st.radio(
+                                "表示期間",
+                                ["全期間", "直近1ヶ月"],
+                                index=1,
+                                horizontal=True,
+                                key="ts_share_period"
+                            )
                             share_data = graph_comments[graph_comments['comment'].notna()].copy()
+                            if share_period == "直近1ヶ月":
+                                share_data = share_data[share_data['year_month_dt'] == end_dt]
                             if not share_data.empty:
                                 # Layer 6: Check if names should be anonymized
                                 anonymize_names = privilege_mgr.should_anonymize_section(current_privilege, "共有したいこと")
@@ -643,7 +682,7 @@ if uploaded_file is not None:
                                             names = section_data['name'].unique()
                                             for name in names:
                                                 name_data = section_data[section_data['name'] == name]
-                                                with st.expander(f"{name}", expanded=False):
+                                                with st.expander(f"{name}", expanded=True):
                                                     for _, row in name_data.iterrows():
                                                         st.markdown(f"**{row['year_month']}**")
                                                         st.text(row['comment'])
@@ -687,6 +726,12 @@ if uploaded_file is not None:
                 if alias_mapping:
                     comparison_df = apply_section_aliases(comparison_df, alias_mapping)
                     tab_signal_df = apply_section_aliases(tab_signal_df, alias_mapping)
+
+                # Apply team section overrides
+                team_overrides = privilege_mgr.get_team_section_overrides(current_privilege, "グループ比較")
+                if team_overrides:
+                    comparison_df = apply_team_section_overrides(comparison_df, team_overrides)
+                    tab_signal_df = apply_team_section_overrides(tab_signal_df, team_overrides)
 
         if comparison_df.empty:
             st.info("選択された条件に該当するデータがありません。")
@@ -819,17 +864,26 @@ if uploaded_file is not None:
                         # Concern section - 気になった出来事や気づき (feature access check)
                         if privilege_mgr.has_feature_access(current_privilege, "気になった出来事や気づき"):
                             with st.expander("気になった出来事や気づき", expanded=False):
+                                concern_period = st.radio(
+                                    "表示期間",
+                                    ["全期間", "直近1ヶ月"],
+                                    index=1,
+                                    horizontal=True,
+                                    key="gc_no_group_concern_period"
+                                )
                                 concern_data = graph_comments[graph_comments['concern'].notna()].copy()
+                                if concern_period == "直近1ヶ月":
+                                    concern_data = concern_data[concern_data['year_month_dt'] == end_dt]
                                 if not concern_data.empty:
-                                    # Sort by section order, then name, then date
+                                    # Sort by section order, then name, then date (descending for latest first)
                                     if section_order:
                                         section_order_map = {name: idx for idx, name in enumerate(section_order)}
                                         concern_data['_section_order'] = concern_data['section'].apply(
                                             lambda x: section_order_map.get(x, len(section_order))
                                         )
-                                        concern_data = concern_data.sort_values(['_section_order', 'name', 'year_month'])
+                                        concern_data = concern_data.sort_values(['_section_order', 'name', 'year_month'], ascending=[True, True, False])
                                     else:
-                                        concern_data = concern_data.sort_values(['section', 'name', 'year_month'])
+                                        concern_data = concern_data.sort_values(['section', 'name', 'year_month'], ascending=[True, True, False])
 
                                     # Display nested: section -> name -> content
                                     sections = concern_data['section'].unique()
@@ -839,7 +893,7 @@ if uploaded_file is not None:
                                             names = section_data['name'].unique()
                                             for name in names:
                                                 name_data = section_data[section_data['name'] == name]
-                                                with st.expander(f"{name}", expanded=False):
+                                                with st.expander(f"{name}", expanded=True):
                                                     for _, row in name_data.iterrows():
                                                         st.markdown(f"**{row['year_month']}**")
                                                         st.text(row['concern'])
@@ -850,7 +904,16 @@ if uploaded_file is not None:
                         # Comment section - 共有したいこと (feature access check)
                         if privilege_mgr.has_feature_access(current_privilege, "共有したいこと") and (share_scope is None or len(share_scope) > 0):
                             with st.expander("共有したいこと", expanded=False):
+                                share_period = st.radio(
+                                    "表示期間",
+                                    ["全期間", "直近1ヶ月"],
+                                    index=1,
+                                    horizontal=True,
+                                    key="gc_no_group_share_period"
+                                )
                                 share_data = graph_comments[graph_comments['comment'].notna()].copy()
+                                if share_period == "直近1ヶ月":
+                                    share_data = share_data[share_data['year_month_dt'] == end_dt]
                                 if not share_data.empty:
                                     # Check if names should be anonymized
                                     anonymize_names = privilege_mgr.should_anonymize_section(current_privilege, "共有したいこと")
@@ -884,7 +947,7 @@ if uploaded_file is not None:
                                                 names = section_data['name'].unique()
                                                 for name in names:
                                                     name_data = section_data[section_data['name'] == name]
-                                                    with st.expander(f"{name}", expanded=False):
+                                                    with st.expander(f"{name}", expanded=True):
                                                         for _, row in name_data.iterrows():
                                                             st.markdown(f"**{row['year_month']}**")
                                                             st.text(row['comment'])
@@ -1000,17 +1063,26 @@ if uploaded_file is not None:
                         # Concern section - 気になった出来事や気づき (feature access check)
                         if privilege_mgr.has_feature_access(current_privilege, "気になった出来事や気づき"):
                             with st.expander("気になった出来事や気づき", expanded=False):
+                                concern_period = st.radio(
+                                    "表示期間",
+                                    ["全期間", "直近1ヶ月"],
+                                    index=1,
+                                    horizontal=True,
+                                    key="gc_grouped_concern_period"
+                                )
                                 concern_data = graph_comments[graph_comments['concern'].notna()].copy()
+                                if concern_period == "直近1ヶ月":
+                                    concern_data = concern_data[concern_data['year_month_dt'] == end_dt]
                                 if not concern_data.empty:
-                                    # Sort by section order, then name, then date
+                                    # Sort by section order, then name, then date (descending for latest first)
                                     if section_order:
                                         section_order_map = {name: idx for idx, name in enumerate(section_order)}
                                         concern_data['_section_order'] = concern_data['section'].apply(
                                             lambda x: section_order_map.get(x, len(section_order))
                                         )
-                                        concern_data = concern_data.sort_values(['_section_order', 'name', 'year_month'])
+                                        concern_data = concern_data.sort_values(['_section_order', 'name', 'year_month'], ascending=[True, True, False])
                                     else:
-                                        concern_data = concern_data.sort_values(['section', 'name', 'year_month'])
+                                        concern_data = concern_data.sort_values(['section', 'name', 'year_month'], ascending=[True, True, False])
 
                                     # Display nested: section -> name -> content
                                     sections = concern_data['section'].unique()
@@ -1020,7 +1092,7 @@ if uploaded_file is not None:
                                             names = section_data['name'].unique()
                                             for name in names:
                                                 name_data = section_data[section_data['name'] == name]
-                                                with st.expander(f"{name}", expanded=False):
+                                                with st.expander(f"{name}", expanded=True):
                                                     for _, row in name_data.iterrows():
                                                         st.markdown(f"**{row['year_month']}**")
                                                         st.text(row['concern'])
@@ -1031,7 +1103,16 @@ if uploaded_file is not None:
                         # Comment section - 共有したいこと (feature access check)
                         if privilege_mgr.has_feature_access(current_privilege, "共有したいこと") and (share_scope is None or len(share_scope) > 0):
                             with st.expander("共有したいこと", expanded=False):
+                                share_period = st.radio(
+                                    "表示期間",
+                                    ["全期間", "直近1ヶ月"],
+                                    index=1,
+                                    horizontal=True,
+                                    key="gc_grouped_share_period"
+                                )
                                 share_data = graph_comments[graph_comments['comment'].notna()].copy()
+                                if share_period == "直近1ヶ月":
+                                    share_data = share_data[share_data['year_month_dt'] == end_dt]
                                 if not share_data.empty:
                                     # Check if names should be anonymized
                                     anonymize_names = privilege_mgr.should_anonymize_section(current_privilege, "共有したいこと")
@@ -1065,7 +1146,7 @@ if uploaded_file is not None:
                                                 names = section_data['name'].unique()
                                                 for name in names:
                                                     name_data = section_data[section_data['name'] == name]
-                                                    with st.expander(f"{name}", expanded=False):
+                                                    with st.expander(f"{name}", expanded=True):
                                                         for _, row in name_data.iterrows():
                                                             st.markdown(f"**{row['year_month']}**")
                                                             st.text(row['comment'])
@@ -1105,6 +1186,11 @@ if uploaded_file is not None:
                 alias_mapping = privilege_mgr.get_section_aliases(current_privilege, "評価")
                 if alias_mapping:
                     evaluation_df = apply_section_aliases(evaluation_df, alias_mapping)
+
+                # Apply team section overrides
+                team_overrides = privilege_mgr.get_team_section_overrides(current_privilege, "評価")
+                if team_overrides:
+                    evaluation_df = apply_team_section_overrides(evaluation_df, team_overrides)
 
         if evaluation_df.empty:
             st.info("選択された条件に該当するデータがありません。")
@@ -1399,9 +1485,18 @@ if uploaded_file is not None:
                         # Concern section - 気になった出来事や気づき (feature access check)
                         if privilege_mgr.has_feature_access(current_privilege, "気になった出来事や気づき"):
                             with st.expander("気になった出来事や気づき", expanded=False):
-                                concern_data = individual_comments[individual_comments['concern'].notna()][['year_month', 'concern']].copy()
+                                concern_period = st.radio(
+                                    "表示期間",
+                                    ["全期間", "直近1ヶ月"],
+                                    index=1,
+                                    horizontal=True,
+                                    key="ind_concern_period"
+                                )
+                                concern_data = individual_comments[individual_comments['concern'].notna()][['year_month', 'year_month_dt', 'concern']].copy()
+                                if concern_period == "直近1ヶ月":
+                                    concern_data = concern_data[concern_data['year_month_dt'] == end_dt]
                                 if not concern_data.empty:
-                                    concern_data = concern_data.sort_values('year_month')
+                                    concern_data = concern_data.sort_values('year_month', ascending=False)
                                     for _, row in concern_data.iterrows():
                                         st.markdown(f"**{row['year_month']}**")
                                         st.text(row['concern'])
@@ -1412,7 +1507,16 @@ if uploaded_file is not None:
                         # Comment section - 共有したいこと (feature access check)
                         if privilege_mgr.has_feature_access(current_privilege, "共有したいこと"):
                             with st.expander("共有したいこと", expanded=False):
-                                comment_data = individual_comments[individual_comments['comment'].notna()][['year_month', 'comment']].copy()
+                                share_period = st.radio(
+                                    "表示期間",
+                                    ["全期間", "直近1ヶ月"],
+                                    index=1,
+                                    horizontal=True,
+                                    key="ind_share_period"
+                                )
+                                comment_data = individual_comments[individual_comments['comment'].notna()][['year_month', 'year_month_dt', 'comment']].copy()
+                                if share_period == "直近1ヶ月":
+                                    comment_data = comment_data[comment_data['year_month_dt'] == end_dt]
                                 if not comment_data.empty:
                                     comment_data = comment_data.sort_values('year_month', ascending=False)
                                     for _, row in comment_data.iterrows():
@@ -1492,6 +1596,11 @@ if uploaded_file is not None:
                 alias_mapping = privilege_mgr.get_section_aliases(current_privilege, "分布")
                 if alias_mapping:
                     dist_df = apply_section_aliases(dist_df, alias_mapping)
+
+                # Apply team section overrides
+                team_overrides = privilege_mgr.get_team_section_overrides(current_privilege, "分布")
+                if team_overrides:
+                    dist_df = apply_team_section_overrides(dist_df, team_overrides)
 
         if dist_df.empty:
             st.info("選択された条件に該当するデータがありません。")
