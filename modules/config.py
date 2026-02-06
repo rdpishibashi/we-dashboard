@@ -110,6 +110,68 @@ GROUPING_LABEL_MAP = {
     'name': '個人別'
 }
 
+# =============================================================================
+# Tab Configuration
+# =============================================================================
+# Centralized tab definitions to avoid hardcoded tab names scattered in code
+
+TAB_NAMES = ['時系列', 'グループ比較', '評価', '個人', '分布']
+TAB_NAMES_AUTHENTICATED = ['時系列', 'グループ比較', '評価', '個人', '分布']
+TAB_NAMES_ANONYMOUS = ['時系列', 'グループ比較', '評価', '分布']  # 個人 tab hidden
+
+# Tab-specific configuration
+TAB_CONFIG = {
+    '時系列': {
+        'key': 'timeseries',
+        'subheader': '時系列トレンド',
+        'has_grouping': True,
+        'has_measured_data': True,
+        'has_statistics': True,
+        'has_signals': True,
+        'has_comments': True,
+    },
+    'グループ比較': {
+        'key': 'group_comparison',
+        'subheader': 'グループ比較',
+        'has_grouping': True,
+        'has_measured_data': True,
+        'has_statistics': True,
+        'has_signals': True,
+        'has_comments': True,
+    },
+    '評価': {
+        'key': 'evaluation',
+        'subheader': '評価分析',
+        'has_grouping': True,
+        'has_measured_data': False,
+        'has_statistics': False,
+        'has_signals': False,
+        'has_comments': False,
+    },
+    '個人': {
+        'key': 'individual',
+        'subheader': '個人分析',
+        'has_grouping': False,
+        'has_measured_data': True,
+        'has_statistics': False,
+        'has_signals': True,
+        'has_comments': True,
+    },
+    '分布': {
+        'key': 'distribution',
+        'subheader': '分布分析',
+        'has_grouping': True,
+        'has_measured_data': False,
+        'has_statistics': True,
+        'has_signals': False,
+        'has_comments': False,
+    },
+}
+
+# Grouping options by authentication state
+GROUPING_OPTIONS_AUTHENTICATED = ['なし', 'department', 'section', 'team', 'project', 'grade', 'name']
+GROUPING_OPTIONS_ANONYMOUS = ['なし', 'department', 'section', 'team', 'project']
+
 # Group labels (without 別 suffix)
 GROUP_LABELS = {
     'division': '部門',

@@ -591,6 +591,10 @@ statsmodels
 | 2025-02-06 | signal_dfのマネジメントフィルタリングを名前ベースに修正 |
 | 2025-02-06 | apply_grouping_filtersのLayer 1（grouping_scope）を無効化 |
 | 2025-02-06 | exclude_sectionsを無効化（サブセクションなし部署対応） |
+| 2025-02-06 | TAB_CONFIG定数追加（config.py） - タブ名のハードコード削減 |
+| 2025-02-06 | format_measured_data()追加（statistics.py） - 計測値表示の共通化 |
+| 2025-02-06 | filter_signal_by_selection()追加（components.py） - signal_dfフィルタリング共通化 |
+| 2025-02-06 | app.pyを1279行→1172行に削減（-8.4%） |
 
 ---
 

@@ -18,6 +18,54 @@ from modules.privilege_manager import filter_dataframe_by_scope
 from modules.utils import GROUP_ORDER_MAP
 
 
+def filter_signal_by_selection(
+    signal_df: pd.DataFrame,
+    main_df: pd.DataFrame,
+    dept_choice: str,
+    section_choice: str,
+    management_override: Optional[Dict] = None
+) -> pd.DataFrame:
+    """
+    Filter signal DataFrame by department/section selections.
+
+    This function provides consistent signal_df filtering across all tabs.
+    When Management override is selected, it uses names from main_df instead of
+    filtering by team column (since rating2 sheet may have different org values).
+
+    Args:
+        signal_df: Signal DataFrame to filter
+        main_df: Main DataFrame (already filtered by dept/section)
+        dept_choice: Selected department ('すべて' for all)
+        section_choice: Selected section ('すべて' for all)
+        management_override: Optional management override dict with 'display_section' key
+
+    Returns:
+        Filtered signal DataFrame
+
+    Example:
+        >>> tab_signal_df = filter_signal_by_selection(
+        ...     tab_signal_df, ts_df,
+        ...     dept_choice, section_choice,
+        ...     management_override=ts_management_override
+        ... )
+    """
+    result = signal_df.copy()
+
+    if dept_choice != 'すべて':
+        result = result[result['department'] == dept_choice]
+
+    if section_choice != 'すべて':
+        if management_override and section_choice == management_override.get('display_section'):
+            # Filter by names from main_df (which is already filtered by team)
+            # This is more reliable than filtering by team column which may differ between sheets
+            names_in_filtered = main_df['name'].unique()
+            result = result[result['name'].isin(names_in_filtered)]
+        else:
+            result = result[result['section'] == section_choice]
+
+    return result
+
+
 def get_management_override(team_overrides: List[Dict]) -> Optional[Dict]:
     """
     Extract the Management team override from a list of team overrides.

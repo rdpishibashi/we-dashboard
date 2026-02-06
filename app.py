@@ -50,7 +50,9 @@ from modules.config import (
     PLOTLY_CHART_KWARGS, RADAR_CHART_CONFIG, DATAFRAME_KWARGS,
     METRIC_LABELS, SIGNAL_TABLE_COLUMNS, RATING_AXIS_MAX,
     DEFAULT_FILE_PATH, RATING_BAND_HIGH_THRESHOLD, RATING_BAND_LOW_THRESHOLD,
-    COLOR_SCALE_START, COLOR_SCALE_END, GROUPING_LABEL_MAP
+    COLOR_SCALE_START, COLOR_SCALE_END, GROUPING_LABEL_MAP,
+    TAB_NAMES_AUTHENTICATED, TAB_NAMES_ANONYMOUS,
+    GROUPING_OPTIONS_AUTHENTICATED, GROUPING_OPTIONS_ANONYMOUS
 )
 from modules.utils import get_options, render_department_and_group_controls
 from modules.data_loader import load_data
@@ -58,7 +60,7 @@ from modules.signal_processing import (
     apply_signal_rating_calculations, format_individual_signal_data,
     get_signal_data, render_signal_table
 )
-from modules.statistics import calculate_group_statistics, format_statistics_for_display
+from modules.statistics import calculate_group_statistics, format_statistics_for_display, format_measured_data
 from modules.charts import (
     create_time_series_chart, create_recent_group_comparison_chart,
     create_box_plot, create_group_rating_distribution, create_radar_chart,
@@ -75,7 +77,7 @@ from modules.privilege_manager import (
 from modules.components import (
     get_management_override, prepare_comment_data, apply_grouping_filters,
     render_action_candidates, render_concern_section, render_comment_section,
-    render_comments_and_signals
+    render_comments_and_signals, filter_signal_by_selection
 )
 
 # ページ設定
@@ -370,8 +372,8 @@ if uploaded_file is not None:
         tab_labels = privilege_mgr.get_allowed_tabs(current_privilege)
         base_grouping_options = privilege_mgr.get_allowed_groupings(current_privilege)
     else:
-        tab_labels = ["時系列", "グループ比較", "評価", "分布"]
-        base_grouping_options = ['なし', 'department', 'section', 'team', 'project']
+        tab_labels = TAB_NAMES_ANONYMOUS
+        base_grouping_options = GROUPING_OPTIONS_ANONYMOUS
 
     # Initialize tab selection on first load
     tab_key = "main_tab_selector_v2"
@@ -439,16 +441,9 @@ if uploaded_file is not None:
         )
 
         # Apply the same local dept/section filter to signal_df for consistency
-        if ts_dept_choice != 'すべて':
-            tab_signal_df = tab_signal_df[tab_signal_df['department'] == ts_dept_choice]
-        if ts_section_choice != 'すべて':
-            if ts_management_override and ts_section_choice == ts_management_override.get('display_section'):
-                # Filter signal_df by names from main df (which is already filtered by team)
-                # This is more reliable than filtering by team column which may differ between sheets
-                names_in_filtered = ts_df['name'].unique()
-                tab_signal_df = tab_signal_df[tab_signal_df['name'].isin(names_in_filtered)]
-            else:
-                tab_signal_df = tab_signal_df[tab_signal_df['section'] == ts_section_choice]
+        tab_signal_df = filter_signal_by_selection(
+            tab_signal_df, ts_df, ts_dept_choice, ts_section_choice, ts_management_override
+        )
 
         # Apply grouping-specific filters (scope, grade, aliases, team overrides)
         ts_df, tab_signal_df = apply_grouping_filters(
@@ -469,58 +464,9 @@ if uploaded_file is not None:
 
             # Display measured values section (collapsible)
             with st.expander("計測値", expanded=False):
-                if ts_group_choice and ts_group_choice != 'なし':
-                    from modules.utils import get_category_order_with_reference
-
-                    # Group by year_month and grouping column
-                    measured_data = ts_df.groupby(['year_month', ts_group_choice])['engagement_rating'].mean().reset_index()
-
-                    # Sort by grouping value using category order, then by year_month
-                    group_values = measured_data[ts_group_choice].unique().tolist()
-                    group_order = get_category_order_with_reference(ts_group_choice, group_values, ts_df)
-                    measured_data[ts_group_choice] = pd.Categorical(
-                        measured_data[ts_group_choice],
-                        categories=group_order,
-                        ordered=True
-                    )
-                    measured_data = measured_data.sort_values([ts_group_choice, 'year_month'])
-                    measured_data[ts_group_choice] = measured_data[ts_group_choice].astype(str)
-
-                    # Format engagement_rating with 1 decimal place
-                    measured_data['engagement_rating'] = measured_data['engagement_rating'].apply(
-                        lambda x: f"{x:.1f}" if pd.notna(x) else "-"
-                    )
-
-                    # Get grouping label and remove "別" suffix
-                    grouping_label = GROUPING_LABEL_MAP.get(ts_group_choice, ts_group_choice)
-                    if grouping_label != 'なし':
-                        grouping_label = grouping_label.replace('別', '')
-
-                    # Rename columns to Japanese
-                    measured_data = measured_data.rename(columns={
-                        'year_month': '年月',
-                        ts_group_choice: grouping_label,
-                        'engagement_rating': 'ワーク・エンゲージメント'
-                    })
-
-                    st.dataframe(measured_data, **DATAFRAME_KWARGS)
-                else:
-                    # No grouping - show overall average by month
-                    measured_data = ts_df.groupby('year_month')['engagement_rating'].mean().reset_index()
-                    measured_data = measured_data.sort_values('year_month')
-
-                    # Format engagement_rating with 1 decimal place
-                    measured_data['engagement_rating'] = measured_data['engagement_rating'].apply(
-                        lambda x: f"{x:.1f}" if pd.notna(x) else "-"
-                    )
-
-                    # Rename columns to Japanese
-                    measured_data = measured_data.rename(columns={
-                        'year_month': '年月',
-                        'engagement_rating': 'ワーク・エンゲージメント'
-                    })
-
-                    st.dataframe(measured_data, **DATAFRAME_KWARGS)
+                group_col = ts_group_choice if ts_group_choice != 'なし' else None
+                measured_data = format_measured_data(ts_df, selected_metric, group_col)
+                st.dataframe(measured_data, **DATAFRAME_KWARGS)
 
             # Display key statistics (collapsible)
             with st.expander("主要な指標", expanded=False):
@@ -569,16 +515,9 @@ if uploaded_file is not None:
         )
 
         # Apply the same local dept/section filter to signal_df for consistency
-        if gc_dept_choice != 'すべて':
-            tab_signal_df = tab_signal_df[tab_signal_df['department'] == gc_dept_choice]
-        if gc_section_choice != 'すべて':
-            if gc_management_override and gc_section_choice == gc_management_override.get('display_section'):
-                # Filter signal_df by names from main df (which is already filtered by team)
-                # This is more reliable than filtering by team column which may differ between sheets
-                names_in_filtered = comparison_df['name'].unique()
-                tab_signal_df = tab_signal_df[tab_signal_df['name'].isin(names_in_filtered)]
-            else:
-                tab_signal_df = tab_signal_df[tab_signal_df['section'] == gc_section_choice]
+        tab_signal_df = filter_signal_by_selection(
+            tab_signal_df, comparison_df, gc_dept_choice, gc_section_choice, gc_management_override
+        )
 
         # Apply grouping-specific filters (scope, grade, aliases, team overrides)
         comparison_df, tab_signal_df = apply_grouping_filters(
@@ -640,21 +579,7 @@ if uploaded_file is not None:
 
                 # Display measured values section (collapsible)
                 with st.expander("計測値", expanded=False):
-                    # No grouping - show overall average by month
-                    measured_data = comparison_df.groupby('year_month')['engagement_rating'].mean().reset_index()
-                    measured_data = measured_data.sort_values('year_month')
-
-                    # Format engagement_rating with 1 decimal place
-                    measured_data['engagement_rating'] = measured_data['engagement_rating'].apply(
-                        lambda x: f"{x:.1f}" if pd.notna(x) else "-"
-                    )
-
-                    # Rename columns to Japanese
-                    measured_data = measured_data.rename(columns={
-                        'year_month': '年月',
-                        'engagement_rating': 'ワーク・エンゲージメント'
-                    })
-
+                    measured_data = format_measured_data(comparison_df, selected_metric, None)
                     st.dataframe(measured_data, **DATAFRAME_KWARGS)
 
                 # Display key statistics (collapsible)
@@ -689,39 +614,7 @@ if uploaded_file is not None:
 
                 # Display measured values section (collapsible)
                 with st.expander("計測値", expanded=False):
-                    from modules.utils import get_category_order_with_reference
-
-                    # Group by grouping column and year_month
-                    measured_data = comparison_df.groupby([comparison_group, 'year_month'])['engagement_rating'].mean().reset_index()
-
-                    # Sort by grouping value using category order, then by year_month
-                    group_values = measured_data[comparison_group].unique().tolist()
-                    group_order = get_category_order_with_reference(comparison_group, group_values, comparison_df)
-                    measured_data[comparison_group] = pd.Categorical(
-                        measured_data[comparison_group],
-                        categories=group_order,
-                        ordered=True
-                    )
-                    measured_data = measured_data.sort_values([comparison_group, 'year_month'])
-                    measured_data[comparison_group] = measured_data[comparison_group].astype(str)
-
-                    # Format engagement_rating with 1 decimal place
-                    measured_data['engagement_rating'] = measured_data['engagement_rating'].apply(
-                        lambda x: f"{x:.1f}" if pd.notna(x) else "-"
-                    )
-
-                    # Get grouping label and remove "別" suffix
-                    grouping_label = GROUPING_LABEL_MAP.get(comparison_group, comparison_group)
-                    if grouping_label != 'なし':
-                        grouping_label = grouping_label.replace('別', '')
-
-                    # Rename columns to Japanese
-                    measured_data = measured_data.rename(columns={
-                        comparison_group: grouping_label,
-                        'year_month': '年月',
-                        'engagement_rating': 'ワーク・エンゲージメント'
-                    })
-
+                    measured_data = format_measured_data(comparison_df, selected_metric, comparison_group)
                     st.dataframe(measured_data, **DATAFRAME_KWARGS)
 
                 # Display key statistics (collapsible)
