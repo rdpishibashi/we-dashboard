@@ -4,8 +4,94 @@ Statistical Calculation Functions for Work Engagement Dashboard
 
 import pandas as pd
 import numpy as np
-from .config import GROUPING_LABEL_MAP, SIGNAL_LABELS
+from typing import Optional
+from .config import GROUPING_LABEL_MAP, SIGNAL_LABELS, METRIC_LABELS
 from .utils import get_category_order_with_reference
+
+
+def format_measured_data(
+    df: pd.DataFrame,
+    metric_col: str,
+    group_col: Optional[str] = None,
+    reference_df: Optional[pd.DataFrame] = None
+) -> pd.DataFrame:
+    """
+    Format measurement data for display in 計測値 section.
+
+    Aggregates data by year_month and optional grouping column, formats values,
+    and renames columns to Japanese labels.
+
+    Args:
+        df: DataFrame with time series data (must have 'year_month' column)
+        metric_col: The metric column to aggregate (e.g., 'engagement_rating')
+        group_col: Optional grouping column (e.g., 'department', 'section', 'name').
+                   Pass None or 'なし' for no grouping.
+        reference_df: Optional reference DataFrame for category ordering (default: use df)
+
+    Returns:
+        Formatted DataFrame ready for display with st.dataframe()
+
+    Example:
+        >>> measured = format_measured_data(ts_df, 'engagement_rating', 'section')
+        >>> st.dataframe(measured, **DATAFRAME_KWARGS)
+    """
+    if reference_df is None:
+        reference_df = df
+
+    # Normalize group_col
+    if group_col == 'なし':
+        group_col = None
+
+    if group_col:
+        # Group by year_month and grouping column
+        measured_data = df.groupby(['year_month', group_col])[metric_col].mean().reset_index()
+
+        # Sort by grouping value using category order, then by year_month
+        group_values = measured_data[group_col].unique().tolist()
+        group_order = get_category_order_with_reference(group_col, group_values, reference_df)
+        measured_data[group_col] = pd.Categorical(
+            measured_data[group_col],
+            categories=group_order,
+            ordered=True
+        )
+        measured_data = measured_data.sort_values([group_col, 'year_month'])
+        measured_data[group_col] = measured_data[group_col].astype(str)
+
+        # Get grouping label and remove "別" suffix
+        grouping_label = GROUPING_LABEL_MAP.get(group_col, group_col)
+        if grouping_label != 'なし':
+            grouping_label = grouping_label.replace('別', '')
+
+        # Format metric with 1 decimal place
+        measured_data[metric_col] = measured_data[metric_col].apply(
+            lambda x: f"{x:.1f}" if pd.notna(x) else "-"
+        )
+
+        # Rename columns to Japanese
+        metric_label = METRIC_LABELS.get(metric_col, metric_col)
+        measured_data = measured_data.rename(columns={
+            'year_month': '年月',
+            group_col: grouping_label,
+            metric_col: metric_label
+        })
+    else:
+        # No grouping - show overall average by month
+        measured_data = df.groupby('year_month')[metric_col].mean().reset_index()
+        measured_data = measured_data.sort_values('year_month')
+
+        # Format metric with 1 decimal place
+        measured_data[metric_col] = measured_data[metric_col].apply(
+            lambda x: f"{x:.1f}" if pd.notna(x) else "-"
+        )
+
+        # Rename columns to Japanese
+        metric_label = METRIC_LABELS.get(metric_col, metric_col)
+        measured_data = measured_data.rename(columns={
+            'year_month': '年月',
+            metric_col: metric_label
+        })
+
+    return measured_data
 
 
 def format_statistics_for_display(stats_df):
