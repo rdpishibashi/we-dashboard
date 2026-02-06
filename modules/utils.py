@@ -95,7 +95,7 @@ def get_options(series, remove_unset=False, order_key=None):
     return sort_with_config(opts, resolve_order_key(order_key))
 
 
-def render_department_and_group_controls(df, tab_key, grouping_options):
+def render_department_and_group_controls(df, tab_key, grouping_options, management_override=None):
     """
     Render department, section (課), and grouping controls.
 
@@ -103,6 +103,8 @@ def render_department_and_group_controls(df, tab_key, grouping_options):
         df: DataFrame to filter
         tab_key: Unique key prefix for this tab's controls
         grouping_options: List of grouping options to display
+        management_override: Optional dict with 'display_section' and 'match_team' keys
+                            for adding Management as a virtual section option
 
     Returns:
         Tuple of (filtered_df, dept_choice, section_choice, grouping_choice)
@@ -144,6 +146,11 @@ def render_department_and_group_controls(df, tab_key, grouping_options):
         remove_unset=True,
         order_key='section'
     )
+    # Add management override section if provided
+    if management_override:
+        display_section = management_override.get('display_section')
+        if display_section and display_section not in section_options:
+            section_options = section_options + [display_section]
     section_choices = ['すべて'] + section_options if section_options else ['すべて']
     with col2:
         # Determine default index for section
@@ -158,7 +165,13 @@ def render_department_and_group_controls(df, tab_key, grouping_options):
             key=section_key
         )
     if section_choice != 'すべて':
-        filtered = filtered[filtered['section'] == section_choice]
+        # Handle management override section - filter by team instead of section
+        if management_override and section_choice == management_override.get('display_section'):
+            match_team = management_override.get('match_team')
+            if match_team:
+                filtered = filtered[filtered['team'] == match_team]
+        else:
+            filtered = filtered[filtered['section'] == section_choice]
 
     grouping_choice = None
     format_func = lambda x: GROUPING_LABEL_MAP.get(x, x)

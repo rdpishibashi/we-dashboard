@@ -611,7 +611,12 @@ def apply_team_section_overrides(df, overrides: list,
     Apply team-based section overrides to a dataframe.
 
     Members with matching team values have their section overridden to a virtual section.
-    Sections in exclude_sections are removed from the result.
+
+    Note: exclude_sections is intentionally NOT applied here because:
+    1. Some departments (e.g., 品質保証部) don't have sub-sections, so all members
+       have section='未設定' - excluding them would hide the entire department
+    2. The section filter would inconsistently exclude people based on whether
+       their department has sub-sections or not
 
     Args:
         df: DataFrame with team and section columns
@@ -620,7 +625,7 @@ def apply_team_section_overrides(df, overrides: list,
         section_column: Name of section column (default: 'section')
 
     Returns:
-        DataFrame with section values overridden and excluded sections removed
+        DataFrame with section values overridden
     """
     if not overrides or df.empty:
         return df
@@ -630,24 +635,15 @@ def apply_team_section_overrides(df, overrides: list,
 
     result = df.copy()
 
-    # Collect all sections to exclude
-    all_exclude_sections = set()
-
     for override in overrides:
         match_team = override.get('match_team')
         display_section = override.get('display_section')
-        exclude_sections = override.get('exclude_sections', [])
-
-        all_exclude_sections.update(exclude_sections)
+        # Note: exclude_sections is intentionally ignored - see docstring
 
         if match_team and display_section and team_column in result.columns:
             # Override section for matching team members
             mask = result[team_column] == match_team
             result.loc[mask, section_column] = display_section
-
-    # Exclude specified sections
-    if all_exclude_sections:
-        result = result[~result[section_column].isin(all_exclude_sections)]
 
     return result
 
