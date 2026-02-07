@@ -6,7 +6,7 @@ Work Engagement Dashboard - A Streamlit-based analytics application for visualiz
 ## Key Architecture
 
 ### Privilege System
-- **Source of truth**: `docs/privileges_configuration.md` (markdown tables)
+- **Source of truth**: `config/privileges_configuration.md` (markdown tables)
 - **Generated config**: `config/privileges.yaml` (auto-generated)
 - **Generator**: `tools/generate_privileges_yaml.py`
 - **Manager**: `modules/privilege_manager.py` (singleton pattern)
@@ -55,7 +55,7 @@ Load Data → Global Filters → Per-Tab Filters → Per-Grouping Filters → Di
 | `modules/privilege_manager.py` | Privilege-based filtering logic |
 | `modules/auth.py` | Authentication (user login) |
 | `modules/config.py` | Configuration constants |
-| `docs/privileges_configuration.md` | **Source of truth** for privileges |
+| `config/privileges_configuration.md` | **Source of truth** for privileges |
 | `config/privileges.yaml` | Generated privilege config |
 | `tools/generate_privileges_yaml.py` | Generates YAML from markdown |
 
@@ -70,8 +70,8 @@ Load Data → Global Filters → Per-Tab Filters → Per-Grouping Filters → Di
 - 時系列 - Time series charts
 - グループ比較 - Group comparison
 - 評価 - Evaluation/ratings
-- 個人 - Individual view
 - 分布 - Distribution
+- 個人 - Individual view
 
 ### Sections within tabs
 - 計測値 - Measured values
@@ -115,7 +115,7 @@ pyyaml>=6.0.0  # Required for yaml module
 ## Development Workflow
 
 ### Updating Privileges
-1. Edit `docs/privileges_configuration.md`
+1. Edit `config/privileges_configuration.md`
 2. Run `python tools/generate_privileges_yaml.py`
 3. Test locally
 4. Deploy

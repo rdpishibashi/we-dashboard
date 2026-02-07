@@ -187,9 +187,6 @@ cython_debug/
 # auth_users.json contains credentials (use auth_users.dat for production)
 auth_users.json
 
-# Default data files
-EngagementMasterSS*.xlsx
-
 # Mac environment
 .DS_Store
 tests/

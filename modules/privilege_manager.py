@@ -319,11 +319,11 @@ class PrivilegeManager:
 
         allowed = tabs_config.get('allowed', [])
         if allowed == 'all':
-            return ['時系列', 'グループ比較', '評価', '個人', '分布']
+            return ['時系列', 'グループ比較', '評価', '分布', '個人']
 
         denied = tabs_config.get('denied', [])
         if denied:
-            all_tabs = ['時系列', 'グループ比較', '評価', '個人', '分布']
+            all_tabs = ['時系列', 'グループ比較', '評価', '分布', '個人']
             return [t for t in all_tabs if t not in denied]
 
         return allowed if allowed else []

@@ -38,7 +38,7 @@ WE-Dashboard/
 ├── tools/
 │   └── generate_privileges_yaml.py  # 権限YAML生成ツール
 ├── docs/
-│   └── privileges_configuration.md  # 権限設定（ソースオブトゥルース）
+│   └── privileges_configuration.md  # 権限設定（ソースオブトゥルース） ※ config/ に移動済み
 ├── auth_users.json           # 認証情報（開発用）
 ├── auth_users.dat            # 認証情報（本番用・エンコード済）
 ├── group_order_config.json   # グループ順序設定
@@ -177,7 +177,7 @@ graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
 
 | 機能 | 認証済み | 未認証 |
 |------|----------|--------|
-| タブ表示 | 5タブ（時系列/グループ比較/評価/個人/分布） | 4タブ（個人タブ非表示） |
+| タブ表示 | 5タブ（時系列/グループ比較/評価/分布/個人） | 4タブ（個人タブ非表示） |
 | グルーピング選択肢 | すべて（部署/課/チーム/プロジェクト/職位/個人） | 制限（職位/個人を除外） |
 | アクション対象候補 | 表示 | 非表示 |
 | 共有したいこと | 表示 | 非表示 |
@@ -424,7 +424,7 @@ team_section_overrides:
 
 **権限設定の階層:**
 ```
-docs/privileges_configuration.md  ← ソースオブトゥルース（Markdown表形式）
+config/privileges_configuration.md  ← ソースオブトゥルース（Markdown表形式）
         ↓ (generate_privileges_yaml.py)
 config/privileges.yaml            ← 生成された設定ファイル
         ↓ (privilege_manager.py)
@@ -534,7 +534,7 @@ config/privileges.yaml            ← 生成された設定ファイル
 ```python
 # タブの動的生成
 if is_authenticated():
-    tab_labels = ["時系列", "グループ比較", "評価", "個人", "分布"]
+    tab_labels = ["時系列", "グループ比較", "評価", "分布", "個人"]
 else:
     tab_labels = ["時系列", "グループ比較", "評価", "分布"]
 
