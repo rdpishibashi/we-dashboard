@@ -115,8 +115,8 @@ GROUPING_LABEL_MAP = {
 # =============================================================================
 # Centralized tab definitions to avoid hardcoded tab names scattered in code
 
-TAB_NAMES = ['時系列', 'グループ比較', '評価', '個人', '分布']
-TAB_NAMES_AUTHENTICATED = ['時系列', 'グループ比較', '評価', '個人', '分布']
+TAB_NAMES = ['時系列', 'グループ比較', '評価', '分布', '個人']
+TAB_NAMES_AUTHENTICATED = ['時系列', 'グループ比較', '評価', '分布', '個人']
 TAB_NAMES_ANONYMOUS = ['時系列', 'グループ比較', '評価', '分布']  # 個人 tab hidden
 
 # Tab-specific configuration
@@ -148,15 +148,6 @@ TAB_CONFIG = {
         'has_signals': False,
         'has_comments': False,
     },
-    '個人': {
-        'key': 'individual',
-        'subheader': '個人分析',
-        'has_grouping': False,
-        'has_measured_data': True,
-        'has_statistics': False,
-        'has_signals': True,
-        'has_comments': True,
-    },
     '分布': {
         'key': 'distribution',
         'subheader': '分布分析',
@@ -165,6 +156,15 @@ TAB_CONFIG = {
         'has_statistics': True,
         'has_signals': False,
         'has_comments': False,
+    },
+    '個人': {
+        'key': 'individual',
+        'subheader': '個人分析',
+        'has_grouping': False,
+        'has_measured_data': True,
+        'has_statistics': False,
+        'has_signals': True,
+        'has_comments': True,
     },
 }
 
