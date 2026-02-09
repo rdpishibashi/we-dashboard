@@ -31,47 +31,70 @@ Work Engagement Dashboard - A Streamlit-based analytics application for visualiz
 
 ### Data Flow
 ```
-Load Data → Global Filters → Per-Tab Filters → Per-Grouping Filters → Display
+Login → Sidebar (Period, Metric, Grouping, Filters) → Per-Tab Privilege Scope → Display
 ```
 
-1. `df`, `signal_df`, `comment_df` loaded from Excel
-2. Global filters applied → `filtered_df`, `filtered_signal_df`, `filtered_comment_df`
-3. Per-tab privilege scope applied → `tab_filtered_df`
-4. Per-grouping scope and grade filter applied
-5. Section aliases applied if configured
+1. **Pre-login**: Welcome page with usage instructions (no dashboard)
+2. **Post-login**: Full dashboard with sidebar controls and `st.tabs()`
+3. `df`, `signal_df`, `comment_df` loaded from Excel
+4. Unified sidebar filters applied → `filtered_df`, `filtered_signal_df` (shared by all tabs)
+5. Per-tab privilege scope applied → `tab_filtered_df`
+6. 表示カテゴリ (grouping) controls visualization per tab
+7. Grade filter, section aliases applied if configured
 
-### Filter Hierarchy (Global Filters)
-```
-部門 (Division) → 部署 (Department) → 課 (Section) → チーム (Team) → プロジェクト (Project) → 職位 (Grade)
-```
+### Unified Filter System (Sidebar)
+**Cascade Order**: 部門 → 職位 → 部署 → 課 → チーム → プロジェクト → 個人
 
-**Important**: Use `sync_filter_selection()` pattern to sync child filters when parent changes. See `~/.claude/skills/streamlit/SKILL.md`.
+- All filters are **selectboxes** with "すべて" (all) option
+- **課, チーム, プロジェクト** are separate cascading dropdowns (not a dimension selector)
+- **個人 filter**: When selected, affects ALL tabs (not just 個人 tab)
+- **Privilege-based**: Filter options restricted by user's data_scope
+- **Cascading**: Parent changes reset children automatically
 
 ## Important Files
 
 | File | Purpose |
 |------|---------|
 | `app.py` | Main Streamlit application |
+| `modules/filter_helpers.py` | Unified filter cascade logic |
 | `modules/privilege_manager.py` | Privilege-based filtering logic |
 | `modules/auth.py` | Authentication (user login) |
 | `modules/config.py` | Configuration constants |
+| `modules/utils.py` | Utility functions (grouping selector, etc.) |
 | `config/privileges_configuration.md` | **Source of truth** for privileges |
 | `config/privileges.yaml` | Generated privilege config |
 | `tools/generate_privileges_yaml.py` | Generates YAML from markdown |
 
 ## UI Structure
 
-### Sidebar (Global Filters)
-- 期間 (Period slider) - always visible
-- 表示指標 (Metric selector) - always visible
-- 組織フィルター (collapsible) - 部門, 部署, 課, チーム, プロジェクト, 職位
+### Pre-Login
+- Unauthenticated users see a **welcome page** with usage instructions
+- Sidebar shows only the login expander — no filters, no tabs
 
-### Tabs
-- 時系列 - Time series charts
-- グループ比較 - Group comparison
-- 評価 - Evaluation/ratings
-- 分布 - Distribution
-- 個人 - Individual view
+### Sidebar (Authenticated)
+```
+1. ログイン (login expander)
+2. 期間 (period slider)
+3. 表示指標 (metric selectbox)
+4. 表示カテゴリ (grouping selectbox) — controls chart aggregation
+5. ── separator ──
+6. フィルター設定 (expander, collapsed by default):
+     部門 → 職位 → 部署 → 課 → チーム → プロジェクト → 個人
+7. データ (expander) — file upload
+8. 期間＆有効データ info box
+9. ── separator ──
+10. Footer ©RDPi
+```
+
+### Tabs (st.tabs)
+- **時系列** - Time series charts
+- **グループ比較** - Group comparison
+- **評価** - Evaluation/ratings
+- **分布** - Distribution
+- **個人** - Individual view
+
+Tabs use `st.tabs()` (pill-style bar). All tab content renders on every rerun.
+表示カテゴリ in the sidebar controls how data is aggregated/visualized across all tabs.
 
 ### Sections within tabs
 - 計測値 - Measured values
@@ -83,8 +106,13 @@ Load Data → Global Filters → Per-Tab Filters → Per-Grouping Filters → Di
 ## Key Implementation Details
 
 ### Anonymous User Handling
+Unauthenticated users see a welcome page — the dashboard is not rendered at all.
 ```python
-current_privilege = get_current_privilege() if is_authenticated() else 'anonymous'
+if not is_authenticated():
+    # Show welcome page
+else:
+    current_privilege = get_current_privilege()
+    # ... full dashboard
 ```
 
 ### Comment Display (共有したいこと)
@@ -141,3 +169,10 @@ See `~/.claude/skills/streamlit/SKILL.md` for reusable patterns:
 - Fixed signal_df and comment_df not being filtered by global filters
 - Comments now sorted by year-month descending (latest first)
 - Anonymized comments grouped by year-month
+
+## Recent Changes (2026-02)
+- **Pre-login welcome page**: Unauthenticated users see instructions instead of dashboard
+- **st.tabs()**: Switched from `st.radio("レポート種別")` to `st.tabs()` (pill-style bar)
+- **Sidebar restructured**: 表示カテゴリ (grouping) moved before filters; フィルター設定 wrapped in expander (collapsed by default)
+- **Separate dimension filters**: Replaced グループ（絞り込み軸）meta-selector with three independent cascading dropdowns: 課, チーム, プロジェクト
+- **Session state keys**: `unified_dimension` / `unified_dimension_value` replaced by `unified_section`, `unified_team`, `unified_project`

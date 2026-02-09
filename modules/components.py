@@ -4,7 +4,6 @@ Reusable UI components for the WE-Dashboard.
 This module consolidates duplicated patterns from app.py into reusable functions:
 - Comment section rendering (共有したいこと, 気になった出来事や気づき)
 - Action candidates rendering (アクション対象候補)
-- Team section override helpers
 - Comment data preparation
 """
 
@@ -22,32 +21,19 @@ def filter_signal_by_selection(
     signal_df: pd.DataFrame,
     main_df: pd.DataFrame,
     dept_choice: str,
-    section_choice: str,
-    management_override: Optional[Dict] = None
+    section_choice: str
 ) -> pd.DataFrame:
     """
     Filter signal DataFrame by department/section selections.
-
-    This function provides consistent signal_df filtering across all tabs.
-    When Management override is selected, it uses names from main_df instead of
-    filtering by team column (since rating2 sheet may have different org values).
 
     Args:
         signal_df: Signal DataFrame to filter
         main_df: Main DataFrame (already filtered by dept/section)
         dept_choice: Selected department ('すべて' for all)
         section_choice: Selected section ('すべて' for all)
-        management_override: Optional management override dict with 'display_section' key
 
     Returns:
         Filtered signal DataFrame
-
-    Example:
-        >>> tab_signal_df = filter_signal_by_selection(
-        ...     tab_signal_df, ts_df,
-        ...     dept_choice, section_choice,
-        ...     management_override=ts_management_override
-        ... )
     """
     result = signal_df.copy()
 
@@ -55,31 +41,9 @@ def filter_signal_by_selection(
         result = result[result['department'] == dept_choice]
 
     if section_choice != 'すべて':
-        if management_override and section_choice == management_override.get('display_section'):
-            # Filter by names from main_df (which is already filtered by team)
-            # This is more reliable than filtering by team column which may differ between sheets
-            names_in_filtered = main_df['name'].unique()
-            result = result[result['name'].isin(names_in_filtered)]
-        else:
-            result = result[result['section'] == section_choice]
+        result = result[result['section'] == section_choice]
 
     return result
-
-
-def get_management_override(team_overrides: List[Dict]) -> Optional[Dict]:
-    """
-    Extract the Management team override from a list of team overrides.
-
-    Args:
-        team_overrides: List of override dictionaries from get_team_section_overrides()
-
-    Returns:
-        The Management override dict, or None if not found
-    """
-    for override in team_overrides:
-        if override.get('match_team') == 'Management':
-            return override
-    return None
 
 
 def prepare_comment_data(
@@ -373,16 +337,17 @@ def apply_grouping_filters(
     privilege_mgr,
     current_privilege: str,
     grouping_choice: str,
-    tab_name: str
+    tab_name: str,
+    selected_filters: dict = None
 ) -> tuple:
     """
     Apply grouping-specific filters to DataFrames.
 
     This applies the following layers in order:
-    1. Grouping scope - restricts data based on selected grouping dimension
+    1. Grouping scope - restricts data based on privilege's grouping_scope config
+       (uses grouping_scope_filtered when a specific dimension value is selected)
     2. Grade filtering - applies only when grouping by 'grade'
     3. Section aliases - renames section values for aggregation/privacy
-    4. Team section overrides - only when grouping by 'name' (個人別)
 
     Args:
         df: Main DataFrame
@@ -390,34 +355,35 @@ def apply_grouping_filters(
         privilege_mgr: PrivilegeManager instance
         current_privilege: Current user's privilege
         grouping_choice: Selected grouping option
-        tab_name: Current tab name (for aliases and overrides)
+        tab_name: Current tab name (for aliases)
+        selected_filters: Sidebar filter selections (used to detect dimension ≠ すべて)
 
     Returns:
         Tuple of (filtered_df, filtered_signal_df)
     """
     from modules.privilege_manager import (
         filter_dataframe_by_scope, filter_dataframe_by_grade,
-        apply_section_aliases, apply_team_section_overrides
+        apply_section_aliases
     )
 
     if not current_privilege or not grouping_choice:
         return df, signal_df
 
-    # Layer 1: Grouping scope - DISABLED
-    # This layer was filtering out departments not explicitly listed in the privilege's
-    # grouping_scope configuration (e.g., 品質保証部). Since data_scope already controls
-    # tab-level visibility and local filters control user selection, this layer is
-    # redundant and causes unexpected filtering issues.
-    #
-    # Original code:
-    # grouping_scope = privilege_mgr.get_grouping_scope(current_privilege, grouping_choice)
-    # df = filter_dataframe_by_scope(df, grouping_scope)
-    # if signal_df is not None:
-    #     signal_df = filter_dataframe_by_scope(signal_df, grouping_scope)
+    # Determine if a specific dimension value is selected (≠ すべて)
+    dimension_filtered = (
+        selected_filters is not None and
+        selected_filters.get('dimension_value', 'すべて') != 'すべて'
+    )
+
+    # Layer 1: Grouping scope (restricts data based on grouping type)
+    grouping_scope = privilege_mgr.get_grouping_scope(current_privilege, grouping_choice, dimension_filtered)
+    df = filter_dataframe_by_scope(df, grouping_scope)
+    if signal_df is not None:
+        signal_df = filter_dataframe_by_scope(signal_df, grouping_scope)
 
     # Layer 2: Grade filtering (only for grade grouping)
     if grouping_choice == 'grade':
-        grade_filter = privilege_mgr.get_grade_filter_for_grouping(current_privilege, grouping_choice)
+        grade_filter = privilege_mgr.get_grade_filter_for_grouping(current_privilege, grouping_choice, dimension_filtered)
         if grade_filter:
             df = filter_dataframe_by_grade(df, grade_filter)
             if signal_df is not None:
@@ -430,15 +396,5 @@ def apply_grouping_filters(
             df = apply_section_aliases(df, alias_mapping)
             if signal_df is not None:
                 signal_df = apply_section_aliases(signal_df, alias_mapping)
-
-    # Layer 4: Team section overrides (only for section/課別 grouping)
-    # Moves members with matching team value to a virtual section (e.g., Management -> マネジメント)
-    # Applied AFTER section aliases so aliases are processed first
-    if grouping_choice == 'section':
-        team_overrides = privilege_mgr.get_team_section_overrides(current_privilege, tab_name)
-        if team_overrides:
-            df = apply_team_section_overrides(df, team_overrides)
-            if signal_df is not None:
-                signal_df = apply_team_section_overrides(signal_df, team_overrides)
 
     return df, signal_df

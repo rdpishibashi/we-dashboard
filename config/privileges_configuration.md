@@ -40,18 +40,8 @@
 - **In tabs**: 時系列, グループ比較, 評価, 分布
 
 
-## Team Section Overrides
-
-### マネジメント
-- **Match**: team = Management
-- **Display as section**: マネジメント
-- **Visible to**: all
-- **In tabs**: 時系列, グループ比較, 評価, 分布
-- **Exclude sections**: 未設定
-
-
-## Data Scope by Grouping local filter
-
+## Data Scope by Grouping
+### 課別・チーム別・プロジェクト別 = すべて
 | Privilege | なし | 部署別・課別・チーム別・プロジェクト別 | 職位別 | 個人別 |
 |---|---|---|---|---|
 | admin | 全て | 全て | 全て | 全て |
@@ -76,6 +66,23 @@
 | develop1 | 開発部 | 開発部 | 開発部 | なし |
 | develop2 | 開発部 | 開発部 | 開発部 | なし |
 
+### 課別・チーム別・プロジェクト別 ≠ すべて
+Overrides from = すべて. Omitted privileges inherit all values. — means same as = すべて.
+
+| Privilege | なし | 部署別・課別・チーム別・プロジェクト別 | 職位別 | 個人別 |
+|---|---|---|---|---|
+| sw | — | ソフトウェア開発課 | — | — |
+| pd | — | 製品技術課 | — | — |
+| soft | — | なし | ソフトウェア開発課（非管理職） | — |
+| prod | — | なし | 製品技術課（非管理職） | — |
+| me1 | — | なし | — | — |
+| me2 | — | なし | — | — |
+| me3 | — | なし | — | — |
+| mechele1 | — | なし | 第一設計課（非管理職） | — |
+| mechele2 | — | なし | 第二設計課（非管理職） | — |
+| mechele3 | — | なし | 第三設計課（非管理職） | — |
+| develop1 | — | なし | 開発部 1課 + UTI技術発展処 | — |
+| develop2 | — | なし | 開発部 2課 + UK S1-Project | — |
 
 ## Data Scope by Section
 

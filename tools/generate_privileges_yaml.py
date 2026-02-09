@@ -94,7 +94,7 @@ def parse_markdown_table(content: str, header_pattern: str) -> list[dict]:
         List of dicts, each representing a row with column names as keys
     """
     # Find the header and table
-    match = re.search(header_pattern + r'\s*\n\|([^\n]+)\|\s*\n\|[-|\s]+\|\s*\n((?:\|[^\n]+\|\s*\n)+)', content)
+    match = re.search(header_pattern + r'[\s\S]*?\n\|([^\n]+)\|\s*\n\|[-|\s]+\|\s*\n((?:\|[^\n]+\|\s*\n)+)', content)
     if not match:
         return []
 
@@ -521,7 +521,7 @@ def generate_base_privileges() -> dict:
     }
 
 
-def generate_user_privilege(privilege: str, tab_scope: dict, section_scope: dict, grouping_scope: dict) -> Optional[dict]:
+def generate_user_privilege(privilege: str, tab_scope: dict, section_scope: dict, grouping_scope: dict, grouping_scope_filtered: dict = None) -> Optional[dict]:
     """Generate a user privilege configuration."""
     if privilege in ('admin', 'anonymous'):
         return None  # These are base classes
@@ -590,6 +590,24 @@ def generate_user_privilege(privilege: str, tab_scope: dict, section_scope: dict
     if grp_scope:
         result['grouping_scope'] = grp_scope
 
+    # Build grouping_scope_filtered - only if overrides exist (≠すべて)
+    if grouping_scope_filtered is not None:
+        grp_scope_filtered = {}
+        for grp_key, internal_key in grouping_key_map.items():
+            if grp_key in grouping_scope_filtered:
+                scope_type, values, has_grade_filter = grouping_scope_filtered[grp_key]
+                if scope_type == 'organization' and values:
+                    grp_scope_filtered[internal_key] = {'values': values}
+                    if has_grade_filter:
+                        grp_scope_filtered[internal_key]['grade_filter'] = 'non_managers'
+                elif scope_type == 'none':
+                    grp_scope_filtered[internal_key] = {'type': 'none'}
+                elif scope_type == 'all':
+                    grp_scope_filtered[internal_key] = {'type': 'all'}
+
+        if grp_scope_filtered:
+            result['grouping_scope_filtered'] = grp_scope_filtered
+
     # Build groupings from grouping_scope data
     groupings = determine_groupings(privilege, grouping_scope)
 
@@ -622,14 +640,15 @@ def generate_yaml_content(md_content: str) -> str:
     # Parse tables
     tab_data = parse_markdown_table(md_content, r'## Data Scope by Privilege and Tab')
     section_data = parse_markdown_table(md_content, r'## Data Scope by Section')
-    grouping_data = parse_markdown_table(md_content, r'## Data Scope by Grouping local filter')
+    grouping_data_default = parse_markdown_table(md_content, r'### 課別・チーム別・プロジェクト別 = すべて')
+    grouping_data_filtered = parse_markdown_table(md_content, r'### 課別・チーム別・プロジェクト別 ≠ すべて')
     aliases = parse_section_aliases(md_content)
-    team_overrides = parse_team_section_overrides(md_content)
 
     # Build scope mappings per privilege
     privilege_tab_scope = {}
     privilege_section_scope = {}
     privilege_grouping_scope = {}
+    privilege_grouping_scope_filtered = {}
 
     for row in tab_data:
         privilege = row.get('Privilege', '').strip()
@@ -655,25 +674,46 @@ def generate_yaml_content(md_content: str) -> str:
 
         privilege_section_scope[privilege] = section_scope
 
-    # Parse grouping scope table
-    for row in grouping_data:
+    # Column mapping for grouping scope tables
+    grouping_column_mapping = {
+        'なし': 'なし',
+        '部署別・課別・チーム別・プロジェクト別': '部署別',
+        '職位別': '職位別',
+        '個人別': '個人別'
+    }
+
+    # Parse default grouping scope (= すべて)
+    for row in grouping_data_default:
         privilege = row.get('Privilege', '').strip()
         if not privilege:
             continue
 
         grouping_scope = {}
-        # Map column names to internal keys
-        column_mapping = {
-            'なし': 'なし',
-            '部署別・課別・チーム別・プロジェクト別': '部署別',
-            '職位別': '職位別',
-            '個人別': '個人別'
-        }
-        for col_name, key in column_mapping.items():
+        for col_name, key in grouping_column_mapping.items():
             if col_name in row:
                 grouping_scope[key] = parse_grouping_scope_value(row[col_name])
 
         privilege_grouping_scope[privilege] = grouping_scope
+
+    # Parse filtered grouping scope (≠ すべて) with fallback to default for — cells
+    for row in grouping_data_filtered:
+        privilege = row.get('Privilege', '').strip()
+        if not privilege:
+            continue
+
+        default_scope = privilege_grouping_scope.get(privilege, {})
+        grouping_scope = {}
+        for col_name, key in grouping_column_mapping.items():
+            if col_name in row:
+                cell_value = row[col_name].strip()
+                if cell_value == '—':
+                    # Inherit from default (= すべて)
+                    if key in default_scope:
+                        grouping_scope[key] = default_scope[key]
+                else:
+                    grouping_scope[key] = parse_grouping_scope_value(cell_value)
+
+        privilege_grouping_scope_filtered[privilege] = grouping_scope
 
     # Build YAML structure
     yaml_data = OrderedDict()
@@ -683,9 +723,6 @@ def generate_yaml_content(md_content: str) -> str:
 
     # Section aliases
     yaml_data['section_aliases'] = aliases
-
-    # Team section overrides
-    yaml_data['team_section_overrides'] = team_overrides
 
     # Base privilege classes
     yaml_data['privileges'] = generate_base_privileges()
@@ -715,7 +752,8 @@ def generate_yaml_content(md_content: str) -> str:
             section_scope = privilege_section_scope.get(privilege, {})
             grouping_scope = privilege_grouping_scope.get(privilege, {})
 
-            user_config = generate_user_privilege(privilege, tab_scope, section_scope, grouping_scope)
+            grouping_scope_filtered = privilege_grouping_scope_filtered.get(privilege)
+            user_config = generate_user_privilege(privilege, tab_scope, section_scope, grouping_scope, grouping_scope_filtered)
             if user_config:
                 user_privileges[privilege] = user_config
 
@@ -739,8 +777,9 @@ def generate_yaml_with_comments(data: dict) -> str:
         "#",
         "# Four tables define data access:",
         "# 1. Data Scope by Privilege and Tab - controls which data is visible per tab",
-        "# 2. Data Scope by Grouping local filter - controls which data is visible per grouping option",
-        "# 3. Data Scope by Section - controls which data is visible in specific UI sections",
+        "# 2. Data Scope by Grouping (= すべて) - grouping scope when no dimension filter is selected",
+        "# 3. Data Scope by Grouping (≠ すべて) - grouping scope when a specific dimension is selected",
+        "# 4. Data Scope by Section - controls which data is visible in specific UI sections",
         "#    (計測値, 主な指標, アクション対象候補, 気になった出来事や気づき, 共有したいこと)",
         ""
     ]
@@ -764,7 +803,6 @@ def generate_yaml_with_comments(data: dict) -> str:
     sections = [
         ('grade_groups', '# Grade groups for filtering'),
         ('section_aliases', '# Section aliases for grouped display in 課別 grouping\n# Note: dev (department head) sees individual sections, NOT combined aliases\n# All section managers in 開発部 (dev1, dev2, uti, uks1) see BOTH combined aliases'),
-        ('team_section_overrides', '# Team-based section overrides for 課別 grouping\n# Members matching the team value are moved to a virtual section'),
         ('privileges', '# Privilege class definitions'),
         ('user_privileges', '# User to privilege mapping with specific data scopes'),
     ]

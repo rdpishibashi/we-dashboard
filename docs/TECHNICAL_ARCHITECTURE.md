@@ -26,19 +26,21 @@ WE-Dashboard/
 │   ├── __init__.py
 │   ├── auth.py               # 認証・権限管理
 │   ├── charts.py             # グラフ生成
+│   ├── components.py         # 再利用可能UIコンポーネント
 │   ├── config.py             # 設定・定数
 │   ├── data_loader.py        # データ読み込み
 │   ├── encryption.py         # 暗号化ユーティリティ
-│   ├── privilege_manager.py  # 権限ベースフィルタリング（NEW）
+│   ├── filter_helpers.py     # サイドバーフィルターカスケードロジック
+│   ├── privilege_manager.py  # 権限ベースフィルタリング
 │   ├── signal_processing.py  # シグナルデータ処理
 │   ├── statistics.py         # 統計計算
 │   └── utils.py              # ユーティリティ関数
 ├── config/
+│   └── privileges_configuration.md  # 権限設定（ソースオブトゥルース）
 │   └── privileges.yaml       # 権限設定（自動生成）
 ├── tools/
 │   └── generate_privileges_yaml.py  # 権限YAML生成ツール
 ├── docs/
-│   └── privileges_configuration.md  # 権限設定（ソースオブトゥルース） ※ config/ に移動済み
 ├── auth_users.json           # 認証情報（開発用）
 ├── auth_users.dat            # 認証情報（本番用・エンコード済）
 ├── group_order_config.json   # グループ順序設定
@@ -169,7 +171,7 @@ graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
 **主要機能:**
 - Streamlit UI構成
 - サイドバーフィルター管理
-- タブ表示（認証状態により表示内容が変化）
+- タブ表示（`st.tabs()`によるピル型タブバー）
 - セッション状態管理
 - 認証ベースの機能制限
 
@@ -177,18 +179,18 @@ graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
 
 | 機能 | 認証済み | 未認証 |
 |------|----------|--------|
-| タブ表示 | 5タブ（時系列/グループ比較/評価/分布/個人） | 4タブ（個人タブ非表示） |
-| グルーピング選択肢 | すべて（部署/課/チーム/プロジェクト/職位/個人） | 制限（職位/個人を除外） |
-| アクション対象候補 | 表示 | 非表示 |
-| 共有したいこと | 表示 | 非表示 |
+| メイン画面 | ダッシュボード（タブ + グラフ） | ウェルカムページ（使い方ガイド） |
+| サイドバー | ログイン + 期間 + 指標 + 表示カテゴリ + フィルター + データ | ログインのみ |
+| タブ表示 | `st.tabs()` 5タブ（時系列/グループ比較/評価/分布/個人） | なし |
 
 **データフロー:**
 ```
 1. ファイルアップロード/デフォルトファイル読込
 2. load_data() でデータ取得
-3. 認証済みの場合 filter_by_privilege() でデータフィルタリング
-4. サイドバーフィルター適用
-5. 各タブでグラフ/テーブル表示
+3. 未認証の場合 → ウェルカムページ表示（ダッシュボードなし）
+4. 認証済みの場合 → サイドバーフィルター表示 + タブ表示
+5. filter_helpers.py の render_unified_sidebar_filters() でフィルター適用
+6. 各タブ（st.tabs）でグラフ/テーブル表示
 ```
 
 **フィルターリセット機構:**
@@ -452,22 +454,26 @@ config/privileges.yaml            ← 生成された設定ファイル
 | `current_user` | ログインユーザー名 |
 | `current_privilege` | ユーザー権限 |
 
-### 4.2 フィルター関連
+### 4.2 フィルター関連（統一フィルターシステム）
 | キー | 説明 |
 |------|------|
 | `filter_period` | 期間スライダー値 |
-| `filter_divisions` | 選択部門 |
-| `filter_departments` | 選択部署 |
-| `filter_sections` | 選択課 |
+| `unified_division` | 部門セレクトボックス |
+| `unified_grade` | 職位セレクトボックス |
+| `unified_department` | 部署セレクトボックス |
+| `unified_section` | 課セレクトボックス |
+| `unified_team` | チームセレクトボックス |
+| `unified_project` | プロジェクトセレクトボックス |
+| `unified_individual` | 個人セレクトボックス |
+| `unified_grouping` | 表示カテゴリ（グルーピング）セレクトボックス |
 | `reset_period_filter` | 期間リセットフラグ |
 | `reset_local_filters` | ローカルフィルターリセットフラグ |
 
-### 4.3 タブ固有
-| キー | 説明 |
-|------|------|
-| `{tab}_department_select` | タブ別部署選択 |
-| `{tab}_section_select` | タブ別課選択 |
-| `{tab}_grouping_select` | タブ別グルーピング選択 |
+**カスケードリセット:**
+親フィルター変更時、子フィルターが自動リセットされます。
+```
+部門 → 職位 → 部署 → 課 → チーム → プロジェクト → 個人
+```
 
 ---
 
@@ -520,29 +526,20 @@ config/privileges.yaml            ← 生成された設定ファイル
 
 ### 6.1 未認証ユーザー向け機能制限
 
-未認証（ログインしていない）ユーザーに対して、以下の機能が非表示となります：
-
-| 非表示項目 | 理由 |
-|------------|------|
-| 個人タブ | 個人別の詳細データを保護 |
-| 職位別グルーピング | 職位情報の保護 |
-| 個人別グルーピング | 個人名の保護 |
-| アクション対象候補セクション | 個人のシグナル情報を保護 |
-| 共有したいことセクション | 個人のコメント情報を保護 |
+未認証（ログインしていない）ユーザーには**ダッシュボードが表示されません**。
+代わりにウェルカムページ（使い方ガイド）が表示されます。
 
 **実装方法:**
 ```python
-# タブの動的生成
-if is_authenticated():
-    tab_labels = ["時系列", "グループ比較", "評価", "分布", "個人"]
+if not is_authenticated():
+    # ウェルカムページ表示（サイドバーはログインのみ）
+    st.markdown("#### 使い方 ...")
 else:
-    tab_labels = ["時系列", "グループ比較", "評価", "分布"]
-
-# グルーピング選択肢の動的生成
-if is_authenticated():
-    base_grouping_options = ['なし', 'department', 'section', 'team', 'project', 'grade', 'name']
-else:
-    base_grouping_options = ['なし', 'department', 'section', 'team', 'project']
+    # 認証済み — フル・ダッシュボード表示
+    current_privilege = get_current_privilege()
+    tab_labels = privilege_mgr.get_allowed_tabs(current_privilege)
+    base_grouping_options = privilege_mgr.get_allowed_groupings(current_privilege)
+    # ... sidebar filters, st.tabs(), charts ...
 ```
 
 **注意点:**
@@ -595,6 +592,11 @@ statsmodels
 | 2025-02-06 | format_measured_data()追加（statistics.py） - 計測値表示の共通化 |
 | 2025-02-06 | filter_signal_by_selection()追加（components.py） - signal_dfフィルタリング共通化 |
 | 2025-02-06 | app.pyを1279行→1172行に削減（-8.4%） |
+| 2026-02-09 | 未認証ユーザーにウェルカムページ表示（ダッシュボード非表示化） |
+| 2026-02-09 | st.radio→st.tabs()への移行（ピル型タブバー） |
+| 2026-02-09 | サイドバー再構成（表示カテゴリ→フィルター設定expander→データexpander） |
+| 2026-02-09 | グループ（絞り込み軸）メタセレクタを廃止、課/チーム/プロジェクト個別ドロップダウンに変更 |
+| 2026-02-09 | filter_helpers.py追加（サイドバーフィルターカスケードロジック） |
 
 ---
 
