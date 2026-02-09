@@ -160,20 +160,24 @@ class PrivilegeManager:
 
         return []
 
-    def get_grouping_scope(self, privilege: str, grouping: str) -> Optional[list]:
+    def get_grouping_scope(self, privilege: str, grouping: str, dimension_filtered: bool = False) -> Optional[list]:
         """
         Get allowed data scope for a specific grouping type.
 
         Args:
             privilege: User's privilege identifier
             grouping: Grouping type (なし, department, section, team, project, grade, name)
+            dimension_filtered: If True, use grouping_scope_filtered (≠すべて) when available
 
         Returns:
             None if all data allowed, list of allowed organization values,
             or empty list if no access
         """
         config = self.get_effective_config(privilege)
-        grouping_scope = config.get('grouping_scope', {})
+        if dimension_filtered:
+            grouping_scope = config.get('grouping_scope_filtered', config.get('grouping_scope', {}))
+        else:
+            grouping_scope = config.get('grouping_scope', {})
 
         # Map grouping types to internal keys
         # department/section/team/project all use 'organization' scope
@@ -210,19 +214,23 @@ class PrivilegeManager:
 
         return None  # No restriction if not specified
 
-    def get_grade_filter_for_grouping(self, privilege: str, grouping: str) -> Optional[list]:
+    def get_grade_filter_for_grouping(self, privilege: str, grouping: str, dimension_filtered: bool = False) -> Optional[list]:
         """
         Get grade filter values for a specific grouping type.
 
         Args:
             privilege: User's privilege identifier
             grouping: Grouping type (grade is the main one that uses this)
+            dimension_filtered: If True, use grouping_scope_filtered (≠すべて) when available
 
         Returns:
             None if no grade filtering, or list of allowed grade values
         """
         config = self.get_effective_config(privilege)
-        grouping_scope = config.get('grouping_scope', {})
+        if dimension_filtered:
+            grouping_scope = config.get('grouping_scope_filtered', config.get('grouping_scope', {}))
+        else:
+            grouping_scope = config.get('grouping_scope', {})
 
         # Map grouping types to internal keys
         grouping_key_map = {
@@ -437,43 +445,7 @@ class PrivilegeManager:
         """
         return len(self.get_section_aliases(privilege, tab)) > 0
 
-    def get_team_section_overrides(self, privilege: str, tab: str) -> list:
-        """
-        Get team section overrides that apply for a privilege/tab combination.
-
-        Team section overrides allow members to be grouped into a virtual section
-        based on their team column value, overriding their original section.
-
-        Args:
-            privilege: User's privilege identifier
-            tab: Tab name (時系列, グループ比較, 評価, 分布)
-
-        Returns:
-            List of override configs that should be applied, each containing:
-            - match_team: team value to match
-            - display_section: section name to use
-            - exclude_sections: sections to exclude from final result
-        """
-        team_overrides = self._config.get('team_section_overrides', {})
-        result = []
-
-        for override_id, override_config in team_overrides.items():
-            visible_to = override_config.get('visible_to', [])
-            visible_in_tabs = override_config.get('visible_in_tabs', [])
-
-            # Check if this override applies to the privilege and tab
-            # "all" is a special keyword that matches any privilege
-            privilege_match = 'all' in visible_to or privilege in visible_to
-            if privilege_match and tab in visible_in_tabs:
-                result.append({
-                    'match_team': override_config.get('match_team'),
-                    'display_section': override_config.get('display_section'),
-                    'exclude_sections': override_config.get('exclude_sections', [])
-                })
-
-        return result
-
-    def get_effective_scope(self, privilege: str, tab: str, grouping: str) -> Optional[list]:
+    def get_effective_scope(self, privilege: str, tab: str, grouping: str, dimension_filtered: bool = False) -> Optional[list]:
         """
         Get the effective data scope combining tab and grouping restrictions.
 
@@ -483,13 +455,14 @@ class PrivilegeManager:
             privilege: User's privilege identifier
             tab: Tab name (時系列, グループ比較, 評価, 個人, 分布)
             grouping: Grouping type (なし, department, section, team, project, grade, name)
+            dimension_filtered: If True, use grouping_scope_filtered (≠すべて) when available
 
         Returns:
             None if all data allowed, list of allowed organization values,
             or empty list if no access
         """
         tab_scope = self.get_data_scope_for_tab(privilege, tab)
-        grouping_scope = self.get_grouping_scope(privilege, grouping)
+        grouping_scope = self.get_grouping_scope(privilege, grouping, dimension_filtered)
 
         # Combine scopes - apply the more restrictive one
         return combine_scopes(tab_scope, grouping_scope)
@@ -601,50 +574,6 @@ def apply_section_aliases(df, alias_mapping: dict, section_column: str = 'sectio
     result[section_column] = result[section_column].map(
         lambda x: alias_mapping.get(x, x)
     )
-    return result
-
-
-def apply_team_section_overrides(df, overrides: list,
-                                  team_column: str = 'team',
-                                  section_column: str = 'section'):
-    """
-    Apply team-based section overrides to a dataframe.
-
-    Members with matching team values have their section overridden to a virtual section.
-
-    Note: exclude_sections is intentionally NOT applied here because:
-    1. Some departments (e.g., 品質保証部) don't have sub-sections, so all members
-       have section='未設定' - excluding them would hide the entire department
-    2. The section filter would inconsistently exclude people based on whether
-       their department has sub-sections or not
-
-    Args:
-        df: DataFrame with team and section columns
-        overrides: List of override configs from get_team_section_overrides()
-        team_column: Name of team column (default: 'team')
-        section_column: Name of section column (default: 'section')
-
-    Returns:
-        DataFrame with section values overridden
-    """
-    if not overrides or df.empty:
-        return df
-
-    if section_column not in df.columns:
-        return df
-
-    result = df.copy()
-
-    for override in overrides:
-        match_team = override.get('match_team')
-        display_section = override.get('display_section')
-        # Note: exclude_sections is intentionally ignored - see docstring
-
-        if match_team and display_section and team_column in result.columns:
-            # Override section for matching team members
-            mask = result[team_column] == match_team
-            result.loc[mask, section_column] = display_section
-
     return result
 
 

@@ -7,9 +7,8 @@
 #
 # Four tables define data access:
 # 1. Data Scope by Privilege and Tab - controls which data is visible per tab
-# 2. Data Scope by Grouping (= すべて) - grouping scope when no dimension filter is selected
-# 3. Data Scope by Grouping (≠ すべて) - grouping scope when a specific dimension is selected
-# 4. Data Scope by Section - controls which data is visible in specific UI sections
+# 2. Data Scope by Grouping local filter - controls which data is visible per grouping option
+# 3. Data Scope by Section - controls which data is visible in specific UI sections
 #    (計測値, 主な指標, アクション対象候補, 気になった出来事や気づき, 共有したいこと)
 
 # Grade groups for filtering
@@ -270,11 +269,11 @@ user_privileges:
         values:
         - システム開発部
         - 機電設計部
-      分布:
+      個人:
         values:
         - システム開発部
         - 機電設計部
-      個人:
+      分布:
         values:
         - システム開発部
         - 機電設計部
@@ -329,11 +328,11 @@ user_privileges:
         values:
         - システム開発部
         - 機電設計部
-      分布:
+      個人:
         values:
         - システム開発部
         - 機電設計部
-      個人:
+      分布:
         values:
         - システム開発部
         - 機電設計部
@@ -385,10 +384,10 @@ user_privileges:
       評価:
         values:
         - 開発部
-      分布:
+      個人:
         values:
         - 開発部
-      個人:
+      分布:
         values:
         - 開発部
       default:
@@ -434,13 +433,13 @@ user_privileges:
         values:
         - システム開発部
         - 機電設計部
+      個人:
+        values:
+        - ソフトウェア開発課
       分布:
         values:
         - システム開発部
         - 機電設計部
-      個人:
-        values:
-        - ソフトウェア開発課
       default:
         values: *id004
     section_scope:
@@ -460,31 +459,186 @@ user_privileges:
         - ソフトウェア開発課
     grouping_scope:
       none:
+        values:
+        - システム開発部
+        - 機電設計部
+      organization:
+        values:
+        - システム開発部
+        - 機電設計部
+      grade:
+        values:
+        - システム開発部
+        - 機電設計部
+      name:
+        values:
+        - ソフトウェア開発課
+  pd:
+    inherits: section_manager
+    data_scope:
+      時系列:
         values: &id005
         - システム開発部
         - 機電設計部
+      グループ比較:
+        values:
+        - システム開発部
+        - 機電設計部
+      評価:
+        values:
+        - システム開発部
+        - 機電設計部
+      個人:
+        values:
+        - 製品技術課
+      分布:
+        values:
+        - システム開発部
+        - 機電設計部
+      default:
+        values: *id005
+    section_scope:
+      計測値:
+        values:
+        - システム開発部
+        - 機電設計部
+      主な指標:
+        values:
+        - システム開発部
+        - 機電設計部
+      アクション対象候補:
+        values:
+        - 製品技術課
+      共有したいこと:
+        values:
+        - 製品技術課
+    grouping_scope:
+      none:
+        values:
+        - システム開発部
+        - 機電設計部
       organization:
         values:
         - システム開発部
         - 機電設計部
       grade:
+        values:
+        - システム開発部
+        - 機電設計部
+      name:
+        values:
+        - 製品技術課
+  me1:
+    inherits: section_manager
+    data_scope:
+      時系列:
         values: &id006
         - システム開発部
         - 機電設計部
-      name:
-        values: &id007
-        - ソフトウェア開発課
-    grouping_scope_filtered:
+      グループ比較:
+        values:
+        - システム開発部
+        - 機電設計部
+      評価:
+        values:
+        - システム開発部
+        - 機電設計部
+      個人:
+        values:
+        - 第一設計課
+      分布:
+        values:
+        - システム開発部
+        - 機電設計部
+      default:
+        values: *id006
+    section_scope:
+      計測値:
+        values:
+        - システム開発部
+        - 機電設計部
+      主な指標:
+        values:
+        - システム開発部
+        - 機電設計部
+      アクション対象候補:
+        values:
+        - 第一設計課
+      共有したいこと:
+        values:
+        - 第一設計課
+    grouping_scope:
       none:
-        values: *id005
+        values:
+        - システム開発部
+        - 機電設計部
       organization:
         values:
-        - ソフトウェア開発課
+        - システム開発部
+        - 機電設計部
       grade:
-        values: *id006
+        values:
+        - システム開発部
+        - 機電設計部
       name:
+        values:
+        - 第一設計課
+  me2:
+    inherits: section_manager
+    data_scope:
+      時系列:
+        values: &id007
+        - システム開発部
+        - 機電設計部
+      グループ比較:
+        values:
+        - システム開発部
+        - 機電設計部
+      評価:
+        values:
+        - システム開発部
+        - 機電設計部
+      個人:
+        values:
+        - 第二設計課
+      分布:
+        values:
+        - システム開発部
+        - 機電設計部
+      default:
         values: *id007
-  pd:
+    section_scope:
+      計測値:
+        values:
+        - システム開発部
+        - 機電設計部
+      主な指標:
+        values:
+        - システム開発部
+        - 機電設計部
+      アクション対象候補:
+        values:
+        - 第二設計課
+      共有したいこと:
+        values:
+        - 第二設計課
+    grouping_scope:
+      none:
+        values:
+        - システム開発部
+        - 機電設計部
+      organization:
+        values:
+        - システム開発部
+        - 機電設計部
+      grade:
+        values:
+        - システム開発部
+        - 機電設計部
+      name:
+        values:
+        - 第二設計課
+  me3:
     inherits: section_manager
     data_scope:
       時系列:
@@ -499,13 +653,13 @@ user_privileges:
         values:
         - システム開発部
         - 機電設計部
+      個人:
+        values:
+        - 第三設計課
       分布:
         values:
         - システム開発部
         - 機電設計部
-      個人:
-        values:
-        - 製品技術課
       default:
         values: *id008
     section_scope:
@@ -519,206 +673,13 @@ user_privileges:
         - 機電設計部
       アクション対象候補:
         values:
-        - 製品技術課
-      共有したいこと:
-        values:
-        - 製品技術課
-    grouping_scope:
-      none:
-        values: &id009
-        - システム開発部
-        - 機電設計部
-      organization:
-        values:
-        - システム開発部
-        - 機電設計部
-      grade:
-        values: &id010
-        - システム開発部
-        - 機電設計部
-      name:
-        values: &id011
-        - 製品技術課
-    grouping_scope_filtered:
-      none:
-        values: *id009
-      organization:
-        values:
-        - 製品技術課
-      grade:
-        values: *id010
-      name:
-        values: *id011
-  me1:
-    inherits: section_manager
-    data_scope:
-      時系列:
-        values: &id012
-        - システム開発部
-        - 機電設計部
-      グループ比較:
-        values:
-        - システム開発部
-        - 機電設計部
-      評価:
-        values:
-        - システム開発部
-        - 機電設計部
-      分布:
-        values:
-        - システム開発部
-        - 機電設計部
-      個人:
-        values:
-        - 第一設計課
-      default:
-        values: *id012
-    section_scope:
-      計測値:
-        values:
-        - システム開発部
-        - 機電設計部
-      主な指標:
-        values:
-        - システム開発部
-        - 機電設計部
-      アクション対象候補:
-        values:
-        - 第一設計課
-      共有したいこと:
-        values:
-        - 第一設計課
-    grouping_scope:
-      none:
-        values: &id013
-        - システム開発部
-        - 機電設計部
-      organization:
-        values:
-        - システム開発部
-        - 機電設計部
-      grade:
-        values: &id014
-        - システム開発部
-        - 機電設計部
-      name:
-        values: &id015
-        - 第一設計課
-    grouping_scope_filtered:
-      none:
-        values: *id013
-      organization:
-        type: none
-      grade:
-        values: *id014
-      name:
-        values: *id015
-  me2:
-    inherits: section_manager
-    data_scope:
-      時系列:
-        values: &id016
-        - システム開発部
-        - 機電設計部
-      グループ比較:
-        values:
-        - システム開発部
-        - 機電設計部
-      評価:
-        values:
-        - システム開発部
-        - 機電設計部
-      分布:
-        values:
-        - システム開発部
-        - 機電設計部
-      個人:
-        values:
-        - 第二設計課
-      default:
-        values: *id016
-    section_scope:
-      計測値:
-        values:
-        - システム開発部
-        - 機電設計部
-      主な指標:
-        values:
-        - システム開発部
-        - 機電設計部
-      アクション対象候補:
-        values:
-        - 第二設計課
-      共有したいこと:
-        values:
-        - 第二設計課
-    grouping_scope:
-      none:
-        values: &id017
-        - システム開発部
-        - 機電設計部
-      organization:
-        values:
-        - システム開発部
-        - 機電設計部
-      grade:
-        values: &id018
-        - システム開発部
-        - 機電設計部
-      name:
-        values: &id019
-        - 第二設計課
-    grouping_scope_filtered:
-      none:
-        values: *id017
-      organization:
-        type: none
-      grade:
-        values: *id018
-      name:
-        values: *id019
-  me3:
-    inherits: section_manager
-    data_scope:
-      時系列:
-        values: &id020
-        - システム開発部
-        - 機電設計部
-      グループ比較:
-        values:
-        - システム開発部
-        - 機電設計部
-      評価:
-        values:
-        - システム開発部
-        - 機電設計部
-      分布:
-        values:
-        - システム開発部
-        - 機電設計部
-      個人:
-        values:
-        - 第三設計課
-      default:
-        values: *id020
-    section_scope:
-      計測値:
-        values:
-        - システム開発部
-        - 機電設計部
-      主な指標:
-        values:
-        - システム開発部
-        - 機電設計部
-      アクション対象候補:
-        values:
         - 第三設計課
       共有したいこと:
         values:
         - 第三設計課
     grouping_scope:
       none:
-        values: &id021
+        values:
         - システム開発部
         - 機電設計部
       organization:
@@ -726,26 +687,17 @@ user_privileges:
         - システム開発部
         - 機電設計部
       grade:
-        values: &id022
+        values:
         - システム開発部
         - 機電設計部
       name:
-        values: &id023
+        values:
         - 第三設計課
-    grouping_scope_filtered:
-      none:
-        values: *id021
-      organization:
-        type: none
-      grade:
-        values: *id022
-      name:
-        values: *id023
   dev1:
     inherits: section_manager
     data_scope:
       時系列:
-        values: &id024
+        values: &id009
         - 開発部
       グループ比較:
         values:
@@ -753,16 +705,16 @@ user_privileges:
       評価:
         values:
         - 開発部
-      分布:
-        values:
-        - 開発部 1課
-        - UTI技術発展処
       個人:
         values:
         - 開発部 1課
         - UTI技術発展処
+      分布:
+        values:
+        - 開発部 1課
+        - UTI技術発展処
       default:
-        values: *id024
+        values: *id009
     section_scope:
       計測値:
         values:
@@ -796,7 +748,7 @@ user_privileges:
     inherits: section_manager
     data_scope:
       時系列:
-        values: &id025
+        values: &id010
         - 開発部
       グループ比較:
         values:
@@ -804,16 +756,16 @@ user_privileges:
       評価:
         values:
         - 開発部
-      分布:
-        values:
-        - 開発部 2課
-        - UK S1-Project
       個人:
         values:
         - 開発部 2課
         - UK S1-Project
+      分布:
+        values:
+        - 開発部 2課
+        - UK S1-Project
       default:
-        values: *id025
+        values: *id010
     section_scope:
       計測値:
         values:
@@ -847,7 +799,7 @@ user_privileges:
     inherits: section_manager
     data_scope:
       時系列:
-        values: &id026
+        values: &id011
         - 開発部
       グループ比較:
         values:
@@ -855,16 +807,16 @@ user_privileges:
       評価:
         values:
         - 開発部
-      分布:
-        values:
-        - 開発部 1課
-        - UTI技術発展処
       個人:
         values:
         - 開発部 1課
         - UTI技術発展処
+      分布:
+        values:
+        - 開発部 1課
+        - UTI技術発展処
       default:
-        values: *id026
+        values: *id011
     section_scope:
       計測値:
         values:
@@ -898,7 +850,7 @@ user_privileges:
     inherits: section_manager
     data_scope:
       時系列:
-        values: &id027
+        values: &id012
         - 開発部
       グループ比較:
         values:
@@ -906,16 +858,16 @@ user_privileges:
       評価:
         values:
         - 開発部
-      分布:
-        values:
-        - 開発部 2課
-        - UK S1-Project
       個人:
         values:
         - 開発部 2課
         - UK S1-Project
+      分布:
+        values:
+        - 開発部 2課
+        - UK S1-Project
       default:
-        values: *id027
+        values: *id012
     section_scope:
       計測値:
         values:
@@ -949,7 +901,7 @@ user_privileges:
     inherits: member
     data_scope:
       時系列:
-        values: &id028
+        values: &id013
         - システム開発部
         - 機電設計部
       グループ比較:
@@ -961,7 +913,7 @@ user_privileges:
         - システム開発部
         - 機電設計部
       default:
-        values: *id028
+        values: *id013
     section_scope:
       計測値:
         values:
@@ -979,7 +931,7 @@ user_privileges:
         anonymize: true
     grouping_scope:
       none:
-        values: &id029
+        values:
         - システム開発部
         - 機電設計部
       organization:
@@ -990,17 +942,6 @@ user_privileges:
         values:
         - システム開発部
         - 機電設計部
-        grade_filter: non_managers
-      name:
-        type: none
-    grouping_scope_filtered:
-      none:
-        values: *id029
-      organization:
-        type: none
-      grade:
-        values:
-        - ソフトウェア開発課
         grade_filter: non_managers
       name:
         type: none
@@ -1008,7 +949,7 @@ user_privileges:
     inherits: member
     data_scope:
       時系列:
-        values: &id030
+        values: &id014
         - システム開発部
         - 機電設計部
       グループ比較:
@@ -1020,7 +961,7 @@ user_privileges:
         - システム開発部
         - 機電設計部
       default:
-        values: *id030
+        values: *id014
     section_scope:
       計測値:
         values:
@@ -1038,7 +979,7 @@ user_privileges:
         anonymize: true
     grouping_scope:
       none:
-        values: &id031
+        values:
         - システム開発部
         - 機電設計部
       organization:
@@ -1049,17 +990,6 @@ user_privileges:
         values:
         - システム開発部
         - 機電設計部
-        grade_filter: non_managers
-      name:
-        type: none
-    grouping_scope_filtered:
-      none:
-        values: *id031
-      organization:
-        type: none
-      grade:
-        values:
-        - 製品技術課
         grade_filter: non_managers
       name:
         type: none
@@ -1067,7 +997,7 @@ user_privileges:
     inherits: member
     data_scope:
       時系列:
-        values: &id032
+        values: &id015
         - システム開発部
         - 機電設計部
       グループ比較:
@@ -1079,7 +1009,7 @@ user_privileges:
         - システム開発部
         - 機電設計部
       default:
-        values: *id032
+        values: *id015
     section_scope:
       計測値:
         values:
@@ -1097,7 +1027,7 @@ user_privileges:
         anonymize: true
     grouping_scope:
       none:
-        values: &id033
+        values:
         - システム開発部
         - 機電設計部
       organization:
@@ -1108,17 +1038,6 @@ user_privileges:
         values:
         - システム開発部
         - 機電設計部
-        grade_filter: non_managers
-      name:
-        type: none
-    grouping_scope_filtered:
-      none:
-        values: *id033
-      organization:
-        type: none
-      grade:
-        values:
-        - 第一設計課
         grade_filter: non_managers
       name:
         type: none
@@ -1126,7 +1045,7 @@ user_privileges:
     inherits: member
     data_scope:
       時系列:
-        values: &id034
+        values: &id016
         - システム開発部
         - 機電設計部
       グループ比較:
@@ -1138,7 +1057,7 @@ user_privileges:
         - システム開発部
         - 機電設計部
       default:
-        values: *id034
+        values: *id016
     section_scope:
       計測値:
         values:
@@ -1156,7 +1075,7 @@ user_privileges:
         anonymize: true
     grouping_scope:
       none:
-        values: &id035
+        values:
         - システム開発部
         - 機電設計部
       organization:
@@ -1167,17 +1086,6 @@ user_privileges:
         values:
         - システム開発部
         - 機電設計部
-        grade_filter: non_managers
-      name:
-        type: none
-    grouping_scope_filtered:
-      none:
-        values: *id035
-      organization:
-        type: none
-      grade:
-        values:
-        - 第二設計課
         grade_filter: non_managers
       name:
         type: none
@@ -1185,7 +1093,7 @@ user_privileges:
     inherits: member
     data_scope:
       時系列:
-        values: &id036
+        values: &id017
         - システム開発部
         - 機電設計部
       グループ比較:
@@ -1197,7 +1105,7 @@ user_privileges:
         - システム開発部
         - 機電設計部
       default:
-        values: *id036
+        values: *id017
     section_scope:
       計測値:
         values:
@@ -1215,7 +1123,7 @@ user_privileges:
         anonymize: true
     grouping_scope:
       none:
-        values: &id037
+        values:
         - システム開発部
         - 機電設計部
       organization:
@@ -1226,17 +1134,6 @@ user_privileges:
         values:
         - システム開発部
         - 機電設計部
-        grade_filter: non_managers
-      name:
-        type: none
-    grouping_scope_filtered:
-      none:
-        values: *id037
-      organization:
-        type: none
-      grade:
-        values:
-        - 第三設計課
         grade_filter: non_managers
       name:
         type: none
@@ -1244,7 +1141,7 @@ user_privileges:
     inherits: member_no_grade_filter
     data_scope:
       時系列:
-        values: &id038
+        values: &id018
         - 開発部
       グループ比較:
         values:
@@ -1253,7 +1150,7 @@ user_privileges:
         values:
         - 開発部
       default:
-        values: *id038
+        values: *id018
     section_scope:
       計測値:
         values:
@@ -1270,7 +1167,7 @@ user_privileges:
         anonymize: true
     grouping_scope:
       none:
-        values: &id039
+        values:
         - 開発部
       organization:
         values:
@@ -1278,24 +1175,13 @@ user_privileges:
       grade:
         values:
         - 開発部
-      name:
-        type: none
-    grouping_scope_filtered:
-      none:
-        values: *id039
-      organization:
-        type: none
-      grade:
-        values:
-        - 開発部 1課
-        - UTI技術発展処
       name:
         type: none
   develop2:
     inherits: member_no_grade_filter
     data_scope:
       時系列:
-        values: &id040
+        values: &id019
         - 開発部
       グループ比較:
         values:
@@ -1304,7 +1190,7 @@ user_privileges:
         values:
         - 開発部
       default:
-        values: *id040
+        values: *id019
     section_scope:
       計測値:
         values:
@@ -1321,7 +1207,7 @@ user_privileges:
         anonymize: true
     grouping_scope:
       none:
-        values: &id041
+        values:
         - 開発部
       organization:
         values:
@@ -1329,16 +1215,5 @@ user_privileges:
       grade:
         values:
         - 開発部
-      name:
-        type: none
-    grouping_scope_filtered:
-      none:
-        values: *id041
-      organization:
-        type: none
-      grade:
-        values:
-        - 開発部 2課
-        - UK S1-Project
       name:
         type: none

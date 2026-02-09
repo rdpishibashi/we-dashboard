@@ -95,7 +95,7 @@ def get_options(series, remove_unset=False, order_key=None):
     return sort_with_config(opts, resolve_order_key(order_key))
 
 
-def render_department_and_group_controls(df, tab_key, grouping_options, management_override=None):
+def render_department_and_group_controls(df, tab_key, grouping_options):
     """
     Render department, section (課), and grouping controls.
 
@@ -103,8 +103,6 @@ def render_department_and_group_controls(df, tab_key, grouping_options, manageme
         df: DataFrame to filter
         tab_key: Unique key prefix for this tab's controls
         grouping_options: List of grouping options to display
-        management_override: Optional dict with 'display_section' and 'match_team' keys
-                            for adding Management as a virtual section option
 
     Returns:
         Tuple of (filtered_df, dept_choice, section_choice, grouping_choice)
@@ -146,11 +144,6 @@ def render_department_and_group_controls(df, tab_key, grouping_options, manageme
         remove_unset=True,
         order_key='section'
     )
-    # Add management override section if provided
-    if management_override:
-        display_section = management_override.get('display_section')
-        if display_section and display_section not in section_options:
-            section_options = section_options + [display_section]
     section_choices = ['すべて'] + section_options if section_options else ['すべて']
     with col2:
         # Determine default index for section
@@ -165,13 +158,7 @@ def render_department_and_group_controls(df, tab_key, grouping_options, manageme
             key=section_key
         )
     if section_choice != 'すべて':
-        # Handle management override section - filter by team instead of section
-        if management_override and section_choice == management_override.get('display_section'):
-            match_team = management_override.get('match_team')
-            if match_team:
-                filtered = filtered[filtered['team'] == match_team]
-        else:
-            filtered = filtered[filtered['section'] == section_choice]
+        filtered = filtered[filtered['section'] == section_choice]
 
     grouping_choice = None
     format_func = lambda x: GROUPING_LABEL_MAP.get(x, x)
@@ -198,3 +185,45 @@ def render_department_and_group_controls(df, tab_key, grouping_options, manageme
                     key=grouping_key
                 )
     return filtered, dept_choice, section_choice, grouping_choice
+
+
+def render_grouping_selector(tab_key: str, grouping_options: list) -> str:
+    """
+    Render only the grouping selector (グルーピング).
+    Replaces render_department_and_group_controls() for new unified filter system.
+
+    Args:
+        tab_key: Tab identifier (timeseries, group_comparison, etc.)
+        grouping_options: List of allowed grouping choices
+
+    Returns:
+        Selected grouping choice
+    """
+    grouping_key = f"{tab_key}_grouping_select"
+
+    # Reset to default if flag is set
+    if st.session_state.get("reset_local_filters", False):
+        if grouping_options:
+            st.session_state[grouping_key] = grouping_options[0]
+
+    # Remove duplicates while preserving order
+    cleaned_options = list(dict.fromkeys(grouping_options))
+    if not cleaned_options:
+        return 'なし'
+
+    # Get current selection
+    default_idx = 0
+    if grouping_key in st.session_state and st.session_state[grouping_key] in cleaned_options:
+        default_idx = cleaned_options.index(st.session_state[grouping_key])
+
+    # Render selectbox
+    format_func = lambda x: GROUPING_LABEL_MAP.get(x, x)
+    grouping_choice = st.selectbox(
+        "グルーピング",
+        cleaned_options,
+        index=default_idx,
+        format_func=format_func,
+        key=grouping_key
+    )
+
+    return grouping_choice

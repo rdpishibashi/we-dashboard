@@ -189,6 +189,19 @@ def reset_filters():
     for key in ["individual_group_value", "individual_selector"]:
         if key in st.session_state:
             del st.session_state[key]
+    # Reset unified sidebar filter keys
+    unified_keys = [
+        "unified_division", "unified_grade", "unified_department",
+        "unified_dimension", "unified_dimension_value", "unified_individual",
+        "unified_grouping"
+    ]
+    for key in unified_keys:
+        if key in st.session_state:
+            del st.session_state[key]
+    # Reset cascade tracking keys (used by should_reset_child_filters)
+    prev_keys = [k for k in list(st.session_state.keys()) if k.startswith("_prev_")]
+    for key in prev_keys:
+        del st.session_state[key]
 
 
 def login(username: str, privilege: Optional[str] = None):
