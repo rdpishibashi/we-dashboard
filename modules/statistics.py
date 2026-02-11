@@ -74,6 +74,9 @@ def format_measured_data(
             group_col: grouping_label,
             metric_col: metric_label
         })
+
+        # Reorder: grouping column, then 年月, then metric
+        measured_data = measured_data[[grouping_label, '年月', metric_label]]
     else:
         # No grouping - show overall average by month
         measured_data = df.groupby('year_month')[metric_col].mean().reset_index()

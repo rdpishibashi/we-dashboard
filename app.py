@@ -48,7 +48,7 @@ import os
 # Import from local modules
 from modules.config import (
     PLOTLY_CHART_KWARGS, RADAR_CHART_CONFIG, DATAFRAME_KWARGS,
-    METRIC_LABELS, SIGNAL_TABLE_COLUMNS, RATING_AXIS_MAX,
+    METRIC_LABELS, SIGNAL_LABELS, SIGNAL_TABLE_COLUMNS, RATING_AXIS_MAX,
     DEFAULT_FILE_PATH, RATING_BAND_HIGH_THRESHOLD, RATING_BAND_LOW_THRESHOLD,
     COLOR_SCALE_START, COLOR_SCALE_END, GROUPING_LABEL_MAP,
 )
@@ -816,9 +816,23 @@ if uploaded_file is not None:
 
                         individual_signal = apply_signal_rating_calculations(individual_signal)
 
-                        display_signal_t = format_individual_signal_data(individual_signal)
+                        display_signal_t, priority_is_neg = format_individual_signal_data(individual_signal)
+
+                        # Apply red/green color to 介入必要度 row (skip when value is ０)
+                        priority_color = 'color: red' if priority_is_neg else 'color: green'
+                        priority_label = SIGNAL_LABELS.get('intervention_priority', '介入必要度')
+
+                        def style_individual_signal(df):
+                            styles = pd.DataFrame('', index=df.index, columns=df.columns)
+                            if priority_label in df.index:
+                                val = str(df.loc[priority_label, '値']).strip()
+                                if val != '０':
+                                    styles.loc[priority_label] = priority_color
+                            return styles
+
+                        styled_signal = display_signal_t.style.apply(style_individual_signal, axis=None)
                         st.dataframe(
-                            display_signal_t,
+                            styled_signal,
                             column_config={
                                 "Index": st.column_config.TextColumn(
                                     "Index",

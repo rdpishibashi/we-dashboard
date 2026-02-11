@@ -7,7 +7,8 @@ import streamlit as st
 from .config import (
     ENGAGEMENT_DIVISOR, COMPONENT_DIVISOR,
     SIGNAL_LABELS, POSITIVE_TRENDS, NEGATIVE_TRENDS,
-    INDIVIDUAL_SIGNAL_COLUMNS, DATAFRAME_KWARGS
+    INDIVIDUAL_SIGNAL_COLUMNS, DATAFRAME_KWARGS, LEVEL_LABELS,
+    INTERVENTION_PRIORITY_THRESHOLD
 )
 
 
@@ -22,29 +23,65 @@ def apply_signal_rating_calculations(signal_df):
     return signal_df
 
 
-def style_trend_column(df):
+def derive_intervention_priority(df):
     """
-    Apply color styling to 中期トレンド column based on trend value.
+    Derive intervention_priority and _priority_is_neg from neg/pos columns.
+
+    When both qualify (> INTERVENTION_PRIORITY_THRESHOLD), _neg takes precedence.
+    The displayed value is raw - INTERVENTION_PRIORITY_THRESHOLD (minimum 1).
 
     Args:
-        df: DataFrame with 中期トレンド column
+        df: DataFrame with intervention_priority_neg and intervention_priority_pos columns
 
     Returns:
-        Styled DataFrame with colored trend values
+        DataFrame with added intervention_priority (derived) and _priority_is_neg (bool) columns
     """
-    def color_trend(val):
-        if pd.isna(val) or val == '' or val == '-':
-            return ''
-        val_str = str(val)
-        if val_str in POSITIVE_TRENDS:
-            return 'color: green'
-        elif val_str in NEGATIVE_TRENDS:
-            return 'color: red'
-        return ''
+    df = df.copy()
+    neg = df['intervention_priority_neg'].fillna(0)
+    pos = df['intervention_priority_pos'].fillna(0)
 
-    if '中期トレンド' in df.columns:
-        return df.style.map(color_trend, subset=['中期トレンド'])
+    threshold = INTERVENTION_PRIORITY_THRESHOLD
+    neg_qualifies = neg > threshold
+    pos_qualifies = pos > threshold
+
+    # _neg takes precedence when both qualify
+    df['_priority_is_neg'] = neg_qualifies | (~pos_qualifies)
+    # Select the raw value, then subtract threshold for display
+    raw = neg.where(df['_priority_is_neg'], pos)
+    df['intervention_priority'] = raw - threshold
+
     return df
+
+
+def style_signal_columns(df, priority_is_neg):
+    """
+    Apply color styling to 介入必要度 column.
+
+    - 介入必要度: red when from _neg, green when from _pos
+
+    Args:
+        df: Display DataFrame with 介入必要度 column
+        priority_is_neg: Series of bools aligned with df index
+
+    Returns:
+        Styled DataFrame
+    """
+    is_neg = priority_is_neg.values
+    priority_label = SIGNAL_LABELS['intervention_priority']
+
+    def style_row(row):
+        idx = row.name
+        pos_idx = df.index.get_loc(idx)
+        neg = is_neg[pos_idx]
+        styles = [''] * len(row)
+
+        for col_idx, col_name in enumerate(row.index):
+            if col_name == priority_label:
+                styles[col_idx] = 'color: red' if neg else 'color: green'
+
+        return styles
+
+    return df.style.apply(style_row, axis=1)
 
 
 def format_signal_display_columns(df):
@@ -75,9 +112,10 @@ def get_signal_column_config():
     Returns:
         Dictionary of column configurations
     """
+    priority_label = SIGNAL_LABELS['intervention_priority']
     return {
-        "介入優先度": st.column_config.TextColumn(
-            "介入優先度",
+        priority_label: st.column_config.TextColumn(
+            priority_label,
             width="small",
         ),
     }
@@ -88,7 +126,7 @@ def render_signal_table(signals, display_cols):
     Render signal table with formatting and styling.
 
     Args:
-        signals: Signal dataframe
+        signals: Signal dataframe (with _priority_is_neg column)
         display_cols: List of columns to display
     """
     if signals.empty:
@@ -101,13 +139,16 @@ def render_signal_table(signals, display_cols):
         st.error(f"signal データに必要なカラムがありません: {', '.join(missing_cols)}")
         return
 
+    # Extract _priority_is_neg before creating display_df
+    priority_is_neg = signals['_priority_is_neg'].reset_index(drop=True)
+
     # Prepare display dataframe
-    display_df = signals[display_cols].copy()
+    display_df = signals[display_cols].copy().reset_index(drop=True)
     display_df = format_signal_display_columns(display_df)
     display_df = display_df.rename(columns=SIGNAL_LABELS)
 
     # Apply styling and display
-    styled_df = style_trend_column(display_df)
+    styled_df = style_signal_columns(display_df, priority_is_neg)
     st.dataframe(
         styled_df,
         column_config=get_signal_column_config(),
@@ -116,16 +157,18 @@ def render_signal_table(signals, display_cols):
 
     col1, col2, _ = st.columns([27, 27, 26])
     with col1:
-        with st.popover("介入優先度について"):
+        with st.popover("介入必要度について"):
             st.markdown(
-                "中期トレンドと短期変化の内容によって、状況分析に基づいたケアやサポート"
-                "（ネガティブの場合）や充実した状態の要因分析（ポジティブの場合）の"
-                "必要度合いを示している。大きな値ほど緊急度は高い。"
+                "中期傾向と短期傾向の内容によって、ケアやサポートの必要度合い、"
+                "もしくは充実した状態の要因分析の必要度合いを示している。\n\n"
+                "- **赤色の数値**: ネガティブな状態への介入（ケア・サポート）の必要度\n"
+                "- **緑色の数値**: ポジティブな状態の要因分析の必要度\n\n"
+                "大きな値ほど緊急度は高い。"
             )
     with col2:
-        with st.popover("中期トレンドについて"):
+        with st.popover("中期傾向について"):
             st.markdown(
-                "| **中期トレンド** | **説明** |\n"
+                "| **中期傾向** | **説明** |\n"
                 "| --- | --- |\n"
                 "| 上昇加速 | 上昇傾向の中、急上昇している |\n"
                 "| 上昇継続 | 上昇傾向が継続している |\n"
@@ -163,6 +206,11 @@ def replace_abbreviations(text):
     return text
 
 
+def _to_fullwidth(s):
+    """Convert ASCII digits to Japanese full-width digits."""
+    return s.translate(str.maketrans('0123456789', '０１２３４５６７８９'))
+
+
 def format_individual_signal_data(signal_data):
     """
     Format individual signal data for display.
@@ -171,8 +219,12 @@ def format_individual_signal_data(signal_data):
         signal_data: Individual signal dataframe
 
     Returns:
-        Formatted and transposed dataframe
+        Tuple of (formatted transposed dataframe, priority_is_neg bool)
     """
+    # Derive intervention_priority from neg/pos columns
+    signal_data = derive_intervention_priority(signal_data)
+    priority_is_neg = signal_data['_priority_is_neg'].iloc[0]
+
     display_signal = signal_data[INDIVIDUAL_SIGNAL_COLUMNS].copy()
 
     # Process strength/weakness columns
@@ -180,14 +232,31 @@ def format_individual_signal_data(signal_data):
         if col in display_signal.columns:
             display_signal[col] = display_signal[col].apply(replace_abbreviations)
 
-    # Format intervention_priority as integer
+    # Format intervention_priority: clamp to 0, full-width digits, neg/pos suffix
+    # When value is 0, no suffix and no color (handled in app.py styling)
     if 'intervention_priority' in display_signal.columns:
+        suffix = "(negative)" if priority_is_neg else "(positive)"
+
+        def _fmt_priority(x):
+            if pd.isna(x):
+                return "-"
+            val = max(int(x), 0)
+            if val == 0:
+                return _to_fullwidth("0")
+            return f"{_to_fullwidth(str(val))} {suffix}"
+
         display_signal['intervention_priority'] = display_signal['intervention_priority'].apply(
-            lambda x: f"{x:.0f}" if pd.notna(x) else "-"
+            _fmt_priority
+        )
+
+    # Translate level values to Japanese
+    if 'level' in display_signal.columns:
+        display_signal['level'] = display_signal['level'].apply(
+            lambda x: LEVEL_LABELS.get(str(x), str(x)) if pd.notna(x) else "-"
         )
 
     # Format other columns as strings
-    for col in ['trend_refined', 'change_tag', 'stability']:
+    for col in ['trend_recent', 'trend_refined', 'change_tag', 'stability']:
         if col in display_signal.columns:
             display_signal[col] = display_signal[col].apply(
                 lambda x: str(x) if pd.notna(x) else "-"
@@ -201,7 +270,7 @@ def format_individual_signal_data(signal_data):
     )
     display_signal_t.index.name = 'Index'
 
-    return display_signal_t
+    return display_signal_t, priority_is_neg
 
 
 def sort_signals_by_trend_and_priority(signals):
@@ -272,7 +341,7 @@ def get_signal_data(signal_df, filtered_df, end_dt):
         end_dt: End date of global period filter (defines "latest wave")
 
     Returns:
-        Filtered signal dataframe for individuals with intervention_priority > 1
+        Filtered signal dataframe for individuals exceeding INTERVENTION_PRIORITY_THRESHOLD
     """
     # Filter to latest wave
     latest_wave = signal_df[signal_df['year_month_dt'] == end_dt].copy()
@@ -281,8 +350,14 @@ def get_signal_data(signal_df, filtered_df, end_dt):
     valid_names = filtered_df['name'].dropna().unique()
     latest_wave = latest_wave[latest_wave['name'].isin(valid_names)]
 
-    # Filter to intervention priority > 1
-    signals = latest_wave[latest_wave['intervention_priority'] > 1].copy()
+    # Filter to intervention priority exceeding threshold
+    threshold = INTERVENTION_PRIORITY_THRESHOLD
+    neg = latest_wave['intervention_priority_neg'].fillna(0)
+    pos = latest_wave['intervention_priority_pos'].fillna(0)
+    signals = latest_wave[(neg > threshold) | (pos > threshold)].copy()
+
+    # Derive combined intervention_priority and _priority_is_neg
+    signals = derive_intervention_priority(signals)
 
     # Sort by trend group and priority
     signals = sort_signals_by_trend_and_priority(signals)

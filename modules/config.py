@@ -54,9 +54,10 @@ METRIC_LABELS = {
 SIGNAL_LABELS = {
     'section': '課',
     'name': '氏名',
-    'intervention_priority': '介入優先度',
-    'trend_recent': '短期変化',
-    'trend_refined': '中期トレンド',
+    'intervention_priority': '介入必要度',
+    'level': 'レベル',
+    'trend_recent': '短期傾向',
+    'trend_refined': '中期傾向',
     'change_tag': '短期変動',
     'stability': '中期安定性',
     'engagement_rating': 'エンゲージメント',
@@ -69,6 +70,15 @@ SIGNAL_LABELS = {
     'weakness_mid': '弱み（中期）'
 }
 
+# Level value mapping (English → Japanese)
+LEVEL_LABELS = {
+    'Critical': '低調',
+    'Low': 'やや低調',
+    'Moderate': '標準',
+    'High': '良好',
+    'Thriving': '非常に良好',
+}
+
 # Rating axis maximum
 RATING_AXIS_MAX = 10.3
 
@@ -76,10 +86,15 @@ RATING_AXIS_MAX = 10.3
 POSITIVE_TRENDS = ['上昇加速', '上昇継続', '回復期待', '回復', '復活', '上昇期待', '上昇']
 NEGATIVE_TRENDS = ['低下懸念', '悪化', '低下危機', '低下加速', '低下継続', '低下警戒', '下降']
 
+# Intervention priority threshold: rows with _neg or _pos > this value are shown;
+# displayed value = raw value - this threshold (so minimum displayed is 1)
+INTERVENTION_PRIORITY_THRESHOLD = 2
+
 # Signal table display columns
 SIGNAL_TABLE_COLUMNS = ['name', 'section', 'intervention_priority', 'trend_recent', 'trend_refined', 'change_tag', 'stability']
 INDIVIDUAL_SIGNAL_COLUMNS = [
-    'intervention_priority', 'trend_refined', 'change_tag', 'stability',
+    'intervention_priority', 'level', 'trend_recent',
+    'trend_refined', 'change_tag', 'stability',
     'strength_short', 'weakness_short', 'strength_mid', 'weakness_mid'
 ]
 
