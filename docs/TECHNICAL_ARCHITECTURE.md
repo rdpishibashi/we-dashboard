@@ -56,28 +56,16 @@ WE-Dashboard/
 
 ### 2.1 入力Excelファイル構成
 
-入力ファイル（`EngagementMasterSS.xlsx`）は3つのシートで構成されます。
+入力ファイル（`EngagementMasterSS.xlsx`）は2つのデータシートで構成されます。
 
-#### rating シート（評価データ）
-| カラム | 説明 | 必須 |
-|--------|------|------|
-| year | 年 | ○ |
-| month | 月 | ○ |
-| mail_address | メールアドレス | ○ |
-| name | 氏名 | ○ |
-| factor | 評価項目（エンゲージメント/活力/熱意/没頭） | ○ |
-| score | スコア | ○ |
-| current_division | 部門（現所属） | |
-| current_department | 部署（現所属） | |
-| current_section | 課（現所属） | |
-| current_team | チーム | |
-| current_project | プロジェクト | |
-| grade | 職位 | |
+#### rating2 シート（唯一のデータソース）
 
-#### rating2 シート（シグナルデータ）
+pivot_df（正規化済み評価データ）とsignal_df（シグナルデータ）の両方がこのシートから生成されます。
+
 | カラム | 説明 |
 |--------|------|
 | year, month | 年月 |
+| mail_address | メールアドレス |
 | name | 氏名 |
 | current_division | 部門（現所属） |
 | current_department | 部署（現所属） |
@@ -85,28 +73,26 @@ WE-Dashboard/
 | current_team | チーム |
 | current_project | プロジェクト |
 | grade | 職位 |
-| intervention_priority | 介入優先度 |
+| intervention_priority_neg | 介入優先度（ネガティブ） |
+| intervention_priority_pos | 介入優先度（ポジティブ） |
 | trend_recent | 短期変化（trend_recent） |
 | trend_refined | 中期トレンド |
 | change_tag | 短期変動 |
 | stability | 中期安定性 |
 | strength_short/mid | 強み（短期/中期） |
 | weakness_short/mid | 弱み（短期/中期） |
-| engagement_rating | エンゲージメント値 |
-| vigor_rating | 活力値 |
-| dedication_rating | 熱意値 |
-| absorption_rating | 没頭値 |
+| engagement_rating | エンゲージメント値（生スコア 0-54） |
+| vigor_rating | 活力値（生スコア 0-18） |
+| dedication_rating | 熱意値（生スコア 0-18） |
+| absorption_rating | 没頭値（生スコア 0-18） |
 
-**重要: rating2シートの組織列はratingシートと異なる場合あり**
-
-rating2シートの組織列（section, team等）の値は、ratingシートと一致しない場合があります。
-signal_dfをフィルタリングする際は、組織列ではなく**名前**でフィルタリングすることを推奨します：
-
-```python
-# 推奨: メインdfの名前でフィルタリング
-names_in_filtered = main_df['name'].unique()
-signal_df = signal_df[signal_df['name'].isin(names_in_filtered)]
-```
+**データ変換:**
+- `signal_df`: rating2シートの全カラムをそのまま保持（生スコア）
+- `pivot_df`: rating2の評価カラムを正規化（0-10スケール）して生成
+  - `engagement_rating / ENGAGEMENT_DIVISOR (5.4)`
+  - `vigor_rating / COMPONENT_DIVISOR (1.8)`
+  - `dedication_rating / COMPONENT_DIVISOR (1.8)`
+  - `absorption_rating / COMPONENT_DIVISOR (1.8)`
 
 #### comment シート（コメントデータ）
 | カラム | 説明 |
@@ -252,10 +238,9 @@ graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
 | `load_data(uploaded_file)` | データ読込・前処理（キャッシュ対応） |
 
 **データ変換処理:**
-1. ratingシートをpivot形式に変換（factor列→各評価列）
-2. 年月カラム生成（`year_month`, `year_month_dt`）
-3. 組織カラムマッピング
-4. 欠損値を「未設定」で補完
+1. rating2シートを読み込み、signal_dfを構築（組織カラムマッピング、年月カラム生成）
+2. signal_dfから評価カラムを選択・正規化してpivot_dfを導出
+3. 欠損値を「未設定」で補完
 
 ### 3.5 modules/charts.py（グラフ生成モジュール）
 
@@ -597,6 +582,7 @@ statsmodels
 | 2026-02-09 | サイドバー再構成（表示カテゴリ→フィルター設定expander→データexpander） |
 | 2026-02-09 | グループ（絞り込み軸）メタセレクタを廃止、課/チーム/プロジェクト個別ドロップダウンに変更 |
 | 2026-02-09 | filter_helpers.py追加（サイドバーフィルターカスケードロジック） |
+| 2026-02-10 | ratingシート依存を廃止、rating2シートからpivot_dfを導出（データソース統一） |
 
 ---
 
@@ -610,7 +596,7 @@ statsmodels
 | 権限フィルタリング | セクションスコープは部署名を含む場合あり、`filter_dataframe_by_scope()`を使用 |
 | チームオーバーライド | `grouping == 'section'`（課別）の時のみ適用 |
 | 統計トレンド列 | 個人別グルーピング時にsignal_dfから結合 |
-| signal_dfフィルタリング | rating2シートの組織列はratingシートと異なる場合あり - 名前でフィルタリング |
+| signal_dfフィルタリング | signal_dfのフィルタリングは名前ベースを推奨 |
 
 ### 9.2 共有したいことセクション
 
@@ -645,19 +631,11 @@ graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
 
 ### 9.5 signal_dfのフィルタリング
 
-rating2シート（signal_df）とratingシート（main df）では組織列の値が異なる場合があります。
-特にマネジメント選択時は、team列ではなく名前でフィルタリングする必要があります：
+signal_dfにはシグナル固有のカラム（trend, intervention_priority等）が含まれるため、
+pivot_dfでフィルタリングした結果と同期させる場合は名前ベースでフィルタリングします：
 
 ```python
-# 誤: team列でフィルタリング（rating2にteam値がない場合、空になる）
-tab_signal_df = tab_signal_df[tab_signal_df['team'] == 'Management']
-
-# 正: メインdfの名前でフィルタリング
+# 推奨: メインdfの名前でフィルタリング
 names_in_filtered = ts_df['name'].unique()
 tab_signal_df = tab_signal_df[tab_signal_df['name'].isin(names_in_filtered)]
 ```
-
-この問題は以下の場合に発生します：
-- 課選択で「マネジメント」を選択
-- グルーピングで「個人別」を選択
-- 「主要な指標」テーブルにトレンド列（短期変化/中期トレンド）が表示されない

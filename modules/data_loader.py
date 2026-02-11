@@ -6,6 +6,8 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 
+from .config import ENGAGEMENT_DIVISOR, COMPONENT_DIVISOR
+
 
 def get_excel_password():
     """
@@ -78,11 +80,16 @@ def load_data(uploaded_file):
     Load and preprocess data file.
     Supports password-protected Excel files.
 
+    Reads the rating2 sheet as the sole data source for both signal_df (raw
+    scores + signal columns) and pivot_df (normalized 0-10 scale ratings).
+    Also reads the comment sheet for comment data.
+
     Args:
         uploaded_file: File object or path to Excel file
 
     Returns:
-        Tuple of (pivot_df, signal_df, comment_df) - rating data, signal data, and comment data
+        Tuple of (pivot_df, signal_df, comment_df) - normalized rating data,
+        raw signal data, and comment data
 
     Raises:
         ValueError: If required columns are missing or data is invalid
@@ -95,77 +102,7 @@ def load_data(uploaded_file):
     except Exception as e:
         raise ValueError(f"ファイルの処理中にエラーが発生しました: {e}")
 
-    # Read Excel file
-    try:
-        raw_df = pd.read_excel(decrypted_file, sheet_name='rating', engine='openpyxl')
-    except Exception as e:
-        raise ValueError(f"rating シートの読み込みに失敗しました: {e}")
-    required_cols = {'year', 'month', 'mail_address', 'name', 'factor', 'score'}
-    missing_cols = required_cols - set(raw_df.columns)
-    if missing_cols:
-        raise ValueError(f"必要なカラムが不足しています: {', '.join(sorted(missing_cols))}")
-
-    df = raw_df.copy()
-    df['year'] = pd.to_numeric(df['year'], errors='coerce')
-    df['month'] = pd.to_numeric(df['month'], errors='coerce')
-    if df['year'].isna().any() or df['month'].isna().any():
-        raise ValueError("year/monthの値に欠損が存在します。")
-    df['year'] = df['year'].astype(int)
-    df['month'] = df['month'].astype(int)
-
-    def get_column(col_name):
-        if col_name in raw_df.columns:
-            return raw_df[col_name]
-        return pd.Series([None] * len(raw_df))
-
-    # Organizational structure mapping (current_* = current affiliation)
-    # Hierarchy: Division (部門) → Department (部署) → Section (課)
-    # See modules/config.py for ORG_COLUMNS and ORG_EXCEL_COLUMNS definitions
-    df['division'] = get_column('current_division')     # 部門 (Division)
-    df['department'] = get_column('current_department') # 部署 (Department)
-    df['section'] = get_column('current_section')       # 課 (Section)
-    df['team'] = get_column('current_team')
-    df['project'] = get_column('current_project')
-    df['grade'] = get_column('grade')
-
-    factor_map = {
-        'エンゲージメント': 'engagement_rating',
-        '活力': 'vigor_rating',
-        '熱意': 'dedication_rating',
-        '没頭': 'absorption_rating'
-    }
-    df['metric'] = df['factor'].map(factor_map)
-    if df['metric'].isna().any():
-        unknown = sorted(df.loc[df['metric'].isna(), 'factor'].dropna().unique())
-        raise ValueError(f"未対応のfactor値があります: {', '.join(unknown)}")
-
-    fill_cols = ['division', 'department', 'section', 'team', 'project', 'grade']
-    for col in fill_cols:
-        if col not in df.columns:
-            df[col] = pd.Series([None] * len(df))
-        df[col] = df[col].fillna('未設定')
-
-    id_cols = ['year', 'month', 'mail_address', 'name', 'division', 'department', 'section', 'team', 'project', 'grade']
-    pivot_df = (
-        df[id_cols + ['metric', 'score']]
-        .pivot_table(index=id_cols, columns='metric', values='score', aggfunc='mean')
-        .reset_index()
-    )
-    pivot_df.columns.name = None
-
-    pivot_df['year'] = pivot_df['year'].astype(int)
-    pivot_df['month'] = pivot_df['month'].astype(int)
-
-    for col in factor_map.values():
-        if col not in pivot_df.columns:
-            pivot_df[col] = np.nan
-
-    pivot_df['year_month'] = (
-        pivot_df['year'].astype(str) + '-' + pivot_df['month'].astype(str).str.zfill(2)
-    )
-    pivot_df['year_month_dt'] = pd.to_datetime(pivot_df['year_month'], format='%Y-%m', errors='coerce')
-
-    # Load rating2 sheet for signal data
+    # Load rating2 sheet (sole data source for both signal_df and pivot_df)
     try:
         signal_raw_df = pd.read_excel(decrypted_file, sheet_name='rating2', engine='openpyxl')
     except Exception as e:
@@ -192,7 +129,7 @@ def load_data(uploaded_file):
             return signal_raw_df[col_name]
         return pd.Series([None] * len(signal_raw_df))
 
-    # Organizational structure mapping (same as rating sheet)
+    # Organizational structure mapping (current_* = current affiliation)
     # Hierarchy: Division (部門) → Department (部署) → Section (課)
     signal_df['division'] = get_signal_column('current_division')     # 部門 (Division)
     signal_df['department'] = get_signal_column('current_department') # 部署 (Department)
@@ -207,6 +144,25 @@ def load_data(uploaded_file):
         if col not in signal_df.columns:
             signal_df[col] = pd.Series([None] * len(signal_df))
         signal_df[col] = signal_df[col].fillna('未設定')
+
+    # Derive pivot_df from signal_df by normalizing raw ratings
+    # rating2 stores raw scores (0-54 for engagement, 0-18 for components);
+    # dividing by the respective divisors produces the 0-10 scale.
+    rating_cols = ['engagement_rating', 'vigor_rating', 'dedication_rating', 'absorption_rating']
+    id_cols = ['year', 'month', 'name', 'division', 'department', 'section',
+               'team', 'project', 'grade']
+    if 'mail_address' in signal_df.columns:
+        id_cols.insert(2, 'mail_address')
+
+    pivot_df = signal_df[id_cols + rating_cols + ['year_month', 'year_month_dt']].copy()
+
+    for col in rating_cols:
+        if col not in pivot_df.columns:
+            pivot_df[col] = np.nan
+    pivot_df['engagement_rating'] = pivot_df['engagement_rating'] / ENGAGEMENT_DIVISOR
+    pivot_df['vigor_rating'] = pivot_df['vigor_rating'] / COMPONENT_DIVISOR
+    pivot_df['dedication_rating'] = pivot_df['dedication_rating'] / COMPONENT_DIVISOR
+    pivot_df['absorption_rating'] = pivot_df['absorption_rating'] / COMPONENT_DIVISOR
 
     # Load comment sheet for concern and comment data
     try:

@@ -42,7 +42,9 @@ def _decrypt_and_load(sheet_name: str) -> pd.DataFrame:
 
 
 def _build_pivot_df(raw_df: pd.DataFrame) -> pd.DataFrame:
-    """Build pivot DataFrame from raw rating data (same as data_loader.py)."""
+    """Build pivot DataFrame from raw rating2 data by normalizing ratings."""
+    from modules.config import ENGAGEMENT_DIVISOR, COMPONENT_DIVISOR
+
     df = raw_df.copy()
     df['year'] = df['year'].astype(int)
     df['month'] = df['month'].astype(int)
@@ -59,30 +61,25 @@ def _build_pivot_df(raw_df: pd.DataFrame) -> pd.DataFrame:
     if 'grade' not in df.columns:
         df['grade'] = None
 
-    factor_map = {
-        'エンゲージメント': 'engagement_rating',
-        '活力': 'vigor_rating',
-        '熱意': 'dedication_rating',
-        '没頭': 'absorption_rating',
-    }
-    df['metric'] = df['factor'].map(factor_map)
-
     fill_cols = ['division', 'department', 'section', 'team', 'project', 'grade']
     for col in fill_cols:
         if col not in df.columns:
             df[col] = None
         df[col] = df[col].fillna('未設定')
 
-    id_cols = [
-        'year', 'month', 'mail_address', 'name',
-        'division', 'department', 'section', 'team', 'project', 'grade',
-    ]
-    pivot_df = (
-        df[id_cols + ['metric', 'score']]
-        .pivot_table(index=id_cols, columns='metric', values='score', aggfunc='mean')
-        .reset_index()
-    )
-    pivot_df.columns.name = None
+    rating_cols = ['engagement_rating', 'vigor_rating', 'dedication_rating', 'absorption_rating']
+    id_cols = ['year', 'month', 'name', 'division', 'department', 'section',
+               'team', 'project', 'grade']
+    if 'mail_address' in df.columns:
+        id_cols.insert(2, 'mail_address')
+
+    pivot_df = df[id_cols + rating_cols].copy()
+
+    pivot_df['engagement_rating'] = pivot_df['engagement_rating'] / ENGAGEMENT_DIVISOR
+    pivot_df['vigor_rating'] = pivot_df['vigor_rating'] / COMPONENT_DIVISOR
+    pivot_df['dedication_rating'] = pivot_df['dedication_rating'] / COMPONENT_DIVISOR
+    pivot_df['absorption_rating'] = pivot_df['absorption_rating'] / COMPONENT_DIVISOR
+
     pivot_df['year_month'] = (
         pivot_df['year'].astype(int).astype(str) + '-'
         + pivot_df['month'].astype(int).astype(str).str.zfill(2)
@@ -102,7 +99,7 @@ def real_df():
     """Load the real pivot DataFrame from EngagementMasterSS.xlsx (cached per session)."""
     if not EXCEL_FILE.exists():
         pytest.skip(f'{EXCEL_FILE} not found')
-    raw = _decrypt_and_load('rating')
+    raw = _decrypt_and_load('rating2')
     return _build_pivot_df(raw)
 
 

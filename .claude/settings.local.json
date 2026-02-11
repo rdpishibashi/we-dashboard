@@ -20,7 +20,9 @@
       "Bash(git branch:*)",
       "Bash(git worktree:*)",
       "Bash(git tag:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(pip3 list:*)",
+      "Bash(pip install:*)"
     ]
   }
 }
