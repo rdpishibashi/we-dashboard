@@ -96,10 +96,10 @@ def format_signal_display_columns(df):
     """
     df = df.copy()
 
-    # Format intervention_priority as integer
+    # Format intervention_priority as full-width integer
     if 'intervention_priority' in df.columns:
         df['intervention_priority'] = df['intervention_priority'].apply(
-            lambda x: f"{x:.0f}" if pd.notna(x) else "-"
+            lambda x: _to_fullwidth(f"{x:.0f}") if pd.notna(x) else "-"
         )
 
     return df
@@ -278,12 +278,14 @@ def sort_signals_by_trend_and_priority(signals):
     Sort signal data by trend group, intervention_priority, and section (課).
 
     Sort order:
-    1. Trend group (negative first, then neutral, then positive)
+    1. Priority type (negative first, then positive)
     2. Intervention priority (descending)
-    3. Section (課) - using configured order from group_order_config.json
+    3. Trend group (negative trends first, then neutral, then positive)
+    4. Section (課) - using configured order from group_order_config.json
 
     Args:
-        signals: Signal dataframe with section, trend_refined and intervention_priority columns
+        signals: Signal dataframe with _priority_is_neg, section, trend_refined
+                 and intervention_priority columns
 
     Returns:
         Sorted signal dataframe
@@ -319,10 +321,10 @@ def sort_signals_by_trend_and_priority(signals):
         # Fallback to alphabetical order
         signals['_section_order'] = signals['section'] if 'section' in signals.columns else 0
 
-    # Sort by trend group, intervention_priority, then section
+    # Sort by priority type (neg first), priority value, trend group, then section
     signals = signals.sort_values(
-        ['_trend_group', 'intervention_priority', '_section_order'],
-        ascending=[True, False, True]
+        ['_priority_is_neg', 'intervention_priority', '_trend_group', '_section_order'],
+        ascending=[False, False, True, True]
     )
 
     # Drop temporary columns
