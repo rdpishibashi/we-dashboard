@@ -251,7 +251,7 @@ if uploaded_file is not None:
         )
 
         # データアップロード section (collapsible, at bottom of sidebar)
-        with st.sidebar.expander("📁 データ", expanded=False):
+        with st.sidebar.expander("データ", expanded=False):
             new_uploaded_file = st.file_uploader(
                 "データファイルをアップロード",
                 type=['xlsx', 'xls'],
