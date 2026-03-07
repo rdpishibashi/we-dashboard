@@ -142,6 +142,17 @@ def get_current_privilege() -> Optional[str]:
     return st.session_state.get("current_privilege")
 
 
+def get_current_display_name() -> Optional[str]:
+    """
+    Get the display name of the currently logged-in user.
+
+    Returns:
+        Display name string or None if not logged in
+    """
+    init_auth_state()
+    return st.session_state.get("current_display_name")
+
+
 def has_privilege(required_privileges: Union[list[str], str]) -> bool:
     """
     Check if the current user has any of the required privileges.
@@ -204,17 +215,19 @@ def reset_filters():
         del st.session_state[key]
 
 
-def login(username: str, privilege: Optional[str] = None):
+def login(username: str, privilege: Optional[str] = None, display_name: Optional[str] = None):
     """
     Set the user as logged in.
 
     Args:
         username: The username to log in
         privilege: The user's privilege class
+        display_name: The user's display name for UI
     """
     st.session_state["authenticated"] = True
     st.session_state["current_user"] = username
     st.session_state["current_privilege"] = privilege
+    st.session_state["current_display_name"] = display_name or username
     reset_filters()
 
 
@@ -223,6 +236,7 @@ def logout():
     st.session_state["authenticated"] = False
     st.session_state["current_user"] = None
     st.session_state["current_privilege"] = None
+    st.session_state["current_display_name"] = None
     reset_filters()
 
 
@@ -251,7 +265,7 @@ def render_login_ui():
             if st.button("ログイン", key="login_button"):
                 user_data = verify_login(username, password)
                 if user_data:
-                    login(username, user_data.get("privilege"))
+                    login(username, user_data.get("privilege"), user_data.get("display_name"))
                     st.success("ログインしました")
                     return True
                 else:

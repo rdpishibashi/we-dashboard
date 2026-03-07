@@ -163,6 +163,9 @@ if uploaded_file is not None:
         st.error(f"データ読み込みエラー: {e}")
         st.stop()
 
+    # Compute latest_year_month from full comment data (before period filtering)
+    latest_year_month = comment_df['year_month_dt'].max() if not comment_df.empty else None
+
     # Get privilege manager for per-tab filtering
     privilege_mgr = get_privilege_manager()
 
@@ -281,6 +284,13 @@ if uploaded_file is not None:
             (comment_df['year_month_dt'] <= end_dt)
         ].copy()
 
+        # Apply sidebar organization filters to comment_df
+        # (same approach as signal_df: filter by mail_address from filtered main df)
+        valid_mail_addresses = filtered_df['mail_address'].dropna().unique()
+        filtered_comment_df = filtered_comment_df[
+            filtered_comment_df['mail_address'].isin(valid_mail_addresses)
+        ]
+
         # =================================================================
         # TAB RENDERING (st.tabs)
         # =================================================================
@@ -348,7 +358,8 @@ if uploaded_file is not None:
                 render_comments_and_signals(
                     tab_signal_df, ts_df, filtered_comment_df,
                     start_dt, end_dt, "ts",
-                    privilege_mgr, current_privilege, is_authenticated()
+                    privilege_mgr, current_privilege, is_authenticated(),
+                    latest_year_month
                 )
 
         # =============================================================
@@ -411,8 +422,7 @@ if uploaded_file is not None:
                             xaxis_title='年月',
                             yaxis_title=METRIC_LABELS.get(selected_metric, selected_metric),
                             showlegend=False,
-                            height=480
-                        )
+                            height=480                        )
                         fig.update_yaxes(range=[0, RATING_AXIS_MAX], dtick=1)
                         fig.update_traces(
                             marker_line_color='white',
@@ -446,7 +456,8 @@ if uploaded_file is not None:
                     render_comments_and_signals(
                         tab_signal_df, comparison_df, filtered_comment_df,
                         start_dt, end_dt, "gc_no_group",
-                        privilege_mgr, current_privilege, is_authenticated()
+                        privilege_mgr, current_privilege, is_authenticated(),
+                        latest_year_month
                     )
 
                 else:
@@ -482,7 +493,8 @@ if uploaded_file is not None:
                     render_comments_and_signals(
                         tab_signal_df, comparison_df, filtered_comment_df,
                         start_dt, end_dt, "gc_grouped",
-                        privilege_mgr, current_privilege, is_authenticated()
+                        privilege_mgr, current_privilege, is_authenticated(),
+                        latest_year_month
                     )
 
         # =============================================================
@@ -646,8 +658,7 @@ if uploaded_file is not None:
                                 )
                             ),
                             title='ワーク･エンゲージメント構成要素',
-                            height=500
-                        )
+                            height=500                        )
                         st.plotly_chart(
                             fig,
                             width='stretch',
@@ -791,10 +802,31 @@ if uploaded_file is not None:
                             if share_period == "直近1ヶ月":
                                 comment_data = comment_data[comment_data['year_month_dt'] == end_dt]
                             if not comment_data.empty:
+                                from modules.response_manager import (
+                                    load_responses, get_responses_for_comment, make_comment_key
+                                )
+                                from modules.components import _render_responses, _render_response_input
+                                anonymize_names = privilege_mgr.should_anonymize_section(current_privilege, "共有したいこと")
+                                can_respond = not anonymize_names
+                                responses_df = load_responses()
+                                member_email = individual_mail or ''
                                 comment_data = comment_data.sort_values('year_month', ascending=False)
                                 for _, row in comment_data.iterrows():
                                     st.markdown(f"**{row['year_month']}**")
                                     st.text(row['comment'])
+                                    _render_responses(
+                                        responses_df, row['year_month'],
+                                        member_email, row['comment']
+                                    )
+                                    if (can_respond and latest_year_month is not None
+                                            and row['year_month_dt'] == latest_year_month):
+                                        comment_key = make_comment_key(
+                                            row['year_month'], member_email, row['comment']
+                                        )
+                                        _render_response_input(
+                                            "ind", comment_key,
+                                            row['year_month'], member_email, row['comment']
+                                        )
                                     st.divider()
                             else:
                                 st.info("データがありません")

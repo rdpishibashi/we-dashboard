@@ -256,7 +256,7 @@ def format_individual_signal_data(signal_data):
         )
 
     # Format other columns as strings
-    for col in ['trend_recent', 'trend_refined', 'change_tag', 'stability']:
+    for col in ['trend_recent', 'trend_refined', 'big_change', 'stability_6']:
         if col in display_signal.columns:
             display_signal[col] = display_signal[col].apply(
                 lambda x: str(x) if pd.notna(x) else "-"

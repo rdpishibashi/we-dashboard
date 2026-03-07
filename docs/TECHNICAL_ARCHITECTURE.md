@@ -77,8 +77,8 @@ pivot_df（正規化済み評価データ）とsignal_df（シグナルデータ
 | intervention_priority_pos | 介入優先度（ポジティブ） |
 | trend_recent | 短期変化（trend_recent） |
 | trend_refined | 中期トレンド |
-| change_tag | 短期変動 |
-| stability | 中期安定性 |
+| big_change | 短期変動 |
+| stability_6 | 中期安定性 |
 | strength_short/mid | 強み（短期/中期） |
 | weakness_short/mid | 弱み（短期/中期） |
 | engagement_rating | エンゲージメント値（生スコア 0-54） |
