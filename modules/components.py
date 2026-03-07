@@ -15,6 +15,10 @@ from modules.signal_processing import get_signal_data, render_signal_table
 from modules.config import SIGNAL_TABLE_COLUMNS
 from modules.privilege_manager import filter_dataframe_by_scope
 from modules.utils import GROUP_ORDER_MAP
+from modules.response_manager import (
+    load_responses, post_response, get_responses_for_comment, make_comment_key
+)
+from modules.auth import get_current_user, get_current_display_name
 
 
 def filter_signal_by_selection(
@@ -192,24 +196,104 @@ def render_concern_section(
             st.info("データがありません")
 
 
+def _render_responses(responses_df: pd.DataFrame, year_month: str, member_email: str, comment: str) -> None:
+    """Display existing responses for a comment."""
+    comment_responses = get_responses_for_comment(responses_df, year_month, member_email, comment)
+    if comment_responses.empty:
+        return
+    for _, resp in comment_responses.iterrows():
+        resp_date = resp.get("responded_at", "")[:10] if resp.get("responded_at") else ""
+        resp_name = resp.get("responder_name", "")
+        resp_text = resp.get("response_text", "")
+        st.markdown(
+            f'<div style="border-left: 3px solid #4CAF50; padding-left: 12px; margin: 4px 0 8px 0;">'
+            f'<span style="font-size: 0.85em; color: #888;">{resp_name} ({resp_date})</span><br>'
+            f'{resp_text}</div>',
+            unsafe_allow_html=True,
+        )
+
+
+def _render_response_input(
+    key_prefix: str,
+    comment_key: str,
+    year_month: str,
+    member_email: str,
+    comment: str,
+) -> None:
+    """Render inline response input form with confirmation step."""
+    toggle_key = f"{key_prefix}_resp_toggle_{comment_key}"
+    text_key = f"{key_prefix}_resp_text_{comment_key}"
+    saved_text_key = f"{key_prefix}_resp_saved_{comment_key}"
+    confirm_key = f"{key_prefix}_resp_confirm_{comment_key}"
+
+    if st.session_state.get(confirm_key):
+        # Confirmation step: show preview
+        # Use saved_text_key (non-widget key) since text_area is not rendered here
+        preview_text = st.session_state.get(saved_text_key, "")
+        st.markdown(
+            f'<div style="border-left: 3px solid #FF9800; padding-left: 12px; margin: 4px 0 8px 0;">'
+            f'<span style="font-size: 0.85em; color: #888;">プレビュー</span><br>'
+            f'{preview_text}</div>',
+            unsafe_allow_html=True,
+        )
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("送信する", key=f"{key_prefix}_resp_send_{comment_key}"):
+                responder_account = get_current_user() or ""
+                responder_name = get_current_display_name() or responder_account
+                success = post_response(
+                    year_month, member_email, comment,
+                    responder_account, responder_name, preview_text
+                )
+                if success:
+                    st.session_state[confirm_key] = False
+                    st.session_state[toggle_key] = False
+                    st.session_state.pop(saved_text_key, None)
+                    st.rerun()
+        with col2:
+            if st.button("戻る", key=f"{key_prefix}_resp_back_{comment_key}"):
+                # Restore saved text to widget key so text_area shows it
+                st.session_state[text_key] = st.session_state.get(saved_text_key, "")
+                st.session_state[confirm_key] = False
+                st.rerun()
+
+    elif st.session_state.get(toggle_key):
+        # Input step
+        st.text_area("返信を入力", key=text_key, height=100, label_visibility="collapsed")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("送信確認", key=f"{key_prefix}_resp_cfm_{comment_key}"):
+                entered_text = st.session_state.get(text_key, "").strip()
+                if entered_text:
+                    # Save text to a non-widget key so it survives rerun
+                    st.session_state[saved_text_key] = entered_text
+                    st.session_state[confirm_key] = True
+                    st.rerun()
+                else:
+                    st.warning("返信を入力してください")
+        with col2:
+            if st.button("キャンセル", key=f"{key_prefix}_resp_cancel_{comment_key}"):
+                st.session_state[toggle_key] = False
+                st.session_state.pop(text_key, None)
+                st.session_state.pop(saved_text_key, None)
+                st.rerun()
+    else:
+        if st.button("💬 返信する", key=f"{key_prefix}_resp_btn_{comment_key}", type="secondary"):
+            st.session_state[toggle_key] = True
+            st.rerun()
+
+
 def render_comment_section(
     comment_data: pd.DataFrame,
     end_dt: pd.Timestamp,
     key_prefix: str,
     privilege_mgr,
     current_privilege: str,
-    share_scope: Optional[List[str]] = None
+    share_scope: Optional[List[str]] = None,
+    latest_year_month: Optional[pd.Timestamp] = None
 ) -> None:
     """
-    Render the 共有したいこと section with optional anonymization.
-
-    When anonymized (for member-class privileges):
-    - Comments grouped by year_month instead of by name
-    - Display hierarchy: section → year_month → comments
-
-    When NOT anonymized:
-    - Comments grouped by name
-    - Display hierarchy: section → name → comments (with date header)
+    Render the 共有したいこと section with optional anonymization and response support.
 
     Args:
         comment_data: Prepared comment DataFrame (from prepare_comment_data)
@@ -218,6 +302,7 @@ def render_comment_section(
         privilege_mgr: PrivilegeManager instance
         current_privilege: Current user's privilege
         share_scope: Section scope for 共有したいこと (used to check access)
+        latest_year_month: Latest year_month_dt in the full comment dataset (for response eligibility)
     """
     if not privilege_mgr.has_feature_access(current_privilege, "共有したいこと"):
         return
@@ -246,6 +331,11 @@ def render_comment_section(
         if not share_data.empty:
             # Check if names should be anonymized
             anonymize_names = privilege_mgr.should_anonymize_section(current_privilege, "共有したいこと")
+            # Non-anonymized users can respond to latest month comments
+            can_respond = not anonymize_names
+
+            # Load responses once for all comments in this section
+            responses_df = load_responses()
 
             share_data = _sort_by_section_order(share_data, section_order)
 
@@ -262,6 +352,12 @@ def render_comment_section(
                             with st.expander(f"{ym}", expanded=True):
                                 for _, row in ym_data.iterrows():
                                     st.text(row['comment'])
+                                    # Display responses (read-only for anonymized users)
+                                    if 'mail_address' in row.index:
+                                        _render_responses(
+                                            responses_df, row['year_month'],
+                                            row.get('mail_address', ''), row['comment']
+                                        )
                                     st.divider()
                     else:
                         # Show comments with names
@@ -272,6 +368,22 @@ def render_comment_section(
                                 for _, row in name_data.iterrows():
                                     st.markdown(f"**{row['year_month']}**")
                                     st.text(row['comment'])
+                                    member_email = row.get('mail_address', '') if 'mail_address' in row.index else ''
+                                    # Display existing responses
+                                    _render_responses(
+                                        responses_df, row['year_month'],
+                                        member_email, row['comment']
+                                    )
+                                    # Response input for latest month only
+                                    if (can_respond and latest_year_month is not None
+                                            and row['year_month_dt'] == latest_year_month):
+                                        comment_key = make_comment_key(
+                                            row['year_month'], member_email, row['comment']
+                                        )
+                                        _render_response_input(
+                                            key_prefix, comment_key,
+                                            row['year_month'], member_email, row['comment']
+                                        )
                                     st.divider()
         else:
             st.info("データがありません")
@@ -286,7 +398,8 @@ def render_comments_and_signals(
     key_prefix: str,
     privilege_mgr,
     current_privilege: str,
-    is_authenticated: bool
+    is_authenticated: bool,
+    latest_year_month: Optional[pd.Timestamp] = None
 ) -> None:
     """
     Render the complete comments and signals section for a tab.
@@ -306,6 +419,7 @@ def render_comments_and_signals(
         privilege_mgr: PrivilegeManager instance
         current_privilege: Current user's privilege
         is_authenticated: Whether user is authenticated
+        latest_year_month: Latest year_month_dt in full comment dataset (for response eligibility)
     """
     if not is_authenticated:
         return
@@ -327,7 +441,8 @@ def render_comments_and_signals(
         # Render comment section
         render_comment_section(
             graph_comments, end_dt, key_prefix,
-            privilege_mgr, current_privilege, share_scope
+            privilege_mgr, current_privilege, share_scope,
+            latest_year_month
         )
 
 
