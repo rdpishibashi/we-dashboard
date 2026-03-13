@@ -189,6 +189,7 @@ auth_users.json
 
 # Mac environment
 .DS_Store
+account.md
 
 # Streamlit secrets (contains passwords and sensitive data)
 .streamlit/secrets.toml
