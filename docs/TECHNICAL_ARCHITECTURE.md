@@ -2,6 +2,13 @@
 
 Work Engagement Dashboard 技術仕様書
 
+> **関連ドキュメント:** 詳細な仕様は以下を参照してください。
+> - [INDEX.md](INDEX.md) - ドキュメント一覧・読書ガイド
+> - [DATA_PIPELINE.md](DATA_PIPELINE.md) - データパイプライン詳細仕様
+> - [PRIVILEGE_SYSTEM.md](PRIVILEGE_SYSTEM.md) - 権限管理システム詳細仕様
+> - [MODULE_REFERENCE.md](MODULE_REFERENCE.md) - モジュールAPIリファレンス
+> - [SETUP_GUIDE.md](SETUP_GUIDE.md) - セットアップガイド
+
 ## 1. システム概要
 
 Work Engagement Dashboardは、従業員のワーク・エンゲージメントデータを可視化・分析するStreamlitベースのWebアプリケーションです。
@@ -32,6 +39,7 @@ WE-Dashboard/
 │   ├── encryption.py         # 暗号化ユーティリティ
 │   ├── filter_helpers.py     # サイドバーフィルターカスケードロジック
 │   ├── privilege_manager.py  # 権限ベースフィルタリング
+│   ├── response_manager.py   # 返信管理（Google Sheets連携）
 │   ├── signal_processing.py  # シグナルデータ処理
 │   ├── statistics.py         # 統計計算
 │   └── utils.py              # ユーティリティ関数
@@ -311,7 +319,25 @@ graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
 既に行っており、ローカルフィルター（部署/課選択）がユーザー選択を制御するため、
 このレイヤーは冗長であり無効化されています。
 
-### 3.8 modules/utils.py（ユーティリティモジュール）
+### 3.8 modules/response_manager.py（返信管理モジュール）
+
+`共有したいこと`セクションのコメントに対する返信機能を提供します。
+Google Sheets APIを使用して返信データを読み書きします。
+
+**主要関数:**
+
+| 関数 | 説明 |
+|------|------|
+| `load_responses()` | Google Sheetから返信一覧読込（session_stateキャッシュ） |
+| `post_response()` | 返信投稿（Sheet追記→キャッシュ無効化） |
+| `get_responses_for_comment()` | 特定コメントの返信取得 |
+| `make_comment_key()` | MD5ハッシュによるウィジェットキー生成 |
+
+**必要な設定:**
+- `gcp_service_account`: Google Cloud サービスアカウント情報（Streamlit secrets）
+- `RESPONSE_SHEET_ID`: Google SpreadsheetのID（Streamlit secrets）
+
+### 3.9 modules/utils.py（ユーティリティモジュール）
 
 **主要関数:**
 
@@ -323,7 +349,7 @@ graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
 | `get_options()` | フィルター選択肢取得 |
 | `render_department_and_group_controls()` | 部署/課/グルーピングコントロール表示 |
 
-### 3.9 modules/statistics.py（統計モジュール）
+### 3.10 modules/statistics.py（統計モジュール）
 
 **主要関数:**
 
@@ -346,7 +372,7 @@ stats_df = calculate_group_statistics(
 
 結果テーブル: `| 個人 | 短期変化 | 中期トレンド | 平均 | 傾向の傾き | 標準偏差 |`
 
-### 3.10 modules/privilege_manager.py（権限管理モジュール）
+### 3.11 modules/privilege_manager.py（権限管理モジュール）
 
 `config/privileges.yaml`を読み込み、権限ベースのデータフィルタリングを提供します。
 
@@ -536,15 +562,17 @@ else:
 ## 7. 依存関係
 
 ```
-streamlit
-pandas
-plotly
-openpyxl
-numpy
-msoffcrypto-tool
-pyyaml          # 権限設定YAML読み込み用
-cryptography
-statsmodels
+streamlit>=1.28.0
+pandas>=2.0.0
+plotly>=5.18.0
+openpyxl>=3.1.0
+numpy>=1.24.0
+statsmodels>=0.14.0
+msoffcrypto-tool>=5.0.0
+cryptography>=41.0.0
+pyyaml>=6.0.0       # 権限設定YAML読み込み用
+gspread              # Google Sheets API（返信機能）
+google-auth>=2.0.0   # Google認証
 ```
 
 ---
@@ -583,6 +611,9 @@ statsmodels
 | 2026-02-09 | グループ（絞り込み軸）メタセレクタを廃止、課/チーム/プロジェクト個別ドロップダウンに変更 |
 | 2026-02-09 | filter_helpers.py追加（サイドバーフィルターカスケードロジック） |
 | 2026-02-10 | ratingシート依存を廃止、rating2シートからpivot_dfを導出（データソース統一） |
+| 2026-03 | response_manager.py追加（共有したいことへの返信機能、Google Sheets連携） |
+| 2026-03 | change_tag→big_change, stability→stability_6 にフィールド名統一 |
+| 2026-03-08 | 技術ドキュメント再構成（INDEX/SETUP_GUIDE/DATA_PIPELINE/PRIVILEGE_SYSTEM/MODULE_REFERENCE追加） |
 
 ---
 
