@@ -370,15 +370,12 @@ def get_signal_data(signal_df, filtered_df, end_dt):
     valid_names = filtered_df['name'].dropna().unique()
     latest_wave = latest_wave[latest_wave['name'].isin(valid_names)]
 
-    # Filter to intervention priority exceeding threshold
-    # Include flag_constant_6m points in neg when applying filter,
-    # so that persons whose effective neg exceeds threshold are not excluded.
+    # Filter to intervention priority exceeding threshold.
+    # Threshold check uses raw neg/pos values (without flag_constant_6m bonus).
+    # flag_constant_6m only boosts the displayed priority value for already-eligible persons.
     threshold = INTERVENTION_PRIORITY_THRESHOLD
     neg = latest_wave['intervention_priority_neg'].fillna(0)
     pos = latest_wave['intervention_priority_pos'].fillna(0)
-    if 'flag_constant_6m' in latest_wave.columns:
-        flag_points = latest_wave['flag_constant_6m'].map(FLAG_CONSTANT_PRIORITY_POINTS).fillna(0)
-        neg = neg + flag_points
     signals = latest_wave[(neg > threshold) | (pos > threshold)].copy()
 
     # Derive combined intervention_priority and _priority_is_neg
