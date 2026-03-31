@@ -13,6 +13,51 @@ from .config import (
 )
 
 
+# =============================================================================
+# Private helpers
+# =============================================================================
+
+def _to_fullwidth(s: str) -> str:
+    """Convert ASCII digits to full-width digits."""
+    return s.translate(str.maketrans('0123456789', '０１２３４５６７８９'))
+
+
+def _get_flag_points(df: pd.DataFrame) -> pd.Series:
+    """Return flag_constant_6m bonus points as a float Series (0 if column absent)."""
+    if 'flag_constant_6m' not in df.columns:
+        return pd.Series(0.0, index=df.index)
+    return df['flag_constant_6m'].map(FLAG_CONSTANT_PRIORITY_POINTS).fillna(0.0)
+
+
+def _fmt_flag_constant(x) -> str:
+    """Translate a flag_constant_6m value to its Japanese display label."""
+    if pd.isna(x) or not str(x):
+        return "-"
+    return FLAG_CONSTANT_LABELS.get(str(x), "-")
+
+
+def _fmt_priority_table(x) -> str:
+    """Format intervention_priority as a full-width integer for table display."""
+    return _to_fullwidth(f"{x:.0f}") if pd.notna(x) else "-"
+
+
+def _fmt_priority_individual(x, suffix: str) -> str:
+    """Format intervention_priority with neg/pos suffix for the individual report.
+
+    Returns '０' (no suffix, no color) when the clamped value is 0.
+    """
+    if pd.isna(x):
+        return "-"
+    val = max(int(x), 0)
+    if val == 0:
+        return _to_fullwidth("0")
+    return f"{_to_fullwidth(str(val))} {suffix}"
+
+
+# =============================================================================
+# Core signal calculations
+# =============================================================================
+
 def apply_signal_rating_calculations(signal_df):
     """Apply rating divisor calculations to signal data."""
     signal_df = signal_df.copy()
@@ -28,146 +73,224 @@ def derive_intervention_priority(df):
     """
     Derive intervention_priority and _priority_is_neg from neg/pos columns.
 
-    When both qualify (> INTERVENTION_PRIORITY_THRESHOLD), _neg takes precedence.
-    The displayed value is raw - INTERVENTION_PRIORITY_THRESHOLD (minimum 1).
+    Rules
+    -----
+    - Eligibility is tested against *raw* neg/pos (without flag bonus), consistent
+      with the threshold filter in get_signal_data().
+    - flag_constant_6m bonus is added to neg **only when raw neg already qualifies**,
+      so the bonus never inflates the priority of non-eligible persons.
+    - When neg qualifies, it takes precedence over pos (even when both qualify).
+    - When neither qualifies, _priority_is_neg defaults to True and the displayed
+      value will be ≤ 0 (clamped to ０ in display formatters).
+    - Displayed value = (effective_neg or pos) − threshold.
 
-    Args:
-        df: DataFrame with intervention_priority_neg and intervention_priority_pos columns
-
-    Returns:
-        DataFrame with added intervention_priority (derived) and _priority_is_neg (bool) columns
+    Returns the input DataFrame with two new columns:
+      intervention_priority  – numeric score ready for display formatting
+      _priority_is_neg       – bool, drives red/green coloring
     """
     df = df.copy()
     raw_neg = df['intervention_priority_neg'].fillna(0)
-    pos = df['intervention_priority_pos'].fillna(0)
-
+    pos     = df['intervention_priority_pos'].fillna(0)
     threshold = INTERVENTION_PRIORITY_THRESHOLD
-    # Eligibility uses raw neg (without flag bonus) — consistent with get_signal_data filter
+
     neg_qualifies = raw_neg > threshold
     pos_qualifies = pos > threshold
 
-    # flag_constant_6m bonus is added only when raw neg already qualifies,
-    # so that flag points do not inflate the displayed priority for non-eligible persons.
-    flag_points = pd.Series(0, index=df.index, dtype=float)
-    if 'flag_constant_6m' in df.columns:
-        flag_points = df['flag_constant_6m'].map(FLAG_CONSTANT_PRIORITY_POINTS).fillna(0)
-    neg = raw_neg + flag_points.where(neg_qualifies, 0)
+    # Flag bonus applied only to already-eligible neg rows
+    neg = raw_neg + _get_flag_points(df).where(neg_qualifies, 0.0)
 
-    # _neg takes precedence when both qualify
-    df['_priority_is_neg'] = neg_qualifies | (~pos_qualifies)
-    # Select the effective value, then subtract threshold for display
-    raw = neg.where(df['_priority_is_neg'], pos)
-    df['intervention_priority'] = raw - threshold
-
+    df['_priority_is_neg']     = neg_qualifies | (~pos_qualifies)
+    df['intervention_priority'] = neg.where(df['_priority_is_neg'], pos) - threshold
     return df
 
 
-def style_signal_columns(df, priority_is_neg):
+def get_signal_data(signal_df, filtered_df, end_dt):
     """
-    Apply color styling to 介入必要度 column.
+    Filter signal data to the latest wave and derive display priority.
 
-    - 介入必要度: red when from _neg, green when from _pos
+    The threshold filter uses raw neg/pos (without flag bonus), so that
+    flag_constant_6m acts only as a display-side boost for already-eligible rows.
 
     Args:
-        df: Display DataFrame with 介入必要度 column
-        priority_is_neg: Series of bools aligned with df index
+        signal_df:   Full rating2 dataframe
+        filtered_df: Currently filtered rating dataframe (defines visible individuals)
+        end_dt:      End date of global period filter (defines "latest wave")
 
     Returns:
-        Styled DataFrame
+        Filtered and sorted signal dataframe for individuals exceeding the threshold
     """
-    is_neg = priority_is_neg.values
-    priority_label = SIGNAL_LABELS['intervention_priority']
+    latest_wave = signal_df[signal_df['year_month_dt'] == end_dt].copy()
 
-    def style_row(row):
-        idx = row.name
-        pos_idx = df.index.get_loc(idx)
-        neg = is_neg[pos_idx]
-        styles = [''] * len(row)
+    valid_names = filtered_df['name'].dropna().unique()
+    latest_wave = latest_wave[latest_wave['name'].isin(valid_names)]
 
-        for col_idx, col_name in enumerate(row.index):
-            if col_name == priority_label:
-                styles[col_idx] = 'color: red' if neg else 'color: green'
+    threshold = INTERVENTION_PRIORITY_THRESHOLD
+    raw_neg = latest_wave['intervention_priority_neg'].fillna(0)
+    raw_pos = latest_wave['intervention_priority_pos'].fillna(0)
+    signals = latest_wave[(raw_neg > threshold) | (raw_pos > threshold)].copy()
 
-        return styles
+    signals = derive_intervention_priority(signals)
+    signals = sort_signals_by_trend_and_priority(signals)
+    return signals
 
-    return df.style.apply(style_row, axis=1)
+
+def sort_signals_by_trend_and_priority(signals):
+    """
+    Sort signal data by priority type → priority value → trend group → section.
+
+    Sort order:
+    1. Priority type  (negative first, then positive)
+    2. Priority value (descending)
+    3. Trend group    (negative trends → neutral → positive)
+    4. Section (課)   (using configured order from group_order_config.json)
+    """
+    if signals.empty:
+        return signals
+
+    from .utils import GROUP_ORDER_MAP
+
+    def _trend_group(trend_value):
+        if pd.isna(trend_value):
+            return 1
+        s = str(trend_value)
+        if s in NEGATIVE_TRENDS:
+            return 0
+        if s in POSITIVE_TRENDS:
+            return 2
+        return 1
+
+    signals = signals.copy()
+    signals['_trend_group'] = signals['trend_refined'].apply(_trend_group)
+
+    section_order = GROUP_ORDER_MAP.get('section', [])
+    if section_order and 'section' in signals.columns:
+        order_map = {name: idx for idx, name in enumerate(section_order)}
+        signals['_section_order'] = signals['section'].apply(
+            lambda x: order_map.get(x, len(section_order))
+        )
+    else:
+        signals['_section_order'] = signals['section'] if 'section' in signals.columns else 0
+
+    signals = signals.sort_values(
+        ['_priority_is_neg', 'intervention_priority', '_trend_group', '_section_order'],
+        ascending=[False, False, True, True],
+    )
+    return signals.drop(columns=['_trend_group', '_section_order'])
+
+
+# =============================================================================
+# Display formatting
+# =============================================================================
+
+def replace_abbreviations(text) -> str:
+    """Replace V/D/A abbreviations in strength/weakness text with Japanese terms."""
+    if pd.isna(text) or not str(text).strip():
+        return "-"
+    text = str(text)
+    text = text.replace("データなし", "-")
+    text = text.replace("V", "活力")
+    text = text.replace("D", "熱意")
+    text = text.replace("A", "没頭")
+    return text
 
 
 def format_signal_display_columns(df):
-    """
-    Format signal dataframe columns for display.
-
-    Args:
-        df: Signal dataframe with raw column values
-
-    Returns:
-        DataFrame with formatted values
-    """
+    """Format intervention_priority and flag_constant_6m columns for table display."""
     df = df.copy()
-
-    # Format intervention_priority as full-width integer
     if 'intervention_priority' in df.columns:
-        df['intervention_priority'] = df['intervention_priority'].apply(
-            lambda x: _to_fullwidth(f"{x:.0f}") if pd.notna(x) else "-"
-        )
-
-    # Format flag_constant_6m to Japanese label
+        df['intervention_priority'] = df['intervention_priority'].apply(_fmt_priority_table)
     if 'flag_constant_6m' in df.columns:
-        df['flag_constant_6m'] = df['flag_constant_6m'].apply(
-            lambda x: FLAG_CONSTANT_LABELS.get(str(x), "-") if pd.notna(x) and str(x) else "-"
-        )
-
+        df['flag_constant_6m'] = df['flag_constant_6m'].apply(_fmt_flag_constant)
     return df
 
 
-def get_signal_column_config():
+def format_individual_signal_data(signal_data):
     """
-    Get column configuration for signal tables.
+    Derive and format signal data for the individual report.
 
     Returns:
-        Dictionary of column configurations
+        Tuple of (transposed display DataFrame indexed by 指標, priority_is_neg bool)
     """
+    signal_data = derive_intervention_priority(signal_data)
+    priority_is_neg = signal_data['_priority_is_neg'].iloc[0]
+
+    display_signal = signal_data[INDIVIDUAL_SIGNAL_COLUMNS].copy()
+
+    for col in ['strength_short', 'weakness_short', 'strength_mid', 'weakness_mid']:
+        if col in display_signal.columns:
+            display_signal[col] = display_signal[col].apply(replace_abbreviations)
+
+    if 'intervention_priority' in display_signal.columns:
+        suffix = "(negative)" if priority_is_neg else "(positive)"
+        display_signal['intervention_priority'] = display_signal['intervention_priority'].apply(
+            lambda x: _fmt_priority_individual(x, suffix)
+        )
+
+    if 'level' in display_signal.columns:
+        display_signal['level'] = display_signal['level'].apply(
+            lambda x: LEVEL_LABELS.get(str(x), str(x)) if pd.notna(x) else "-"
+        )
+
+    for col in ['trend_recent', 'trend_refined', 'big_change', 'stability_6']:
+        if col in display_signal.columns:
+            display_signal[col] = display_signal[col].apply(
+                lambda x: str(x) if pd.notna(x) else "-"
+            )
+
+    if 'flag_constant_6m' in display_signal.columns:
+        display_signal['flag_constant_6m'] = display_signal['flag_constant_6m'].apply(_fmt_flag_constant)
+
+    display_signal_t = display_signal.T
+    display_signal_t.columns = ['値']
+    display_signal_t.index = display_signal_t.index.map(lambda x: SIGNAL_LABELS.get(x, x))
+    display_signal_t.index.name = '指標'
+    return display_signal_t, priority_is_neg
+
+
+# =============================================================================
+# Streamlit rendering
+# =============================================================================
+
+def style_signal_columns(df, priority_is_neg):
+    """Apply red/green coloring to the 介入必要度 column based on priority type."""
+    is_neg = priority_is_neg.values
     priority_label = SIGNAL_LABELS['intervention_priority']
-    return {
-        priority_label: st.column_config.TextColumn(
-            priority_label,
-            width="small",
-        ),
-    }
+
+    def _style_row(row):
+        pos_idx = df.index.get_loc(row.name)
+        styles = [''] * len(row)
+        for col_idx, col_name in enumerate(row.index):
+            if col_name == priority_label:
+                styles[col_idx] = 'color: red' if is_neg[pos_idx] else 'color: green'
+        return styles
+
+    return df.style.apply(_style_row, axis=1)
 
 
 def render_signal_table(signals, display_cols):
-    """
-    Render signal table with formatting and styling.
-
-    Args:
-        signals: Signal dataframe (with _priority_is_neg column)
-        display_cols: List of columns to display
-    """
+    """Render the action-candidates signal table with formatting, styling, and help popovers."""
     if signals.empty:
         st.info("アクション対象候補はいません")
         return
 
-    # Validate columns exist
     missing_cols = [col for col in display_cols if col not in signals.columns]
     if missing_cols:
         st.error(f"signal データに必要なカラムがありません: {', '.join(missing_cols)}")
         return
 
-    # Extract _priority_is_neg before creating display_df
     priority_is_neg = signals['_priority_is_neg'].reset_index(drop=True)
-
-    # Prepare display dataframe
     display_df = signals[display_cols].copy().reset_index(drop=True)
     display_df = format_signal_display_columns(display_df)
     display_df = display_df.rename(columns=SIGNAL_LABELS)
 
-    # Apply styling and display
+    priority_label = SIGNAL_LABELS['intervention_priority']
     styled_df = style_signal_columns(display_df, priority_is_neg)
     st.dataframe(
         styled_df,
-        column_config=get_signal_column_config(),
-        **DATAFRAME_KWARGS
+        column_config={
+            priority_label: st.column_config.TextColumn(priority_label, width="small")
+        },
+        **DATAFRAME_KWARGS,
     )
 
     col1, col2, _ = st.columns([27, 27, 26])
@@ -199,192 +322,3 @@ def render_signal_table(signals, display_cols):
                 "| 下降加速 | 下降傾向の中、急激に落ち込んでいる |\n"
                 "| 安定維持 | 安定した状態を維持している |"
             )
-
-
-def replace_abbreviations(text):
-    """
-    Replace abbreviations in strength/weakness text.
-
-    Args:
-        text: Text with abbreviations (V, D, A)
-
-    Returns:
-        Text with full Japanese terms
-    """
-    if pd.isna(text) or not str(text).strip():
-        return "-"
-    text = str(text)
-    text = text.replace("データなし", "-")
-    text = text.replace("V", "活力")
-    text = text.replace("D", "熱意")
-    text = text.replace("A", "没頭")
-    return text
-
-
-def _to_fullwidth(s):
-    """Convert ASCII digits to Japanese full-width digits."""
-    return s.translate(str.maketrans('0123456789', '０１２３４５６７８９'))
-
-
-def format_individual_signal_data(signal_data):
-    """
-    Format individual signal data for display.
-
-    Args:
-        signal_data: Individual signal dataframe
-
-    Returns:
-        Tuple of (formatted transposed dataframe, priority_is_neg bool)
-    """
-    # Derive intervention_priority from neg/pos columns
-    signal_data = derive_intervention_priority(signal_data)
-    priority_is_neg = signal_data['_priority_is_neg'].iloc[0]
-
-    display_signal = signal_data[INDIVIDUAL_SIGNAL_COLUMNS].copy()
-
-    # Process strength/weakness columns
-    for col in ['strength_short', 'weakness_short', 'strength_mid', 'weakness_mid']:
-        if col in display_signal.columns:
-            display_signal[col] = display_signal[col].apply(replace_abbreviations)
-
-    # Format intervention_priority: clamp to 0, full-width digits, neg/pos suffix
-    # When value is 0, no suffix and no color (handled in app.py styling)
-    if 'intervention_priority' in display_signal.columns:
-        suffix = "(negative)" if priority_is_neg else "(positive)"
-
-        def _fmt_priority(x):
-            if pd.isna(x):
-                return "-"
-            val = max(int(x), 0)
-            if val == 0:
-                return _to_fullwidth("0")
-            return f"{_to_fullwidth(str(val))} {suffix}"
-
-        display_signal['intervention_priority'] = display_signal['intervention_priority'].apply(
-            _fmt_priority
-        )
-
-    # Translate level values to Japanese
-    if 'level' in display_signal.columns:
-        display_signal['level'] = display_signal['level'].apply(
-            lambda x: LEVEL_LABELS.get(str(x), str(x)) if pd.notna(x) else "-"
-        )
-
-    # Format other columns as strings
-    for col in ['trend_recent', 'trend_refined', 'big_change', 'stability_6']:
-        if col in display_signal.columns:
-            display_signal[col] = display_signal[col].apply(
-                lambda x: str(x) if pd.notna(x) else "-"
-            )
-
-    # Format flag_constant_6m to Japanese label
-    if 'flag_constant_6m' in display_signal.columns:
-        display_signal['flag_constant_6m'] = display_signal['flag_constant_6m'].apply(
-            lambda x: FLAG_CONSTANT_LABELS.get(str(x), "-") if pd.notna(x) and str(x) else "-"
-        )
-
-    # Transpose for better display
-    display_signal_t = display_signal.T
-    display_signal_t.columns = ['値']
-    display_signal_t.index = display_signal_t.index.map(
-        lambda x: SIGNAL_LABELS.get(x, x)
-    )
-    display_signal_t.index.name = '指標'
-
-    return display_signal_t, priority_is_neg
-
-
-def sort_signals_by_trend_and_priority(signals):
-    """
-    Sort signal data by trend group, intervention_priority, and section (課).
-
-    Sort order:
-    1. Priority type (negative first, then positive)
-    2. Intervention priority (descending)
-    3. Trend group (negative trends first, then neutral, then positive)
-    4. Section (課) - using configured order from group_order_config.json
-
-    Args:
-        signals: Signal dataframe with _priority_is_neg, section, trend_refined
-                 and intervention_priority columns
-
-    Returns:
-        Sorted signal dataframe
-    """
-    if signals.empty:
-        return signals
-
-    from .utils import GROUP_ORDER_MAP
-
-    def get_trend_group(trend_value):
-        """Classify trend into negative (0), neutral (1), or positive (2)."""
-        if pd.isna(trend_value):
-            return 1  # neutral
-        trend_str = str(trend_value)
-        if trend_str in NEGATIVE_TRENDS:
-            return 0  # negative group first
-        elif trend_str in POSITIVE_TRENDS:
-            return 2  # positive group last
-        return 1  # neutral in middle
-
-    signals = signals.copy()
-    signals['_trend_group'] = signals['trend_refined'].apply(get_trend_group)
-
-    # Create section order index (use 'section' key from config for 'section' column)
-    section_order = GROUP_ORDER_MAP.get('section', [])
-    if section_order and 'section' in signals.columns:
-        # Map section to order index, unknown sections go to end
-        section_order_map = {name: idx for idx, name in enumerate(section_order)}
-        signals['_section_order'] = signals['section'].apply(
-            lambda x: section_order_map.get(x, len(section_order))
-        )
-    else:
-        # Fallback to alphabetical order
-        signals['_section_order'] = signals['section'] if 'section' in signals.columns else 0
-
-    # Sort by priority type (neg first), priority value, trend group, then section
-    signals = signals.sort_values(
-        ['_priority_is_neg', 'intervention_priority', '_trend_group', '_section_order'],
-        ascending=[False, False, True, True]
-    )
-
-    # Drop temporary columns
-    signals = signals.drop(columns=['_trend_group', '_section_order'])
-
-    return signals
-
-
-def get_signal_data(signal_df, filtered_df, end_dt):
-    """
-    Filter signal data to match current sidebar filters and latest wave.
-
-    Args:
-        signal_df: Full rating2 dataframe
-        filtered_df: Currently filtered rating dataframe (from sidebar filters)
-        end_dt: End date of global period filter (defines "latest wave")
-
-    Returns:
-        Filtered signal dataframe for individuals exceeding INTERVENTION_PRIORITY_THRESHOLD
-    """
-    # Filter to latest wave
-    latest_wave = signal_df[signal_df['year_month_dt'] == end_dt].copy()
-
-    # Apply same filters as main data by matching on available individuals
-    valid_names = filtered_df['name'].dropna().unique()
-    latest_wave = latest_wave[latest_wave['name'].isin(valid_names)]
-
-    # Filter to intervention priority exceeding threshold.
-    # Threshold check uses raw neg/pos values (without flag_constant_6m bonus).
-    # flag_constant_6m only boosts the displayed priority value for already-eligible persons.
-    threshold = INTERVENTION_PRIORITY_THRESHOLD
-    neg = latest_wave['intervention_priority_neg'].fillna(0)
-    pos = latest_wave['intervention_priority_pos'].fillna(0)
-    signals = latest_wave[(neg > threshold) | (pos > threshold)].copy()
-
-    # Derive combined intervention_priority and _priority_is_neg
-    signals = derive_intervention_priority(signals)
-
-    # Sort by trend group and priority
-    signals = sort_signals_by_trend_and_priority(signals)
-
-    return signals
