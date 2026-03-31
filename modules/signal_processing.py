@@ -38,21 +38,24 @@ def derive_intervention_priority(df):
         DataFrame with added intervention_priority (derived) and _priority_is_neg (bool) columns
     """
     df = df.copy()
-    neg = df['intervention_priority_neg'].fillna(0)
+    raw_neg = df['intervention_priority_neg'].fillna(0)
     pos = df['intervention_priority_pos'].fillna(0)
 
-    # Add flag_constant_6m points to neg score
+    threshold = INTERVENTION_PRIORITY_THRESHOLD
+    # Eligibility uses raw neg (without flag bonus) — consistent with get_signal_data filter
+    neg_qualifies = raw_neg > threshold
+    pos_qualifies = pos > threshold
+
+    # flag_constant_6m bonus is added only when raw neg already qualifies,
+    # so that flag points do not inflate the displayed priority for non-eligible persons.
+    flag_points = pd.Series(0, index=df.index, dtype=float)
     if 'flag_constant_6m' in df.columns:
         flag_points = df['flag_constant_6m'].map(FLAG_CONSTANT_PRIORITY_POINTS).fillna(0)
-        neg = neg + flag_points
-
-    threshold = INTERVENTION_PRIORITY_THRESHOLD
-    neg_qualifies = neg > threshold
-    pos_qualifies = pos > threshold
+    neg = raw_neg + flag_points.where(neg_qualifies, 0)
 
     # _neg takes precedence when both qualify
     df['_priority_is_neg'] = neg_qualifies | (~pos_qualifies)
-    # Select the raw value, then subtract threshold for display
+    # Select the effective value, then subtract threshold for display
     raw = neg.where(df['_priority_is_neg'], pos)
     df['intervention_priority'] = raw - threshold
 
