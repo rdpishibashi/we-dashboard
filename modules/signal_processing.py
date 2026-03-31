@@ -9,7 +9,7 @@ from .config import (
     SIGNAL_LABELS, POSITIVE_TRENDS, NEGATIVE_TRENDS,
     INDIVIDUAL_SIGNAL_COLUMNS, DATAFRAME_KWARGS, LEVEL_LABELS,
     INTERVENTION_PRIORITY_THRESHOLD,
-    FLAG_CONSTANT_LABELS, FLAG_CONSTANT_PRIORITY_POINTS,
+    FLAG_CONSTANT_LABELS,
 )
 
 
@@ -20,13 +20,6 @@ from .config import (
 def _to_fullwidth(s: str) -> str:
     """Convert ASCII digits to full-width digits."""
     return s.translate(str.maketrans('0123456789', '０１２３４５６７８９'))
-
-
-def _get_flag_points(df: pd.DataFrame) -> pd.Series:
-    """Return flag_constant_6m bonus points as a float Series (0 if column absent)."""
-    if 'flag_constant_6m' not in df.columns:
-        return pd.Series(0.0, index=df.index)
-    return df['flag_constant_6m'].map(FLAG_CONSTANT_PRIORITY_POINTS).fillna(0.0)
 
 
 def _fmt_flag_constant(x) -> str:
@@ -75,29 +68,26 @@ def derive_intervention_priority(df):
 
     Rules
     -----
-    - Eligibility is tested against *raw* neg/pos (without flag bonus), consistent
-      with the threshold filter in get_signal_data().
-    - flag_constant_6m bonus is added to neg **only when raw neg already qualifies**,
-      so the bonus never inflates the priority of non-eligible persons.
-    - When neg qualifies, it takes precedence over pos (even when both qualify).
+    - intervention_priority_neg already includes flag_constant_6m bonus points,
+      computed by Admin GAS before writing to rating2 sheet.
+      The Dashboard does NOT add any flag bonus — flag_constant_6m is display-only here.
+    - intervention_priority_pos has no flag adjustment.
+    - When neg qualifies (> threshold), it takes precedence over pos.
     - When neither qualifies, _priority_is_neg defaults to True and the displayed
       value will be ≤ 0 (clamped to ０ in display formatters).
-    - Displayed value = (effective_neg or pos) − threshold.
+    - Displayed value = (neg or pos) − threshold.
 
     Returns the input DataFrame with two new columns:
       intervention_priority  – numeric score ready for display formatting
       _priority_is_neg       – bool, drives red/green coloring
     """
     df = df.copy()
-    raw_neg = df['intervention_priority_neg'].fillna(0)
-    pos     = df['intervention_priority_pos'].fillna(0)
+    neg = df['intervention_priority_neg'].fillna(0)
+    pos = df['intervention_priority_pos'].fillna(0)
     threshold = INTERVENTION_PRIORITY_THRESHOLD
 
-    neg_qualifies = raw_neg > threshold
+    neg_qualifies = neg > threshold
     pos_qualifies = pos > threshold
-
-    # Flag bonus applied only to already-eligible neg rows
-    neg = raw_neg + _get_flag_points(df).where(neg_qualifies, 0.0)
 
     df['_priority_is_neg']     = neg_qualifies | (~pos_qualifies)
     df['intervention_priority'] = neg.where(df['_priority_is_neg'], pos) - threshold
@@ -108,8 +98,8 @@ def get_signal_data(signal_df, filtered_df, end_dt):
     """
     Filter signal data to the latest wave and derive display priority.
 
-    The threshold filter uses raw neg/pos (without flag bonus), so that
-    flag_constant_6m acts only as a display-side boost for already-eligible rows.
+    The threshold filter uses neg/pos directly. intervention_priority_neg already
+    includes flag_constant_6m bonus from Admin GAS — no Dashboard-side adjustment.
 
     Args:
         signal_df:   Full rating2 dataframe

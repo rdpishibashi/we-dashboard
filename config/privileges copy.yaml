@@ -485,7 +485,7 @@ user_privileges:
       name:
         values: *id007
   pd:
-    inherits: department_head
+    inherits: section_manager
     data_scope:
       時系列:
         values: &id008
@@ -505,8 +505,7 @@ user_privileges:
         - 機電設計部
       個人:
         values:
-        - システム開発部
-        - 機電設計部
+        - 製品技術課
       default:
         values: *id008
     section_scope:
@@ -520,15 +519,13 @@ user_privileges:
         - 機電設計部
       アクション対象候補:
         values:
-        - システム開発部
-        - 機電設計部
+        - 製品技術課
       共有したいこと:
         values:
-        - システム開発部
-        - 機電設計部
+        - 製品技術課
     grouping_scope:
       none:
-        values:
+        values: &id009
         - システム開発部
         - 機電設計部
       organization:
@@ -536,13 +533,22 @@ user_privileges:
         - システム開発部
         - 機電設計部
       grade:
-        values:
+        values: &id010
         - システム開発部
         - 機電設計部
       name:
+        values: &id011
+        - 製品技術課
+    grouping_scope_filtered:
+      none:
+        values: *id009
+      organization:
         values:
-        - システム開発部
-        - 機電設計部
+        - 製品技術課
+      grade:
+        values: *id010
+      name:
+        values: *id011
   me1:
     inherits: section_manager
     data_scope:

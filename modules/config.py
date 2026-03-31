@@ -79,14 +79,6 @@ FLAG_CONSTANT_LABELS = {
     'FIX_SHIFTED': '連続固定回答シフト',
 }
 
-# flag_constant_6m additional points to intervention_priority_neg
-FLAG_CONSTANT_PRIORITY_POINTS = {
-    'LOW_FIXED': 3,
-    'MID_EVASION': 2,
-    'HIGH_AVOIDANCE': 2,
-    'FIX_SHIFTED': 4,
-}
-
 # Level value mapping (English → Japanese)
 LEVEL_LABELS = {
     'Critical': '低調',
@@ -103,10 +95,6 @@ RATING_AXIS_MAX = 10.3
 POSITIVE_TRENDS = ['上昇加速', '上昇継続', '回復期待', '回復', '復活', '上昇期待', '上昇']
 NEGATIVE_TRENDS = ['低下懸念', '悪化', '低下危機', '低下加速', '低下継続', '低下警戒', '下降']
 
-# Intervention priority threshold: rows with _neg or _pos > this value are shown;
-# displayed value = raw value - this threshold (so minimum displayed is 1)
-INTERVENTION_PRIORITY_THRESHOLD = 2
-
 # Signal table display columns
 SIGNAL_TABLE_COLUMNS = ['name', 'section', 'intervention_priority', 'trend_recent', 'trend_refined', 'big_change', 'stability_6', 'flag_constant_6m']
 INDIVIDUAL_SIGNAL_COLUMNS = [
@@ -117,6 +105,10 @@ INDIVIDUAL_SIGNAL_COLUMNS = [
 
 # Group order configuration file
 GROUP_ORDER_FILE = Path(__file__).parent.parent / 'group_order_config.json'
+
+# Intervention priority threshold: rows with _neg or _pos > this value are shown;
+# displayed value = raw value - this threshold (so minimum displayed is 1)
+INTERVENTION_PRIORITY_THRESHOLD = 2
 
 # Rating calculation constants
 ENGAGEMENT_DIVISOR = 5.4
@@ -129,6 +121,9 @@ RATING_BAND_LOW_THRESHOLD = 2.0
 # Color scale configuration
 COLOR_SCALE_START = 0.35
 COLOR_SCALE_END = 1
+
+# Bar chart opacity for 評価別比率 (group rating distribution)
+RATING_DISTRIBUTION_BAR_OPACITY = 0.9
 
 # Grouping label map
 GROUPING_LABEL_MAP = {

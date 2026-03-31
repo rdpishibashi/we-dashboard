@@ -11,7 +11,8 @@ from plotly.colors import sample_colorscale
 from .config import (
     METRIC_LABELS, RATING_AXIS_MAX, GROUPING_LABEL_MAP,
     GROUP_LABELS, COLOR_SCALE_START, COLOR_SCALE_END,
-    RATING_BAND_HIGH_THRESHOLD, RATING_BAND_LOW_THRESHOLD
+    RATING_BAND_HIGH_THRESHOLD, RATING_BAND_LOW_THRESHOLD,
+    RATING_DISTRIBUTION_BAR_OPACITY,
 )
 from .utils import get_category_order_with_reference
 
@@ -374,7 +375,7 @@ def create_group_rating_distribution(df, group_col, metric_col, range_label=None
         fig.update_xaxes(tickmode='array', tickvals=tickvals, ticktext=ticktext)
     fig.update_yaxes(range=[0, 100], ticksuffix='%', dtick=10)
     fig.update_traces(
-        opacity=0.8,
+        opacity=RATING_DISTRIBUTION_BAR_OPACITY,
         texttemplate='%{text:.0f}',
         textposition='inside',
         hovertemplate=(
