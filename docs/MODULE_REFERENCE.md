@@ -370,17 +370,6 @@ ORG_FILTER_COLUMNS = ['division', 'department', 'section']
 | `HIGH_AVOIDANCE` | 連続固定高評価回答 |
 | `FIX_SHIFTED` | 連続固定回答シフト |
 
-#### `FLAG_CONSTANT_PRIORITY_POINTS`
-
-`flag_constant_6m` 値ごとの `intervention_priority_neg` への加算ポイント。
-
-| キー | 加算ポイント |
-|------|------------|
-| `LOW_FIXED` | 3 |
-| `MID_EVASION` | 2 |
-| `HIGH_AVOIDANCE` | 2 |
-| `FIX_SHIFTED` | 4 |
-
 #### `LEVEL_LABELS`
 
 レベル値の英語→日本語マッピング。
@@ -726,7 +715,6 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 | 関数 | 説明 |
 |------|------|
 | `_to_fullwidth(s)` | ASCII 数字 → 全角数字変換 |
-| `_get_flag_points(df)` | `flag_constant_6m` → ボーナスポイント Series（列が存在しない場合は 0 Series） |
 | `_fmt_flag_constant(x)` | `flag_constant_6m` 値 → 日本語表示ラベル（`FLAG_CONSTANT_LABELS` 参照） |
 | `_fmt_priority_table(x)` | 介入必要度 → 全角整数（アクション候補テーブル用） |
 | `_fmt_priority_individual(x, suffix)` | 介入必要度 → 全角整数 + neg/pos サフィックス（個人レポート用）、値 0 のときはサフィックスなし |
@@ -737,19 +725,19 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 
 #### `derive_intervention_priority(df)`
 
-`intervention_priority_neg` と `intervention_priority_pos` の生値から `intervention_priority`（表示値）と `_priority_is_neg`（フラグ）を導出する。
+`intervention_priority_neg` と `intervention_priority_pos` から `intervention_priority`（表示値）と `_priority_is_neg`（フラグ）を導出する。
 
 | 引数 | 型 | 説明 |
 |------|----|------|
-| `df` | `DataFrame` | `intervention_priority_neg`, `intervention_priority_pos` 列、および任意で `flag_constant_6m` 列を含む DataFrame |
+| `df` | `DataFrame` | `intervention_priority_neg`, `intervention_priority_pos` 列を含む DataFrame |
 
 **ロジック**:
-1. **足切り判定は raw 値のみ**: `neg_qualifies = raw_neg > threshold`、`pos_qualifies = pos > threshold`。flag_constant_6m ボーナスは含まない。
-2. **flag ボーナスは適格行のみに加算**: `neg = raw_neg + flag_pts.where(neg_qualifies, 0.0)`。非適格行のボーナスは 0 扱い。
-3. **neg 優先**: 両方が適格な場合は neg が優先。どちらも不適格な場合も neg をデフォルトとし、表示値は ≤ 0 となる（表示フォーマット側で ０ にクランプ）。
-4. **表示値**: `(effective_neg or pos) − INTERVENTION_PRIORITY_THRESHOLD`。
+1. **neg には flag ボーナス込み**: `intervention_priority_neg` は Admin GAS が `flag_constant_6m` ボーナスを含めた値を rating2 シートに書き込む。Dashboard 側では flag 加算を行わない。
+2. **足切り判定**: `neg_qualifies = neg > threshold`、`pos_qualifies = pos > threshold`。neg が適格な場合は neg を優先。
+3. **どちらも不適格な場合は neg をデフォルト**: 表示値は ≤ 0 となる（表示フォーマット側で ０ にクランプ）。
+4. **表示値**: `(neg または pos) − INTERVENTION_PRIORITY_THRESHOLD`。
 
-**戻り値**: `DataFrame` — `intervention_priority`（表示値）と `_priority_is_neg`（`bool`）列を追加した DataFrame（最小表示値は 0 となる）。
+**戻り値**: `DataFrame` — `intervention_priority`（表示値）と `_priority_is_neg`（`bool`）列を追加した DataFrame。
 
 ---
 
@@ -871,7 +859,7 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 **動作**:
 1. `signal_df` を `end_dt` でフィルタリングして最新波のみを抽出する。
 2. `filtered_df` の `name` 列と突き合わせて、フィルター適用済みスコープの個人のみに絞る。
-3. `intervention_priority_neg` または `intervention_priority_pos` の **raw 値**（flag ボーナスなし）が `INTERVENTION_PRIORITY_THRESHOLD`（2）を超える行のみを返す。flag_constant_6m ボーナスは表示値の計算（`derive_intervention_priority`）にのみ影響する。
+3. `intervention_priority_neg` または `intervention_priority_pos` が `INTERVENTION_PRIORITY_THRESHOLD`（2）を超える行のみを返す。`intervention_priority_neg` には Admin GAS が flag_constant_6m ボーナスを含めており、Dashboard では加工しない。
 4. `derive_intervention_priority` と `sort_signals_by_trend_and_priority` を適用する。
 
 **戻り値**: `DataFrame`
