@@ -137,6 +137,7 @@ def load_data(uploaded_file):
     signal_df['team'] = get_signal_column('current_team')
     signal_df['project'] = get_signal_column('current_project')
     signal_df['grade'] = get_signal_column('grade')
+    signal_df['flag_constant_6m'] = get_signal_column('flag_constant_6m')
 
     # Fill missing values for organizational columns
     fill_cols = ['division', 'department', 'section', 'team', 'project', 'grade']

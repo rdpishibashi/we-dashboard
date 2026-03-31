@@ -8,7 +8,8 @@ from .config import (
     ENGAGEMENT_DIVISOR, COMPONENT_DIVISOR,
     SIGNAL_LABELS, POSITIVE_TRENDS, NEGATIVE_TRENDS,
     INDIVIDUAL_SIGNAL_COLUMNS, DATAFRAME_KWARGS, LEVEL_LABELS,
-    INTERVENTION_PRIORITY_THRESHOLD
+    INTERVENTION_PRIORITY_THRESHOLD,
+    FLAG_CONSTANT_LABELS, FLAG_CONSTANT_PRIORITY_POINTS,
 )
 
 
@@ -39,6 +40,11 @@ def derive_intervention_priority(df):
     df = df.copy()
     neg = df['intervention_priority_neg'].fillna(0)
     pos = df['intervention_priority_pos'].fillna(0)
+
+    # Add flag_constant_6m points to neg score
+    if 'flag_constant_6m' in df.columns:
+        flag_points = df['flag_constant_6m'].map(FLAG_CONSTANT_PRIORITY_POINTS).fillna(0)
+        neg = neg + flag_points
 
     threshold = INTERVENTION_PRIORITY_THRESHOLD
     neg_qualifies = neg > threshold
@@ -100,6 +106,12 @@ def format_signal_display_columns(df):
     if 'intervention_priority' in df.columns:
         df['intervention_priority'] = df['intervention_priority'].apply(
             lambda x: _to_fullwidth(f"{x:.0f}") if pd.notna(x) else "-"
+        )
+
+    # Format flag_constant_6m to Japanese label
+    if 'flag_constant_6m' in df.columns:
+        df['flag_constant_6m'] = df['flag_constant_6m'].apply(
+            lambda x: FLAG_CONSTANT_LABELS.get(str(x), "-") if pd.notna(x) and str(x) else "-"
         )
 
     return df
@@ -262,13 +274,19 @@ def format_individual_signal_data(signal_data):
                 lambda x: str(x) if pd.notna(x) else "-"
             )
 
+    # Format flag_constant_6m to Japanese label
+    if 'flag_constant_6m' in display_signal.columns:
+        display_signal['flag_constant_6m'] = display_signal['flag_constant_6m'].apply(
+            lambda x: FLAG_CONSTANT_LABELS.get(str(x), "-") if pd.notna(x) and str(x) else "-"
+        )
+
     # Transpose for better display
     display_signal_t = display_signal.T
     display_signal_t.columns = ['値']
     display_signal_t.index = display_signal_t.index.map(
         lambda x: SIGNAL_LABELS.get(x, x)
     )
-    display_signal_t.index.name = 'Index'
+    display_signal_t.index.name = '指標'
 
     return display_signal_t, priority_is_neg
 
@@ -353,9 +371,14 @@ def get_signal_data(signal_df, filtered_df, end_dt):
     latest_wave = latest_wave[latest_wave['name'].isin(valid_names)]
 
     # Filter to intervention priority exceeding threshold
+    # Include flag_constant_6m points in neg when applying filter,
+    # so that persons whose effective neg exceeds threshold are not excluded.
     threshold = INTERVENTION_PRIORITY_THRESHOLD
     neg = latest_wave['intervention_priority_neg'].fillna(0)
     pos = latest_wave['intervention_priority_pos'].fillna(0)
+    if 'flag_constant_6m' in latest_wave.columns:
+        flag_points = latest_wave['flag_constant_6m'].map(FLAG_CONSTANT_PRIORITY_POINTS).fillna(0)
+        neg = neg + flag_points
     signals = latest_wave[(neg > threshold) | (pos > threshold)].copy()
 
     # Derive combined intervention_priority and _priority_is_neg

@@ -1,6 +1,6 @@
 # WE-Dashboard モジュール API リファレンス
 
-> 最終更新: 2026-03-08
+> 最終更新: 2026-03-31
 
 本ドキュメントは WE-Dashboard アプリケーションを構成する全モジュールの関数レベルリファレンスです。
 各関数のシグネチャ・引数・戻り値・動作仕様を網羅的に記載します。
@@ -337,7 +337,7 @@ ORG_FILTER_COLUMNS = ['division', 'department', 'section']
 
 #### `SIGNAL_LABELS`
 
-シグナル列名と日本語表示名のマッピング（16 項目）。
+シグナル列名と日本語表示名のマッピング（17 項目）。
 
 | キー | 表示名 |
 |------|--------|
@@ -349,6 +349,7 @@ ORG_FILTER_COLUMNS = ['division', 'department', 'section']
 | `trend_refined` | 中期傾向 |
 | `big_change` | 短期変動 |
 | `stability_6` | 中期安定性 |
+| `flag_constant_6m` | 調査抵抗疑義 |
 | `engagement_rating` | エンゲージメント |
 | `vigor_rating` | 活力 |
 | `dedication_rating` | 熱意 |
@@ -357,6 +358,28 @@ ORG_FILTER_COLUMNS = ['division', 'department', 'section']
 | `weakness_short` | 弱み（短期） |
 | `strength_mid` | 強み（中期） |
 | `weakness_mid` | 弱み（中期） |
+
+#### `FLAG_CONSTANT_LABELS`
+
+`flag_constant_6m` 内部値と日本語表示名のマッピング。
+
+| キー | 表示名 |
+|------|--------|
+| `LOW_FIXED` | 連続固定低評価回答 |
+| `MID_EVASION` | 連続固定中評価回答 |
+| `HIGH_AVOIDANCE` | 連続固定高評価回答 |
+| `FIX_SHIFTED` | 連続固定回答シフト |
+
+#### `FLAG_CONSTANT_PRIORITY_POINTS`
+
+`flag_constant_6m` 値ごとの `intervention_priority_neg` への加算ポイント。
+
+| キー | 加算ポイント |
+|------|------------|
+| `LOW_FIXED` | 3 |
+| `MID_EVASION` | 2 |
+| `HIGH_AVOIDANCE` | 2 |
+| `FIX_SHIFTED` | 4 |
 
 #### `LEVEL_LABELS`
 
@@ -510,6 +533,7 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 - `year_month`（例: `"2026-01"`）および `year_month_dt`（`Timestamp`）列を生成
 - `current_division` → `division`、`current_department` → `department`、`current_section` → `section` にマッピング
 - `team`, `project`, `grade` 列を追加し、欠損値を `"未設定"` で補完
+- `flag_constant_6m` 列を追加（Excel に列がない場合は `None` で補完）
 - `pivot_df`: `engagement_rating` を `ENGAGEMENT_DIVISOR`（5.4）で、コンポーネント評価値を `COMPONENT_DIVISOR`（1.8）で除算して 0–10 スケールに正規化
 
 | 引数 | 型 | 説明 |
@@ -701,10 +725,11 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 
 | 引数 | 型 | 説明 |
 |------|----|------|
-| `df` | `DataFrame` | `intervention_priority_neg`, `intervention_priority_pos` 列を含む DataFrame |
+| `df` | `DataFrame` | `intervention_priority_neg`, `intervention_priority_pos` 列、および任意で `flag_constant_6m` 列を含む DataFrame |
 
 **ロジック**:
-- `_neg` と `_pos` のどちらが `INTERVENTION_PRIORITY_THRESHOLD`（2）を超えるかを判定する。
+- `flag_constant_6m` 列が存在する場合、`FLAG_CONSTANT_PRIORITY_POINTS` に基づくポイントを `_neg` に加算する。
+- `_neg`（加算後）と `_pos` のどちらが `INTERVENTION_PRIORITY_THRESHOLD`（2）を超えるかを判定する。
 - 両方が閾値を超える場合は `_neg` が優先される。
 - 表示値 = 選択された生値 - `INTERVENTION_PRIORITY_THRESHOLD`（最小表示値は 1 となる）。
 
@@ -735,7 +760,7 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 |------|----|------|
 | `df` | `DataFrame` | 生値を含むシグナル DataFrame |
 
-**動作**: `intervention_priority` 列の数値を全角数字（例: `２`）に変換する。`NaN` の場合は `"-"` を設定する。
+**動作**: `intervention_priority` 列の数値を全角数字（例: `２`）に変換する。`flag_constant_6m` 列が存在する場合は `FLAG_CONSTANT_LABELS` で日本語表示名に変換する（未マッチまたは空の場合は `"-"`）。`NaN` の場合は `"-"` を設定する。
 
 **戻り値**: `DataFrame`
 
@@ -797,8 +822,9 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 2. 強み・弱みテキストを `replace_abbreviations` で展開する。
 3. `intervention_priority` を全角数字 + `"(negative)"` または `"(positive)"` サフィックスでフォーマットする（値が 0 の場合はサフィックスなし）。
 4. `level` を `LEVEL_LABELS` で日本語に変換する。
-5. その他列を文字列フォーマットし、`NaN` を `"-"` に変換する。
-6. DataFrame を転置し、インデックスを `SIGNAL_LABELS` で日本語にリネームする。
+5. `flag_constant_6m` を `FLAG_CONSTANT_LABELS` で日本語表示名に変換する（未マッチまたは空の場合は `"-"`）。
+6. その他列を文字列フォーマットし、`NaN` を `"-"` に変換する。
+7. DataFrame を転置し、インデックスを `SIGNAL_LABELS` で日本語にリネームする。
 
 **戻り値**: `Tuple[DataFrame, bool]`
 - `DataFrame`: 転置済み表示用 DataFrame（列名: `"値"`）

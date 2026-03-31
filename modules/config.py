@@ -64,10 +64,27 @@ SIGNAL_LABELS = {
     'vigor_rating': '活力',
     'dedication_rating': '熱意',
     'absorption_rating': '没頭',
+    'flag_constant_6m': '調査抵抗疑義',
     'strength_short': '強み（短期）',
     'weakness_short': '弱み（短期）',
     'strength_mid': '強み（中期）',
     'weakness_mid': '弱み（中期）'
+}
+
+# flag_constant_6m display labels
+FLAG_CONSTANT_LABELS = {
+    'LOW_FIXED': '連続固定低評価回答',
+    'MID_EVASION': '連続固定中評価回答',
+    'HIGH_AVOIDANCE': '連続固定高評価回答',
+    'FIX_SHIFTED': '連続固定回答シフト',
+}
+
+# flag_constant_6m additional points to intervention_priority_neg
+FLAG_CONSTANT_PRIORITY_POINTS = {
+    'LOW_FIXED': 3,
+    'MID_EVASION': 2,
+    'HIGH_AVOIDANCE': 2,
+    'FIX_SHIFTED': 4,
 }
 
 # Level value mapping (English → Japanese)
@@ -91,10 +108,10 @@ NEGATIVE_TRENDS = ['低下懸念', '悪化', '低下危機', '低下加速', '�
 INTERVENTION_PRIORITY_THRESHOLD = 2
 
 # Signal table display columns
-SIGNAL_TABLE_COLUMNS = ['name', 'section', 'intervention_priority', 'trend_recent', 'trend_refined', 'big_change', 'stability_6']
+SIGNAL_TABLE_COLUMNS = ['name', 'section', 'intervention_priority', 'trend_recent', 'trend_refined', 'big_change', 'stability_6', 'flag_constant_6m']
 INDIVIDUAL_SIGNAL_COLUMNS = [
     'intervention_priority', 'level', 'trend_recent',
-    'trend_refined', 'big_change', 'stability_6',
+    'trend_refined', 'big_change', 'stability_6', 'flag_constant_6m',
     'strength_short', 'weakness_short', 'strength_mid', 'weakness_mid'
 ]
 

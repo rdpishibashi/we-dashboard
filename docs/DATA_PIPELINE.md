@@ -37,6 +37,7 @@ WE-Dashboard アプリケーションにおける、Excel 入力からグラフ�
 | `trend_refined` | 中期トレンド |
 | `big_change` | 短期変動（旧称: `change_tag`） |
 | `stability_6` | 中期安定性（旧称: `stability`） |
+| `flag_constant_6m` | 調査抵抗疑義（V/D/A 固定化パターン判定） |
 | `strength_short` | 強み（短期） |
 | `strength_mid` | 強み（中期） |
 | `weakness_short` | 弱み（短期） |
@@ -90,6 +91,7 @@ EngagementMasterSS.xlsx
         │  current_division   → division
         │  current_department → department
         │  current_section    → section
+        │  flag_constant_6m   → flag_constant_6m (列なし時は None)
         ▼
 [5] 欠損値補完
         │  組織カラムを「未設定」で fillna
@@ -221,12 +223,22 @@ comment_df に対して直接 `filter_dataframe_by_scope()` を適用するこ�
 
 ### intervention_priority の導出
 
-rating2 シートには `intervention_priority_neg` と `intervention_priority_pos` の 2 列が存在する。これらを以下の規則で 1 列の `intervention_priority` に統合する。
+rating2 シートには `intervention_priority_neg` と `intervention_priority_pos` の 2 列が存在する。加えて `flag_constant_6m` の値に基づく追加ポイントを `_neg` に加算した上で、以下の規則で 1 列の `intervention_priority` に統合する。
+
+**flag_constant_6m 加算ポイント:**
+
+| 値 | 加算ポイント |
+|----|------------|
+| `LOW_FIXED` | +3 |
+| `MID_EVASION` | +2 |
+| `HIGH_AVOIDANCE` | +2 |
+| `FIX_SHIFTED` | +4 |
+| その他（空文字・None） | 0 |
 
 ```
-intervention_priority_neg > INTERVENTION_PRIORITY_THRESHOLD (= 2)
+(intervention_priority_neg + flag_constant_6m ポイント) > INTERVENTION_PRIORITY_THRESHOLD (= 2)
     → タイプ: negative
-    → 表示値 = intervention_priority_neg - threshold
+    → 表示値 = 加算後 neg 値 - threshold
 
 intervention_priority_pos > INTERVENTION_PRIORITY_THRESHOLD (= 2)
     → タイプ: positive
@@ -259,7 +271,18 @@ intervention_priority_pos > INTERVENTION_PRIORITY_THRESHOLD (= 2)
 |-----------|---------|
 | 介入必要度 | 全角数字で表示。negative は赤色、positive は緑色 |
 | `level` | 英語ラベル → 日本語変換（下表参照） |
+| `flag_constant_6m` | 内部値 → 日本語変換（下表参照） |
 | `strength` / `weakness` | 略称 → 日本語変換（下表参照） |
+
+**flag_constant_6m 変換テーブル:**
+
+| 内部値 | 日本語表示名 |
+|--------|------------|
+| `LOW_FIXED` | 連続固定低評価回答 |
+| `MID_EVASION` | 連続固定中評価回答 |
+| `HIGH_AVOIDANCE` | 連続固定高評価回答 |
+| `FIX_SHIFTED` | 連続固定回答シフト |
+| その他 | `-` |
 
 **level 変換テーブル:**
 
