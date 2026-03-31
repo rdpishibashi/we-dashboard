@@ -274,15 +274,20 @@ graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
 | 関数 | 説明 |
 |------|------|
 | `apply_signal_rating_calculations()` | シグナル値の計算適用 |
+| `derive_intervention_priority()` | 介入優先度の表示値を導出（flag ボーナス含む） |
 | `get_signal_data()` | フィルタリング済みシグナルデータ取得 |
 | `sort_signals_by_trend_and_priority()` | トレンド・優先度でソート |
 | `render_signal_table()` | シグナルテーブル表示 |
 | `format_individual_signal_data()` | 個人シグナルの整形 |
 
+**介入優先度（intervention_priority）の計算:**
+
+1. **足切り判定は raw 値のみ**: `neg_qualifies = raw_neg > threshold`、`pos_qualifies = pos > threshold`。`flag_constant_6m` ボーナスは eligibility チェックに含まない。
+2. **flag ボーナスは適格行のみに加算**: 足切りを通過した neg 行のみに `FLAG_CONSTANT_PRIORITY_POINTS` のボーナスを加算する（`flag_pts.where(neg_qualifies, 0.0)`）。
+3. **どちらも不適格な場合は neg をデフォルト**: 表示値は ≤ 0 となり、フォーマット側で ０ にクランプされる。
+
 **シグナルソート順:**
-1. トレンドグループ（ネガティブ → 中立 → ポジティブ）
-2. 介入優先度（降順）
-3. 課（設定順）
+1. 優先度タイプ（neg first）→ 優先度値 → トレンドグループ → 課
 
 ### 3.7 modules/components.py（UIコンポーネントモジュール）
 
@@ -619,6 +624,9 @@ google-auth>=2.0.0   # Google認証
 | 2026-03 | change_tag→big_change, stability→stability_6 にフィールド名統一 |
 | 2026-03-08 | 技術ドキュメント再構成（INDEX/SETUP_GUIDE/DATA_PIPELINE/PRIVILEGE_SYSTEM/MODULE_REFERENCE追加） |
 | 2026-03-31 | `flag_constant_6m`（調査抵抗疑義）をシグナル表示・介入優先度計算に追加 |
+| 2026-03-31 | `derive_intervention_priority()` の足切りロジックを修正: flag_constant_6m ボーナスは raw_neg が閾値を超えた行にのみ適用 |
+| 2026-03-31 | `get_signal_data()` の足切りフィルターを raw neg/pos ベースに修正（flag ボーナスは表示値のみに影響） |
+| 2026-03-31 | signal_processing.py リファクタリング: プライベートヘルパー抽出（`_get_flag_points`, `_fmt_flag_constant`, `_fmt_priority_table`, `_fmt_priority_individual`）、`get_signal_column_config()` を `render_signal_table()` にインライン化 |
 
 ---
 
@@ -675,3 +683,31 @@ pivot_dfでフィルタリングした結果と同期させる場合は名前ベ
 names_in_filtered = ts_df['name'].unique()
 tab_signal_df = tab_signal_df[tab_signal_df['name'].isin(names_in_filtered)]
 ```
+
+### 9.6 intervention_priority の計算ルールと落とし穴
+
+#### 設計原則
+
+| レイヤー | 使用する値 | 理由 |
+|----------|-----------|------|
+| 足切りフィルター（`get_signal_data`） | **raw neg / pos のみ** | flag ボーナスで対象者が増えないようにする |
+| 表示値の計算（`derive_intervention_priority`） | **raw neg + flag ボーナス**（raw neg が閾値を超えた行のみ） | 表示値だけを引き上げる |
+
+#### derive_intervention_priority() のルール
+
+```python
+neg_qualifies = raw_neg > threshold          # フラグなしの生値で判定
+neg = raw_neg + flag_pts.where(neg_qualifies, 0.0)  # 適格な行のみにボーナス加算
+_priority_is_neg = neg_qualifies | (~pos_qualifies)  # neg 優先（どちらも不適格なら neg をデフォルト）
+intervention_priority = neg.where(_priority_is_neg, pos) - threshold
+```
+
+`_priority_is_neg` は表示の赤/緑の色分けだけでなく、ソート順にも影響する。
+
+#### よくある落とし穴
+
+| 問題 | 症状 | 原因 | 対策 |
+|------|------|------|------|
+| flag ボーナスを足切り前に加算 | raw_neg == threshold の人が表示される（または個人レポートで priority > 0 になる） | `get_signal_data()` または `derive_intervention_priority()` で flag ポイントを eligibility チェック前に足す | 足切りフィルターと `neg_qualifies` には raw neg のみを使う |
+| 二重コンテキスト | 個人レポートで非適格者の priority が 0 にならない | `derive_intervention_priority()` が `get_signal_data()` 経由（適格者のみ）と `format_individual_signal_data()` 経由（全員）の両方から呼ばれる | `flag_pts.where(neg_qualifies, 0.0)` で常に raw eligibility をチェック |
+| flag 変換ロジックの重複 | flag ラベル変更時の更新漏れ | 同一の変換 lambda が複数箇所に存在 | `_fmt_flag_constant()` プライベートヘルパーを唯一の場所とする |
