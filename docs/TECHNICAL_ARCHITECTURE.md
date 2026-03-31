@@ -87,6 +87,7 @@ pivot_df（正規化済み評価データ）とsignal_df（シグナルデータ
 | trend_refined | 中期トレンド |
 | big_change | 短期変動 |
 | stability_6 | 中期安定性 |
+| flag_constant_6m | 調査抵抗疑義（V/D/A 固定化パターン判定） |
 | strength_short/mid | 強み（短期/中期） |
 | weakness_short/mid | 弱み（短期/中期） |
 | engagement_rating | エンゲージメント値（生スコア 0-54） |
@@ -230,6 +231,8 @@ graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
 | `ORG_FILTER_COLUMNS` | 権限フィルタリング対象カラム |
 | `METRIC_LABELS` | 指標の日本語ラベル |
 | `SIGNAL_LABELS` | シグナル項目の日本語ラベル |
+| `FLAG_CONSTANT_LABELS` | `flag_constant_6m` 値の日本語表示名マッピング |
+| `FLAG_CONSTANT_PRIORITY_POINTS` | `flag_constant_6m` 値の介入優先度加算ポイント |
 | `RATING_AXIS_MAX` | Y軸最大値（10.3） |
 | `POSITIVE_TRENDS` / `NEGATIVE_TRENDS` | トレンド分類 |
 | `PRIVILEGE_GROUP_ACCESS` | 権限別アクセス範囲 |
@@ -249,6 +252,7 @@ graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
 1. rating2シートを読み込み、signal_dfを構築（組織カラムマッピング、年月カラム生成）
 2. signal_dfから評価カラムを選択・正規化してpivot_dfを導出
 3. 欠損値を「未設定」で補完
+4. `flag_constant_6m` 列を追加（Excel に列がない場合は None で補完）
 
 ### 3.5 modules/charts.py（グラフ生成モジュール）
 
@@ -614,6 +618,7 @@ google-auth>=2.0.0   # Google認証
 | 2026-03 | response_manager.py追加（共有したいことへの返信機能、Google Sheets連携） |
 | 2026-03 | change_tag→big_change, stability→stability_6 にフィールド名統一 |
 | 2026-03-08 | 技術ドキュメント再構成（INDEX/SETUP_GUIDE/DATA_PIPELINE/PRIVILEGE_SYSTEM/MODULE_REFERENCE追加） |
+| 2026-03-31 | `flag_constant_6m`（調査抵抗疑義）をシグナル表示・介入優先度計算に追加 |
 
 ---
 
