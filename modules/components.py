@@ -433,25 +433,25 @@ def render_non_respondents(
     # Mail addresses of members who submitted data in the latest period
     submitted = set(df[df['year_month'] == latest_ym]['mail_address'].dropna().unique())
 
-    # List A: divisions present in the uploaded data
+    # List A: divisions present in the uploaded data file
     data_divisions = set(df['division'].dropna().unique())
 
-    # Filter member list to the privilege's org scope
-    scope = privilege_mgr.get_data_scope_for_tab(current_privilege, 'default')
+    # List B: members in members.yaml whose division is in List A
+    list_b = member_df[member_df['division'].isin(data_divisions)].copy()
+
+    # List C: members in members.yaml matching the same scope as アクション対象候補
+    scope = privilege_mgr.get_section_scope(current_privilege, "アクション対象候補")
     if scope is not None and len(scope) == 0:
         return  # No access
     if scope is not None:
         mask = (
-            member_df['division'].isin(scope) |
-            member_df['department'].isin(scope) |
-            member_df['section'].isin(scope)
+            list_b['division'].isin(scope) |
+            list_b['department'].isin(scope) |
+            list_b['section'].isin(scope)
         )
-        scoped_members = member_df[mask].copy()
+        scoped_members = list_b[mask].copy()
     else:
-        scoped_members = member_df.copy()
-
-    # List B: restrict to members whose division is in the uploaded data (List A)
-    scoped_members = scoped_members[scoped_members['division'].isin(data_divisions)]
+        scoped_members = list_b.copy()  # admin: no restriction
 
     # Apply sidebar filter selections to member list
     if selected_filters:
