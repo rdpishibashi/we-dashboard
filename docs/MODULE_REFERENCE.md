@@ -1,6 +1,6 @@
 # WE-Dashboard モジュール API リファレンス
 
-> 最終更新: 2026-03-31
+> 最終更新: 2026-04-04
 
 本ドキュメントは WE-Dashboard アプリケーションを構成する全モジュールの関数レベルリファレンスです。
 各関数のシグネチャ・引数・戻り値・動作仕様を網羅的に記載します。
@@ -22,6 +22,7 @@
 11. [modules/utils.py — ユーティリティ](#11-modulesutilspy--ユーティリティ)
 12. [modules/encryption.py — 暗号化](#12-modulesencryptionpy--暗号化)
 13. [modules/response_manager.py — 返信管理](#13-modulesresponse_managerpy--返信管理)
+14. [modules/member_loader.py — メンバーリスト読み込み](#14-modulesmember_loaderpy--メンバーリスト読み込み)
 
 ---
 
@@ -574,6 +575,7 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 
 **動作**:
 - `color_by` が指定されている場合: グループ別に月次平均を集計し、複数折れ線を描画する。グループ順序は `get_category_order_with_reference` で決定する。
+- `color_by == 'name'`（個人別）の場合: トレース順（= 統合ホバーリストの表示順）を最新データ時点の値の降順でソートする。これにより、ホバーウィンドウのリストが最新時点の折れ線の上下順と一致する。
 - `color_by` が `None` または `'なし'` の場合: 全体の月次平均を単一の折れ線で描画する。
 - データ点数が 6 以下の場合、X 軸ティックを明示的に設定する。
 - Y 軸範囲は `[0, RATING_AXIS_MAX]`（10.3）に固定する。
@@ -981,9 +983,34 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 
 ---
 
-#### `render_comments_and_signals(signal_df, main_df, comment_df, start_dt, end_dt, key_prefix, privilege_mgr, current_privilege, is_authenticated, latest_year_month)`
+#### `render_non_respondents(member_df, df, end_dt, privilege_mgr, current_privilege, selected_filters)`
 
-アクション候補・気になった出来事・共有したいことの 3 セクションをまとめて表示する便利関数。
+「未記入者」（最新期間に回答データが存在しないメンバー）セクションを表示する。
+
+| 引数 | 型 | 説明 |
+|------|----|------|
+| `member_df` | `DataFrame` | `member_loader.load_members()` で読み込んだアクティブメンバーリスト |
+| `df` | `DataFrame` | タブスコープでフィルタリング済みのエンゲージメント DataFrame（回答済みメンバー特定用） |
+| `end_dt` | `Timestamp` | 選択中の期間終了日（最新期間の定義に使用） |
+| `privilege_mgr` | `PrivilegeManager` | PrivilegeManager インスタンス |
+| `current_privilege` | `str` | 現在のユーザーの権限クラス |
+| `selected_filters` | `Optional[dict]` | サイドバーフィルターの選択値辞書（`render_unified_sidebar_filters` の戻り値） |
+
+**動作**:
+1. `has_feature_access` で `'未記入者'` 機能へのアクセス権を確認する（admin / department_head / section_manager のみ）。
+2. `get_data_scope_for_tab` で権限スコープを取得し、`member_df` をスコープフィルタリングする。
+3. `selected_filters` が指定されている場合、`division` / `department` / `section` / `individual` の各フィルターを `scoped_members` に適用する（`individual` は `member_name` 列で一致）。
+4. `df` の最新 `year_month` に回答が存在しないメンバーを特定し、部署順 → 課順 → 氏名順でソートして `st.dataframe` で表示する。
+
+**アクセス権**: `admin`, `department_head`, `section_manager` のみ表示。`member` / `member_no_grade_filter` / `anonymous` は非表示。
+
+**戻り値**: `None`
+
+---
+
+#### `render_comments_and_signals(signal_df, main_df, comment_df, start_dt, end_dt, key_prefix, privilege_mgr, current_privilege, is_authenticated, latest_year_month, member_df, selected_filters)`
+
+アクション候補・気になった出来事・共有したいこと・未記入者の 4 セクションをまとめて表示する便利関数。
 
 | 引数 | 型 | 説明 |
 |------|----|------|
@@ -997,8 +1024,10 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 | `current_privilege` | `str` | 現在のユーザーの権限クラス |
 | `is_authenticated` | `bool` | ユーザーが認証済みかどうか |
 | `latest_year_month` | `Optional[Timestamp]` | 返信可能判定基準となる最新の `year_month_dt` |
+| `member_df` | `Optional[DataFrame]` | 未記入者セクション用アクティブメンバーリスト（`None` の場合はセクションをスキップ） |
+| `selected_filters` | `Optional[dict]` | サイドバーフィルターの選択値辞書（`render_non_respondents` に転送） |
 
-**動作**: `is_authenticated=False` の場合は何も表示しない。`render_action_candidates` → `prepare_comment_data` → `render_concern_section` → `render_comment_section` の順で処理する。
+**動作**: `is_authenticated=False` の場合は何も表示しない。`render_action_candidates` → `prepare_comment_data` → `render_concern_section` → `render_comment_section` → `render_non_respondents` の順で処理する。
 
 **戻り値**: `None`
 
@@ -1699,6 +1728,34 @@ Google Sheet から返信一覧を読み込む。セッション状態にキャ�
 
 ---
 
+## 14. modules/member_loader.py — メンバーリスト読み込み
+
+**行数**: 43 行
+**役割**: `config/members.yaml` からアクティブメンバーリストを読み込み、未記入者セクションに提供する。設定ファイルが存在しない場合は空 DataFrame を返してセクションをサイレントにスキップする。
+
+**データソース**: `config/members.yaml`（`tools/generate_member_yaml.py` で `Member.xlsx` から生成）
+
+**読み込み列**:
+
+| 列名 | 説明 |
+|------|------|
+| `mail_address` | メールアドレス（エンゲージメントデータとの照合キー） |
+| `member_name` | 氏名 |
+| `division` | 部門 |
+| `department` | 部署 |
+| `section` | 課 |
+
+### 関数リファレンス
+
+#### `load_members()` _(キャッシュあり: `@st.cache_data`)_
+
+`config/members.yaml` からアクティブメンバーリストを読み込む。
+
+**引数**: なし
+**戻り値**: `DataFrame` — `mail_address`, `member_name`, `division`, `department`, `section` 列を含む DataFrame。`members.yaml` が存在しない場合は空 DataFrame（未記入者セクションはサイレントスキップ）。
+
+---
+
 ## 付録: モジュール間依存関係
 
 ```
@@ -1730,6 +1787,7 @@ app.py
   │    ├─ modules/privilege_manager.py
   │    ├─ modules/auth.py
   │    └─ modules/response_manager.py
+  ├─ modules/member_loader.py   （メンバーリスト読み込み）
   ├─ modules/encryption.py      （暗号化）
   └─ modules/response_manager.py（返信管理）
 ```

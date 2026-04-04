@@ -210,8 +210,24 @@ GROUP_LABELS = {
     'name': '個人'
 }
 
-# Default data file
-DEFAULT_FILE_PATH = "EngagementMasterSS.xlsx"
+# Default data file — looks for EngagementData-*.xlsx
+def find_default_data_files():
+    """
+    Search for EngagementData-*.xlsx in a platform-appropriate location.
+
+    - Windows: ~/Documents/WE-Dashboard/  (user-visible folder next to the exe)
+    - Other (Mac / Streamlit Cloud): same directory as app.py (project root)
+
+    Returns a list of matching paths (may be empty).
+    """
+    import glob
+    import sys
+    if sys.platform == 'win32':
+        data_dir = Path.home() / 'Documents' / 'WE-Dashboard'
+    else:
+        # Path(__file__) is modules/config.py → .parent.parent is project root
+        data_dir = Path(__file__).resolve().parent.parent
+    return glob.glob(str(data_dir / 'EngagementData-*.xlsx'))
 
 # Privilege-based access control for 共有したいこと section
 # Maps privilege to allowed groups (None = all groups allowed)

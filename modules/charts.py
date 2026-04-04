@@ -25,6 +25,7 @@ def _create_empty_figure(message="表示できるデータがありません", h
     return fig
 
 
+
 def create_time_series_chart(df, y_col, title, color_by=None):
     """時系列チャートの作成"""
     axis_title = METRIC_LABELS.get(y_col, y_col)
@@ -36,7 +37,21 @@ def create_time_series_chart(df, y_col, title, color_by=None):
 
         # カテゴリ順序の設定
         color_values = grouped[color_by].unique().tolist()
-        color_order = get_category_order_with_reference(color_by, color_values, df)
+        if color_by == 'name':
+            # Sort by most recent value descending so the unified hover list
+            # matches the top-to-bottom visual order of the lines at the latest date
+            latest_ym = grouped['year_month_dt'].max()
+            latest_vals = (
+                grouped[grouped['year_month_dt'] == latest_ym]
+                .set_index('name')[y_col]
+                .to_dict()
+            )
+            color_order = sorted(
+                color_values,
+                key=lambda n: -latest_vals.get(n, float('-inf'))
+            )
+        else:
+            color_order = get_category_order_with_reference(color_by, color_values, df)
 
         fig = px.line(
             grouped,

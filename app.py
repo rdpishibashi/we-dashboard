@@ -49,11 +49,12 @@ import os
 from modules.config import (
     PLOTLY_CHART_KWARGS, RADAR_CHART_CONFIG, DATAFRAME_KWARGS,
     METRIC_LABELS, SIGNAL_LABELS, SIGNAL_TABLE_COLUMNS, RATING_AXIS_MAX,
-    DEFAULT_FILE_PATH, RATING_BAND_HIGH_THRESHOLD, RATING_BAND_LOW_THRESHOLD,
+    find_default_data_files, RATING_BAND_HIGH_THRESHOLD, RATING_BAND_LOW_THRESHOLD,
     COLOR_SCALE_START, COLOR_SCALE_END, GROUPING_LABEL_MAP,
 )
 from modules.utils import get_options
 from modules.data_loader import load_data
+from modules.member_loader import load_members
 from modules.signal_processing import (
     apply_signal_rating_calculations, format_individual_signal_data,
     get_signal_data, render_signal_table
@@ -99,9 +100,14 @@ if render_login_ui():
 
 # Initialize uploaded file from previous upload (will render uploader at bottom later)
 uploaded_file = st.session_state.get('current_uploaded_file', None)
-if uploaded_file is None and os.path.exists(DEFAULT_FILE_PATH):
-    uploaded_file = DEFAULT_FILE_PATH
-    st.session_state['current_uploaded_file'] = DEFAULT_FILE_PATH
+if uploaded_file is None:
+    _defaults = find_default_data_files()
+    if len(_defaults) == 1:
+        uploaded_file = _defaults[0]
+        st.session_state['current_uploaded_file'] = _defaults[0]
+    elif len(_defaults) > 1:
+        uploaded_file = _defaults  # list of paths
+        st.session_state['current_uploaded_file'] = _defaults
 
 
 def migrate_session_state():
@@ -157,11 +163,20 @@ if uploaded_file is not None:
     migrate_session_state()
     # データ読み込み
     try:
-        df, signal_df, comment_df = load_data(uploaded_file)
+        if isinstance(uploaded_file, list):
+            results = [load_data(p) for p in uploaded_file]
+            df = pd.concat([r[0] for r in results], ignore_index=True)
+            signal_df = pd.concat([r[1] for r in results], ignore_index=True)
+            comment_df = pd.concat([r[2] for r in results], ignore_index=True)
+        else:
+            df, signal_df, comment_df = load_data(uploaded_file)
         # Success message will be shown in upload section at bottom
     except Exception as e:
         st.error(f"データ読み込みエラー: {e}")
         st.stop()
+
+    # Load member list for 未記入者 section (silently skipped if members.yaml is missing)
+    member_df = load_members()
 
     # Compute latest_year_month from full comment data (before period filtering)
     latest_year_month = comment_df['year_month_dt'].max() if not comment_df.empty else None
@@ -196,7 +211,7 @@ if uploaded_file is not None:
 - **計測値**：表示しているデータの値
 - **主要な指標**：表示しているデータの主要統計値
 - **アクション対象候補**：アクションの必要性が高いメンバーと主要な分析値
-- **共有したいこと**：「共有したいこと」の記入内容一覧
+- **幹部職に伝えたいこと**：「幹部職に伝えたいこと」の記入内容一覧
 
 ##### グラフの種類
 - **時系列**：年月推移の表示カテゴリ別折れ線グラフ
@@ -225,17 +240,29 @@ if uploaded_file is not None:
         default_start = available_months[max(0, len(available_months) - 6)]
         default_period = (default_start.to_pydatetime(), default_end.to_pydatetime())
 
+        min_dt = available_months[0].to_pydatetime()
+        max_dt = available_months[-1].to_pydatetime()
+
         # Initialize or reset period filter
         if "filter_period" not in st.session_state:
             st.session_state["filter_period"] = default_period
         elif st.session_state.get("reset_period_filter", False):
             st.session_state["filter_period"] = default_period
             st.session_state["reset_period_filter"] = False
+        else:
+            # Clamp stored value into the current data's date range.
+            # This prevents StreamlitValueBelowMinError when a new file
+            # is uploaded with a different (e.g. narrower) date range.
+            stored_start, stored_end = st.session_state["filter_period"]
+            clamped_start = max(min_dt, min(stored_start, max_dt))
+            clamped_end = max(min_dt, min(stored_end, max_dt))
+            if clamped_start != stored_start or clamped_end != stored_end:
+                st.session_state["filter_period"] = (clamped_start, clamped_end)
 
         start_dt, end_dt = st.sidebar.slider(
             "期間",
-            min_value=available_months[0].to_pydatetime(),
-            max_value=available_months[-1].to_pydatetime(),
+            min_value=min_dt,
+            max_value=max_dt,
             format="YYYY-MM",
             key="filter_period"
         )
@@ -296,8 +323,11 @@ if uploaded_file is not None:
                     st.rerun()
 
             # Show current file status
-            if uploaded_file == DEFAULT_FILE_PATH:
-                st.info(f"📋 デフォルトファイルを使用中")
+            if isinstance(uploaded_file, list):
+                names = ', '.join(os.path.basename(p) for p in uploaded_file)
+                st.info(f"📋 自動読み込み中: {names}")
+            elif isinstance(uploaded_file, str):
+                st.info(f"📋 自動読み込み中: {os.path.basename(uploaded_file)}")
             elif uploaded_file is not None:
                 st.success(f"✅ データ読み込み完了: {len(df):,}件")
 
@@ -386,7 +416,7 @@ if uploaded_file is not None:
                     tab_signal_df, ts_df, filtered_comment_df,
                     start_dt, end_dt, "ts",
                     privilege_mgr, current_privilege, is_authenticated(),
-                    latest_year_month
+                    latest_year_month, member_df, selected_filters
                 )
 
         # =============================================================
@@ -484,7 +514,7 @@ if uploaded_file is not None:
                         tab_signal_df, comparison_df, filtered_comment_df,
                         start_dt, end_dt, "gc_no_group",
                         privilege_mgr, current_privilege, is_authenticated(),
-                        latest_year_month
+                        latest_year_month, member_df, selected_filters
                     )
 
                 else:
@@ -521,7 +551,7 @@ if uploaded_file is not None:
                         tab_signal_df, comparison_df, filtered_comment_df,
                         start_dt, end_dt, "gc_grouped",
                         privilege_mgr, current_privilege, is_authenticated(),
-                        latest_year_month
+                        latest_year_month, member_df, selected_filters
                     )
 
         # =============================================================
@@ -816,8 +846,8 @@ if uploaded_file is not None:
                                 st.info("データがありません")
 
                     # Comment section
-                    if privilege_mgr.has_feature_access(current_privilege, "共有したいこと"):
-                        with st.expander("共有したいこと", expanded=False):
+                    if privilege_mgr.has_feature_access(current_privilege, "幹部職に伝えたいこと"):
+                        with st.expander("幹部職に伝えたいこと", expanded=False):
                             share_period = st.radio(
                                 "表示期間",
                                 ["全期間", "直近1ヶ月"],
@@ -829,12 +859,17 @@ if uploaded_file is not None:
                             if share_period == "直近1ヶ月":
                                 comment_data = comment_data[comment_data['year_month_dt'] == end_dt]
                             if not comment_data.empty:
-                                from modules.response_manager import (
-                                    load_responses, get_responses_for_comment, make_comment_key
-                                )
+                                try:
+                                    from modules.response_manager_windows import (
+                                        load_responses, get_responses_for_comment, make_comment_key
+                                    )
+                                except ImportError:
+                                    from modules.response_manager import (
+                                        load_responses, get_responses_for_comment, make_comment_key
+                                    )
                                 from modules.components import _render_responses, _render_response_input
-                                anonymize_names = privilege_mgr.should_anonymize_section(current_privilege, "共有したいこと")
-                                can_respond = not anonymize_names
+                                anonymize_names = privilege_mgr.should_anonymize_section(current_privilege, "幹部職に伝えたいこと")
+                                can_respond = not anonymize_names and privilege_mgr.is_response_enabled(current_privilege, "幹部職に伝えたいこと")
                                 responses_df = load_responses()
                                 member_email = individual_mail or ''
                                 comment_data = comment_data.sort_values('year_month', ascending=False)
@@ -1027,12 +1062,38 @@ else:
     st.info("サイドバーからデータファイルをアップロードしてください")
 
     st.markdown("""
-    ### 機能
+    #### 機能
+    1. **ログイン**：サイドバーからログインしてください
+    2. **フィルター設定**：期間・組織などを絞り込み
+    3. **レポート種別**：時系列、グループ比較、評価、分布、個人の各タブで分析
+    4. **インタラクティブ操作**：グラフ上でズーム、ホバー、凡例クリック
 
-    1. **ログイン**:　設定されたアカウントでログインする
-    2. **フィルター設定**:　サイドバーで表示対象データの期間・組織などを絞り込み
-    3. **表示タブ選択**:　時系列、グループ比較、分布分析、評価別、個人別の表示分類を選択
-    4. **インタラクティブ操作**:　グラフ上でズーム、ホバー、凡例クリックなど
+    #### 使い方
+    ##### ログイン
+    - 各部長、各課長、各課メンバーに応じたアカウントでログイン
+    - ログインアカウントによって見ることができるデータ範囲を制御している
+
+    ##### サイド・ウィンドウでの操作
+    - **期間**：表示期間の調整（デフォルトは直近６ヶ月）
+    - **表示指標**：ワーク・エンゲージメント総合値、活力／熱意／没頭の構成要素値の選択
+    - **表示カテゴリ**：表示をグルーピングするカテゴリの選択
+    - **フィルター設定**：表示データを部署などの属性でフィルターする
+    - **データ**：工数データファイルのアップロード
+
+    ##### メイン・ウィンドウでの操作
+    - **タブ**：表示するグラフ種類の選択
+    - **計測値**：表示しているデータの値
+    - **主要な指標**：表示しているデータの主要統計値
+    - **アクション対象候補**：アクションの必要性が高いメンバーと主要な分析値
+    - **幹部職に伝えたいこと**：「幹部職に伝えたいこと」の記入内容一覧
+
+    ##### グラフの種類
+    - **時系列**：年月推移の表示カテゴリ別折れ線グラフ
+    - **グループ比較**：年月別棒グラフ
+    - **評価（評価別比率）**：高い／中間／低い比率棒グラフ
+    - **評価（レーダーチャート）**：構成要素別レーダーチャート
+    - **分布**：平均／最大／最小／四分位の統計表示と点数別ヒストグラム
+    - **個人**：個人の時系列表示とアクション用シグナル（主要な分析値）
     """)
 
 # フッター

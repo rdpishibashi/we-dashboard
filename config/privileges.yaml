@@ -10,7 +10,7 @@
 # 2. Data Scope by Grouping (= すべて) - grouping scope when no dimension filter is selected
 # 3. Data Scope by Grouping (≠ すべて) - grouping scope when a specific dimension is selected
 # 4. Data Scope by Section - controls which data is visible in specific UI sections
-#    (計測値, 主な指標, アクション対象候補, 気になった出来事や気づき, 共有したいこと)
+#    (計測値, 主な指標, アクション対象候補, 気になった出来事や気づき, 幹部職に伝えたいこと)
 
 # Grade groups for filtering
 grade_groups:
@@ -74,15 +74,17 @@ privileges:
         type: all
       アクション対象候補:
         type: all
-      共有したいこと:
+      幹部職に伝えたいこと:
         type: all
     groupings:
       allowed: all
     features:
       気になった出来事や気づき: true
-      共有したいこと:
+      幹部職に伝えたいこと:
         access: true
         anonymize: false
+        response_enabled: true
+      未記入者: true
   department_head:
     tabs:
       allowed: all
@@ -96,15 +98,17 @@ privileges:
         type: organization
       アクション対象候補:
         type: organization
-      共有したいこと:
+      幹部職に伝えたいこと:
         type: organization
     groupings:
       allowed: all
     features:
       気になった出来事や気づき: false
-      共有したいこと:
+      幹部職に伝えたいこと:
         access: true
         anonymize: false
+        response_enabled: true
+      未記入者: true
   section_manager:
     inherits: department_head
     tabs:
@@ -129,7 +133,7 @@ privileges:
         type: organization
       アクション対象候補:
         type: organization
-      共有したいこと:
+      幹部職に伝えたいこと:
         type: organization
     groupings:
       allowed: all
@@ -145,9 +149,11 @@ privileges:
         reset_to: user_section
     features:
       気になった出来事や気づき: false
-      共有したいこと:
+      幹部職に伝えたいこと:
         access: true
         anonymize: false
+        response_enabled: true
+      未記入者: true
   member:
     inherits: section_manager
     tabs:
@@ -168,7 +174,7 @@ privileges:
         type: organization
       アクション対象候補:
         type: none
-      共有したいこと:
+      幹部職に伝えたいこと:
         type: organization
     groupings:
       allowed:
@@ -185,9 +191,11 @@ privileges:
         values_from: non_managers
     features:
       気になった出来事や気づき: false
-      共有したいこと:
-        access: true
+      幹部職に伝えたいこと:
+        access: false
         anonymize: true
+        response_enabled: false
+      未記入者: false
   member_no_grade_filter:
     inherits: section_manager
     tabs:
@@ -208,7 +216,7 @@ privileges:
         type: organization
       アクション対象候補:
         type: none
-      共有したいこと:
+      幹部職に伝えたいこと:
         type: none
     groupings:
       allowed:
@@ -222,9 +230,11 @@ privileges:
       - name
     features:
       気になった出来事や気づき: false
-      共有したいこと:
+      幹部職に伝えたいこと:
         access: false
         anonymize: true
+        response_enabled: false
+      未記入者: false
   anonymous:
     tabs:
       allowed: []
@@ -238,7 +248,7 @@ privileges:
         type: none
       アクション対象候補:
         type: none
-      共有したいこと:
+      幹部職に伝えたいこと:
         type: none
     groupings:
       allowed:
@@ -249,9 +259,11 @@ privileges:
       - project
     features:
       気になった出来事や気づき: false
-      共有したいこと:
+      幹部職に伝えたいこと:
         access: false
         anonymize: true
+        response_enabled: false
+      未記入者: false
 
 # User to privilege mapping with specific data scopes
 user_privileges:
@@ -293,7 +305,7 @@ user_privileges:
         values:
         - システム開発部
         - 機電設計部
-      共有したいこと:
+      幹部職に伝えたいこと:
         values:
         - システム開発部
         - 機電設計部
@@ -314,6 +326,13 @@ user_privileges:
         values:
         - システム開発部
         - 機電設計部
+    features:
+      気になった出来事や気づき: false
+      未記入者: true
+      幹部職に伝えたいこと:
+        access: true
+        anonymize: false
+        response_enabled: false
   me:
     inherits: department_head
     data_scope:
@@ -352,7 +371,7 @@ user_privileges:
         values:
         - システム開発部
         - 機電設計部
-      共有したいこと:
+      幹部職に伝えたいこと:
         values:
         - システム開発部
         - 機電設計部
@@ -373,6 +392,13 @@ user_privileges:
         values:
         - システム開発部
         - 機電設計部
+    features:
+      気になった出来事や気づき: false
+      未記入者: true
+      幹部職に伝えたいこと:
+        access: true
+        anonymize: false
+        response_enabled: false
   dev:
     inherits: department_head
     data_scope:
@@ -403,7 +429,7 @@ user_privileges:
       アクション対象候補:
         values:
         - 開発部
-      共有したいこと:
+      幹部職に伝えたいこと:
         values:
         - 開発部
     grouping_scope:
@@ -419,6 +445,13 @@ user_privileges:
       name:
         values:
         - 開発部
+    features:
+      気になった出来事や気づき: false
+      未記入者: true
+      幹部職に伝えたいこと:
+        access: true
+        anonymize: false
+        response_enabled: true
   sw:
     inherits: section_manager
     data_scope:
@@ -455,7 +488,7 @@ user_privileges:
       アクション対象候補:
         values:
         - ソフトウェア開発課
-      共有したいこと:
+      幹部職に伝えたいこと:
         values:
         - ソフトウェア開発課
     grouping_scope:
@@ -484,8 +517,15 @@ user_privileges:
         values: *id006
       name:
         values: *id007
+    features:
+      気になった出来事や気づき: false
+      未記入者: true
+      幹部職に伝えたいこと:
+        access: true
+        anonymize: false
+        response_enabled: false
   pd:
-    inherits: department_head
+    inherits: section_manager
     data_scope:
       時系列:
         values: &id008
@@ -505,8 +545,7 @@ user_privileges:
         - 機電設計部
       個人:
         values:
-        - システム開発部
-        - 機電設計部
+        - 製品技術課
       default:
         values: *id008
     section_scope:
@@ -522,13 +561,13 @@ user_privileges:
         values:
         - システム開発部
         - 機電設計部
-      共有したいこと:
+      幹部職に伝えたいこと:
         values:
         - システム開発部
         - 機電設計部
     grouping_scope:
       none:
-        values:
+        values: &id009
         - システム開発部
         - 機電設計部
       organization:
@@ -536,13 +575,29 @@ user_privileges:
         - システム開発部
         - 機電設計部
       grade:
-        values:
+        values: &id010
         - システム開発部
         - 機電設計部
       name:
+        values: &id011
+        - 製品技術課
+    grouping_scope_filtered:
+      none:
+        values: *id009
+      organization:
         values:
-        - システム開発部
-        - 機電設計部
+        - 製品技術課
+      grade:
+        values: *id010
+      name:
+        values: *id011
+    features:
+      気になった出来事や気づき: false
+      未記入者: true
+      幹部職に伝えたいこと:
+        access: true
+        anonymize: false
+        response_enabled: false
   me1:
     inherits: section_manager
     data_scope:
@@ -579,7 +634,7 @@ user_privileges:
       アクション対象候補:
         values:
         - 第一設計課
-      共有したいこと:
+      幹部職に伝えたいこと:
         values:
         - 第一設計課
     grouping_scope:
@@ -602,11 +657,19 @@ user_privileges:
       none:
         values: *id013
       organization:
-        type: none
+        values:
+        - 第一設計課
       grade:
         values: *id014
       name:
         values: *id015
+    features:
+      気になった出来事や気づき: false
+      未記入者: true
+      幹部職に伝えたいこと:
+        access: true
+        anonymize: false
+        response_enabled: false
   me2:
     inherits: section_manager
     data_scope:
@@ -643,7 +706,7 @@ user_privileges:
       アクション対象候補:
         values:
         - 第二設計課
-      共有したいこと:
+      幹部職に伝えたいこと:
         values:
         - 第二設計課
     grouping_scope:
@@ -666,11 +729,19 @@ user_privileges:
       none:
         values: *id017
       organization:
-        type: none
+        values:
+        - 第二設計課
       grade:
         values: *id018
       name:
         values: *id019
+    features:
+      気になった出来事や気づき: false
+      未記入者: true
+      幹部職に伝えたいこと:
+        access: true
+        anonymize: false
+        response_enabled: false
   me3:
     inherits: section_manager
     data_scope:
@@ -707,7 +778,7 @@ user_privileges:
       アクション対象候補:
         values:
         - 第三設計課
-      共有したいこと:
+      幹部職に伝えたいこと:
         values:
         - 第三設計課
     grouping_scope:
@@ -730,11 +801,19 @@ user_privileges:
       none:
         values: *id021
       organization:
-        type: none
+        values:
+        - 第三設計課
       grade:
         values: *id022
       name:
         values: *id023
+    features:
+      気になった出来事や気づき: false
+      未記入者: true
+      幹部職に伝えたいこと:
+        access: true
+        anonymize: false
+        response_enabled: false
   dev1:
     inherits: section_manager
     data_scope:
@@ -768,7 +847,7 @@ user_privileges:
         values:
         - 開発部 1課
         - UTI技術発展処
-      共有したいこと:
+      幹部職に伝えたいこと:
         values:
         - 開発部 1課
         - UTI技術発展処
@@ -786,6 +865,13 @@ user_privileges:
         values:
         - 開発部 1課
         - UTI技術発展処
+    features:
+      気になった出来事や気づき: false
+      未記入者: true
+      幹部職に伝えたいこと:
+        access: true
+        anonymize: false
+        response_enabled: true
   dev2:
     inherits: section_manager
     data_scope:
@@ -819,7 +905,7 @@ user_privileges:
         values:
         - 開発部 2課
         - UK S1-Project
-      共有したいこと:
+      幹部職に伝えたいこと:
         values:
         - 開発部 2課
         - UK S1-Project
@@ -837,6 +923,13 @@ user_privileges:
         values:
         - 開発部 2課
         - UK S1-Project
+    features:
+      気になった出来事や気づき: false
+      未記入者: true
+      幹部職に伝えたいこと:
+        access: true
+        anonymize: false
+        response_enabled: true
   uti:
     inherits: section_manager
     data_scope:
@@ -870,7 +963,7 @@ user_privileges:
         values:
         - 開発部 1課
         - UTI技術発展処
-      共有したいこと:
+      幹部職に伝えたいこと:
         values:
         - 開発部 1課
         - UTI技術発展処
@@ -888,6 +981,13 @@ user_privileges:
         values:
         - 開発部 1課
         - UTI技術発展処
+    features:
+      気になった出来事や気づき: false
+      未記入者: true
+      幹部職に伝えたいこと:
+        access: true
+        anonymize: false
+        response_enabled: true
   uks:
     inherits: section_manager
     data_scope:
@@ -921,7 +1021,7 @@ user_privileges:
         values:
         - 開発部 2課
         - UK S1-Project
-      共有したいこと:
+      幹部職に伝えたいこと:
         values:
         - 開発部 2課
         - UK S1-Project
@@ -939,6 +1039,13 @@ user_privileges:
         values:
         - 開発部 2課
         - UK S1-Project
+    features:
+      気になった出来事や気づき: false
+      未記入者: true
+      幹部職に伝えたいこと:
+        access: true
+        anonymize: false
+        response_enabled: true
   soft:
     inherits: member
     data_scope:
@@ -967,7 +1074,7 @@ user_privileges:
         - 機電設計部
       アクション対象候補:
         type: none
-      共有したいこと:
+      幹部職に伝えたいこと:
         values:
         - ソフトウェア開発課
         anonymize: true
@@ -998,6 +1105,13 @@ user_privileges:
         grade_filter: non_managers
       name:
         type: none
+    features:
+      気になった出来事や気づき: false
+      未記入者: false
+      幹部職に伝えたいこと:
+        access: false
+        anonymize: true
+        response_enabled: false
   prod:
     inherits: member
     data_scope:
@@ -1026,7 +1140,7 @@ user_privileges:
         - 機電設計部
       アクション対象候補:
         type: none
-      共有したいこと:
+      幹部職に伝えたいこと:
         values:
         - 製品技術課
         anonymize: true
@@ -1057,6 +1171,13 @@ user_privileges:
         grade_filter: non_managers
       name:
         type: none
+    features:
+      気になった出来事や気づき: false
+      未記入者: false
+      幹部職に伝えたいこと:
+        access: false
+        anonymize: true
+        response_enabled: false
   mechele1:
     inherits: member
     data_scope:
@@ -1085,7 +1206,7 @@ user_privileges:
         - 機電設計部
       アクション対象候補:
         type: none
-      共有したいこと:
+      幹部職に伝えたいこと:
         values:
         - 第一設計課
         anonymize: true
@@ -1116,6 +1237,13 @@ user_privileges:
         grade_filter: non_managers
       name:
         type: none
+    features:
+      気になった出来事や気づき: false
+      未記入者: false
+      幹部職に伝えたいこと:
+        access: false
+        anonymize: true
+        response_enabled: false
   mechele2:
     inherits: member
     data_scope:
@@ -1144,7 +1272,7 @@ user_privileges:
         - 機電設計部
       アクション対象候補:
         type: none
-      共有したいこと:
+      幹部職に伝えたいこと:
         values:
         - 第二設計課
         anonymize: true
@@ -1175,6 +1303,13 @@ user_privileges:
         grade_filter: non_managers
       name:
         type: none
+    features:
+      気になった出来事や気づき: false
+      未記入者: false
+      幹部職に伝えたいこと:
+        access: false
+        anonymize: true
+        response_enabled: false
   mechele3:
     inherits: member
     data_scope:
@@ -1203,7 +1338,7 @@ user_privileges:
         - 機電設計部
       アクション対象候補:
         type: none
-      共有したいこと:
+      幹部職に伝えたいこと:
         values:
         - 第三設計課
         anonymize: true
@@ -1234,6 +1369,13 @@ user_privileges:
         grade_filter: non_managers
       name:
         type: none
+    features:
+      気になった出来事や気づき: false
+      未記入者: false
+      幹部職に伝えたいこと:
+        access: false
+        anonymize: true
+        response_enabled: false
   develop1:
     inherits: member_no_grade_filter
     data_scope:
@@ -1257,7 +1399,7 @@ user_privileges:
         - 開発部
       アクション対象候補:
         type: none
-      共有したいこと:
+      幹部職に伝えたいこと:
         values:
         - 開発部 1課
         - UTI技術発展処
@@ -1285,6 +1427,13 @@ user_privileges:
         - UTI技術発展処
       name:
         type: none
+    features:
+      気になった出来事や気づき: false
+      未記入者: false
+      幹部職に伝えたいこと:
+        access: false
+        anonymize: true
+        response_enabled: false
   develop2:
     inherits: member_no_grade_filter
     data_scope:
@@ -1308,7 +1457,7 @@ user_privileges:
         - 開発部
       アクション対象候補:
         type: none
-      共有したいこと:
+      幹部職に伝えたいこと:
         values:
         - 開発部 2課
         - UK S1-Project
@@ -1336,3 +1485,10 @@ user_privileges:
         - UK S1-Project
       name:
         type: none
+    features:
+      気になった出来事や気づき: false
+      未記入者: false
+      幹部職に伝えたいこと:
+        access: false
+        anonymize: true
+        response_enabled: false

@@ -75,9 +75,9 @@ Overrides from = すべて. Omitted privileges inherit all values. — means sam
 | pd | — | 製品技術課 | — | — |
 | soft | — | なし | ソフトウェア開発課（非管理職） | — |
 | prod | — | なし | 製品技術課（非管理職） | — |
-| me1 | — | なし | — | — |
-| me2 | — | なし | — | — |
-| me3 | — | なし | — | — |
+| me1 | — | 第一設計課 | — | — |
+| me2 | — | 第二設計課 | — | — |
+| me3 | — | 第三設計課 | — | — |
 | mechele1 | — | なし | 第一設計課（非管理職） | — |
 | mechele2 | — | なし | 第二設計課（非管理職） | — |
 | mechele3 | — | なし | 第三設計課（非管理職） | — |
@@ -86,13 +86,13 @@ Overrides from = すべて. Omitted privileges inherit all values. — means sam
 
 ## Data Scope by Section
 
-| Privilege | 計測値 | 主な指標 | アクション対象候補 | 気になった出来事や気づき | 共有したいこと |
+| Privilege | 計測値 | 主な指標 | アクション対象候補 | 気になった出来事や気づき | 幹部職に伝えたいこと |
 |---|---|---|---|---|---|
 | admin | 全て | 全て | 全て | 全て | 全て |
 | anonymous | なし | なし | なし | なし | なし |
 | sd | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | なし | システム開発部 + 機電設計部 |
 | sw | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | ソフトウェア開発課 | なし | ソフトウェア開発課 |
-| pd | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | 製品技術課 | なし | 製品技術課 |
+| pd | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | なし | システム開発部 + 機電設計部 |
 | soft | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | なし | なし | ソフトウェア開発課（個人名なし） |
 | prod | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | なし | なし | 製品技術課（個人名なし） |
 | me | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | なし | システム開発部 + 機電設計部 |
@@ -109,4 +109,35 @@ Overrides from = すべて. Omitted privileges inherit all values. — means sam
 | uks | 開発部 | 開発部 | 開発部 2課 + UK S1-Project | なし | 開発部 2課 + UK S1-Project |
 | develop1 | 開発部 | 開発部 | なし | なし | 開発部 1課 + UTI技術発展処（個人名なし） |
 | develop2 | 開発部 | 開発部 | なし | なし | 開発部 2課 + UK S1-Project（個人名なし） |
+
+
+## Feature Configuration
+
+### 幹部職に伝えたいこと
+response_enabled = true: 表示あり（管理職は名前表示＋レスポンス可、member クラスは匿名表示のみ）
+response_enabled = false: member/member_no_grade_filter クラスはセクション非表示、その他は名前表示のみ（レスポンス UI なし）
+
+| Privilege | response_enabled |
+|-----------|-----------------|
+| admin | true |
+| sd | false |
+| me | false |
+| dev | true |
+| sw | false |
+| pd | false |
+| me1 | false |
+| me2 | false |
+| me3 | false |
+| dev1 | true |
+| dev2 | true |
+| uti | true |
+| uks | true |
+| soft | false |
+| prod | false |
+| mechele1 | false |
+| mechele2 | false |
+| mechele3 | false |
+| develop1 | false |
+| develop2 | false |
+| anonymous | false |
 
