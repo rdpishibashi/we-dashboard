@@ -2,7 +2,7 @@
 Reusable UI components for the WE-Dashboard.
 
 This module consolidates duplicated patterns from app.py into reusable functions:
-- Comment section rendering (共有したいこと, 気になった出来事や気づき)
+- Comment section rendering (幹部職に伝えたいこと, 気になった出来事や気づき)
 - Action candidates rendering (アクション対象候補)
 - Comment data preparation
 """
@@ -15,9 +15,14 @@ from modules.signal_processing import get_signal_data, render_signal_table
 from modules.config import SIGNAL_TABLE_COLUMNS
 from modules.privilege_manager import filter_dataframe_by_scope
 from modules.utils import GROUP_ORDER_MAP
-from modules.response_manager import (
-    load_responses, post_response, get_responses_for_comment, make_comment_key
-)
+try:
+    from modules.response_manager_windows import (
+        load_responses, post_response, get_responses_for_comment, make_comment_key
+    )
+except ImportError:
+    from modules.response_manager import (
+        load_responses, post_response, get_responses_for_comment, make_comment_key
+    )
 from modules.auth import get_current_user, get_current_display_name
 
 
@@ -87,6 +92,11 @@ def prepare_comment_data(
         graph_comments['department'] = graph_comments['current_department'].fillna('未設定')
     if 'current_division' in graph_comments.columns:
         graph_comments['division'] = graph_comments['current_division'].fillna('未設定')
+
+    # Ensure no NaN remains in org columns regardless of which source columns exist
+    for col in ['section', 'department', 'division']:
+        if col in graph_comments.columns:
+            graph_comments[col] = graph_comments[col].fillna('未設定')
 
     # Apply section scope filtering using comment's own organization columns
     # filter_dataframe_by_scope checks division, department, AND section columns
@@ -162,6 +172,7 @@ def render_concern_section(
     if comment_data.empty:
         return
 
+    st.subheader("コメント")
     section_order = GROUP_ORDER_MAP.get('section', [])
 
     with st.expander("気になった出来事や気づき", expanded=False):
@@ -293,7 +304,7 @@ def render_comment_section(
     latest_year_month: Optional[pd.Timestamp] = None
 ) -> None:
     """
-    Render the 共有したいこと section with optional anonymization and response support.
+    Render the 幹部職に伝えたいこと section with optional anonymization and response support.
 
     Args:
         comment_data: Prepared comment DataFrame (from prepare_comment_data)
@@ -301,10 +312,10 @@ def render_comment_section(
         key_prefix: Unique key prefix for Streamlit widgets
         privilege_mgr: PrivilegeManager instance
         current_privilege: Current user's privilege
-        share_scope: Section scope for 共有したいこと (used to check access)
+        share_scope: Section scope for 幹部職に伝えたいこと (used to check access)
         latest_year_month: Latest year_month_dt in the full comment dataset (for response eligibility)
     """
-    if not privilege_mgr.has_feature_access(current_privilege, "共有したいこと"):
+    if not privilege_mgr.has_feature_access(current_privilege, "幹部職に伝えたいこと"):
         return
 
     # Check if scope allows access
@@ -316,7 +327,7 @@ def render_comment_section(
 
     section_order = GROUP_ORDER_MAP.get('section', [])
 
-    with st.expander("共有したいこと", expanded=False):
+    with st.expander("幹部職に伝えたいこと", expanded=False):
         share_period = st.radio(
             "表示期間",
             ["全期間", "直近1ヶ月"],
@@ -330,9 +341,9 @@ def render_comment_section(
 
         if not share_data.empty:
             # Check if names should be anonymized
-            anonymize_names = privilege_mgr.should_anonymize_section(current_privilege, "共有したいこと")
-            # Non-anonymized users can respond to latest month comments
-            can_respond = not anonymize_names
+            anonymize_names = privilege_mgr.should_anonymize_section(current_privilege, "幹部職に伝えたいこと")
+            # Can respond only when names are visible AND response is enabled for this privilege
+            can_respond = not anonymize_names and privilege_mgr.is_response_enabled(current_privilege, "幹部職に伝えたいこと")
 
             # Load responses once for all comments in this section
             responses_df = load_responses()
@@ -389,6 +400,105 @@ def render_comment_section(
             st.info("データがありません")
 
 
+def render_non_respondents(
+    member_df: pd.DataFrame,
+    df: pd.DataFrame,
+    end_dt: pd.Timestamp,
+    privilege_mgr,
+    current_privilege: str,
+    selected_filters: Optional[dict] = None
+) -> None:
+    """
+    Render the 未記入者 (non-respondents) section.
+
+    Shows members who have no engagement data for the latest period (end_dt).
+    Only visible to admin, department_head, and section_manager privileges.
+    Members are matched by mail_address.
+
+    Args:
+        member_df: Active member list from member_loader.load_members()
+        df: Engagement DataFrame (tab-scoped, used to determine submitted members)
+        end_dt: Selected end date — defines the latest period to check
+        privilege_mgr: PrivilegeManager instance
+        current_privilege: Current user's privilege
+        selected_filters: Sidebar filter selections dict (from render_unified_sidebar_filters)
+    """
+    if not privilege_mgr.has_feature_access(current_privilege, '未記入者'):
+        return
+    if member_df is None or member_df.empty:
+        return
+
+    latest_ym = end_dt.strftime('%Y-%m')
+
+    # Mail addresses of members who submitted data in the latest period
+    submitted = set(df[df['year_month'] == latest_ym]['mail_address'].dropna().unique())
+
+    # List A: divisions present in the uploaded data
+    data_divisions = set(df['division'].dropna().unique())
+
+    # Filter member list to the privilege's org scope
+    scope = privilege_mgr.get_data_scope_for_tab(current_privilege, 'default')
+    if scope is not None and len(scope) == 0:
+        return  # No access
+    if scope is not None:
+        mask = (
+            member_df['division'].isin(scope) |
+            member_df['department'].isin(scope) |
+            member_df['section'].isin(scope)
+        )
+        scoped_members = member_df[mask].copy()
+    else:
+        scoped_members = member_df.copy()
+
+    # List B: restrict to members whose division is in the uploaded data (List A)
+    scoped_members = scoped_members[scoped_members['division'].isin(data_divisions)]
+
+    # Apply sidebar filter selections to member list
+    if selected_filters:
+        for key, col in [('division', 'division'), ('department', 'department'), ('section', 'section')]:
+            val = selected_filters.get(key, 'すべて')
+            if val and val != 'すべて':
+                scoped_members = scoped_members[scoped_members[col] == val]
+        individual = selected_filters.get('individual', 'すべて')
+        if individual and individual != 'すべて':
+            scoped_members = scoped_members[scoped_members['member_name'] == individual]
+
+    # Find non-respondents
+    non_respondents = scoped_members[~scoped_members['mail_address'].isin(submitted)].copy()
+    if non_respondents.empty:
+        return
+
+    # Sort: department order → section order → member_name ascending
+    dept_order = GROUP_ORDER_MAP.get('department', [])
+    sect_order = GROUP_ORDER_MAP.get('section', [])
+    dept_order_map = {name: idx for idx, name in enumerate(dept_order)}
+    sect_order_map = {name: idx for idx, name in enumerate(sect_order)}
+
+    non_respondents['_dept_order'] = non_respondents['department'].apply(
+        lambda x: dept_order_map.get(x, len(dept_order))
+    )
+    non_respondents['_sect_order'] = non_respondents['section'].apply(
+        lambda x: sect_order_map.get(x, len(sect_order))
+    )
+    non_respondents = non_respondents.sort_values(
+        ['_dept_order', '_sect_order', 'member_name'],
+        ascending=[True, True, True]
+    )
+
+    st.subheader("未記入者")
+    st.dataframe(
+        non_respondents[['division', 'department', 'section', 'member_name']].reset_index(drop=True),
+        hide_index=True,
+        width='stretch',
+        column_config={
+            'division':    st.column_config.TextColumn('部門'),
+            'department':  st.column_config.TextColumn('部署'),
+            'section':     st.column_config.TextColumn('課'),
+            'member_name': st.column_config.TextColumn('氏名'),
+        }
+    )
+
+
 def render_comments_and_signals(
     signal_df: pd.DataFrame,
     main_df: pd.DataFrame,
@@ -399,7 +509,9 @@ def render_comments_and_signals(
     privilege_mgr,
     current_privilege: str,
     is_authenticated: bool,
-    latest_year_month: Optional[pd.Timestamp] = None
+    latest_year_month: Optional[pd.Timestamp] = None,
+    member_df: Optional[pd.DataFrame] = None,
+    selected_filters: Optional[dict] = None
 ) -> None:
     """
     Render the complete comments and signals section for a tab.
@@ -407,7 +519,7 @@ def render_comments_and_signals(
     This is a convenience function that combines:
     - アクション対象候補 (action candidates)
     - 気になった出来事や気づき (concerns)
-    - 共有したいこと (comments)
+    - 幹部職に伝えたいこと (comments)
 
     Args:
         signal_df: Signal DataFrame (already filtered by tab/grouping scope)
@@ -420,6 +532,8 @@ def render_comments_and_signals(
         current_privilege: Current user's privilege
         is_authenticated: Whether user is authenticated
         latest_year_month: Latest year_month_dt in full comment dataset (for response eligibility)
+        member_df: Active member list for 未記入者 section (optional; section skipped if None)
+        selected_filters: Sidebar filter selections dict (passed to render_non_respondents)
     """
     if not is_authenticated:
         return
@@ -428,7 +542,7 @@ def render_comments_and_signals(
     render_action_candidates(signal_df, main_df, end_dt, privilege_mgr, current_privilege)
 
     # Get comment scope and prepare comment data
-    share_scope = privilege_mgr.get_section_scope(current_privilege, "共有したいこと")
+    share_scope = privilege_mgr.get_section_scope(current_privilege, "幹部職に伝えたいこと")
     graph_comments = prepare_comment_data(comment_df, start_dt, end_dt, share_scope)
 
     if not graph_comments.empty:
@@ -444,6 +558,9 @@ def render_comments_and_signals(
             privilege_mgr, current_privilege, share_scope,
             latest_year_month
         )
+
+    # Render non-respondents section (managers only)
+    render_non_respondents(member_df, main_df, end_dt, privilege_mgr, current_privilege, selected_filters)
 
 
 def apply_grouping_filters(

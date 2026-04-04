@@ -38,16 +38,20 @@ WE-Dashboard/
 │   ├── data_loader.py        # データ読み込み
 │   ├── encryption.py         # 暗号化ユーティリティ
 │   ├── filter_helpers.py     # サイドバーフィルターカスケードロジック
+│   ├── member_loader.py      # メンバーリスト読み込み（未記入者機能用）
 │   ├── privilege_manager.py  # 権限ベースフィルタリング
 │   ├── response_manager.py   # 返信管理（Google Sheets連携）
 │   ├── signal_processing.py  # シグナルデータ処理
 │   ├── statistics.py         # 統計計算
 │   └── utils.py              # ユーティリティ関数
 ├── config/
-│   └── privileges_configuration.md  # 権限設定（ソースオブトゥルース）
-│   └── privileges.yaml       # 権限設定（自動生成）
+│   ├── privileges_configuration.md  # 権限設定（ソースオブトゥルース）
+│   ├── privileges.yaml              # 権限設定（自動生成）
+│   └── members.yaml                 # アクティブメンバーリスト（自動生成）
 ├── tools/
-│   └── generate_privileges_yaml.py  # 権限YAML生成ツール
+│   ├── generate_privileges_yaml.py  # 権限YAML生成ツール
+│   ├── generate_member_yaml.py      # メンバーYAML生成ツール
+│   └── split_by_division.py         # 部門別データ分割ツール
 ├── docs/
 ├── auth_users.json           # 認証情報（開発用）
 ├── auth_users.dat            # 認証情報（本番用・エンコード済）
@@ -267,6 +271,10 @@ graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
 | `create_radar_chart()` | レーダーチャート |
 | `create_individual_trend()` | 個人別推移グラフ |
 
+**個人別（`color_by='name'`）のホバー順序:**
+
+`hovermode='x unified'` では統合ホバーリストのアイテム順がトレース順に対応する。`color_by='name'` の場合、トレース順を最新データ時点の値の降順でソートすることで、ホバーウィンドウのリストが最新時点の折れ線の上下順と一致するようにしている。他のグルーピング（課別・部署別等）では `get_category_order_with_reference` による従来の順序（グループ順序設定ベース）を維持する。
+
 ### 3.6 modules/signal_processing.py（シグナル処理モジュール）
 
 **主要関数:**
@@ -304,7 +312,16 @@ graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
 | `render_action_candidates()` | アクション対象候補セクション表示 |
 | `render_concern_section()` | 気になった出来事や気づきセクション表示 |
 | `render_comment_section()` | 共有したいことセクション表示（匿名化対応） |
-| `render_comments_and_signals()` | 上記3セクションの一括表示 |
+| `render_non_respondents()` | 未記入者セクション表示（管理職のみ、サイドバーフィルター対応） |
+| `render_comments_and_signals()` | 上記4セクションの一括表示 |
+
+**`render_non_respondents()` のフィルタリング:**
+
+`member_df` に対して2段階のフィルタリングを適用する：
+1. **権限スコープ**: `get_data_scope_for_tab` で権限に応じた組織範囲に制限
+2. **サイドバーフィルター**: `selected_filters` の `division` / `department` / `section` / `individual` を適用（`individual` は `member_name` 列で照合）
+
+`team` / `project` フィルターは `member_df` に該当列が存在しないためスキップする。
 
 **設計思想:**
 - app.pyの1763行から1249行へ削減（-29%）
@@ -329,7 +346,26 @@ graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
 既に行っており、ローカルフィルター（部署/課選択）がユーザー選択を制御するため、
 このレイヤーは冗長であり無効化されています。
 
-### 3.8 modules/response_manager.py（返信管理モジュール）
+### 3.8 modules/member_loader.py（メンバーリスト読み込みモジュール）
+
+`config/members.yaml` からアクティブメンバーリストを読み込み、未記入者セクションに提供する。`members.yaml` が存在しない場合は空 DataFrame を返し、未記入者セクションをサイレントにスキップする。
+
+**データソース**: `config/members.yaml`（`tools/generate_member_yaml.py` で `Member.xlsx` から生成）
+
+**主要関数:**
+
+| 関数 | 説明 |
+|------|------|
+| `load_members()` | `members.yaml` からアクティブメンバーを読み込む（`@st.cache_data`） |
+
+**YAML生成ワークフロー:**
+```
+Member.xlsx → tools/generate_member_yaml.py → config/members.yaml → member_loader.py
+```
+
+---
+
+### 3.10 modules/response_manager.py（返信管理モジュール）
 
 `共有したいこと`セクションのコメントに対する返信機能を提供します。
 Google Sheets APIを使用して返信データを読み書きします。
@@ -347,7 +383,7 @@ Google Sheets APIを使用して返信データを読み書きします。
 - `gcp_service_account`: Google Cloud サービスアカウント情報（Streamlit secrets）
 - `RESPONSE_SHEET_ID`: Google SpreadsheetのID（Streamlit secrets）
 
-### 3.9 modules/utils.py（ユーティリティモジュール）
+### 3.11 modules/utils.py（ユーティリティモジュール）
 
 **主要関数:**
 
@@ -359,7 +395,7 @@ Google Sheets APIを使用して返信データを読み書きします。
 | `get_options()` | フィルター選択肢取得 |
 | `render_department_and_group_controls()` | 部署/課/グルーピングコントロール表示 |
 
-### 3.10 modules/statistics.py（統計モジュール）
+### 3.12 modules/statistics.py（統計モジュール）
 
 **主要関数:**
 
@@ -382,7 +418,7 @@ stats_df = calculate_group_statistics(
 
 結果テーブル: `| 個人 | 短期変化 | 中期トレンド | 平均 | 傾向の傾き | 標準偏差 |`
 
-### 3.11 modules/privilege_manager.py（権限管理モジュール）
+### 3.13 modules/privilege_manager.py（権限管理モジュール）
 
 `config/privileges.yaml`を読み込み、権限ベースのデータフィルタリングを提供します。
 
@@ -628,6 +664,10 @@ google-auth>=2.0.0   # Google認証
 | 2026-03-31 | `derive_intervention_priority()` を修正: `intervention_priority_neg` には Admin GAS で flag ボーナス込みの生データが格納されるため、Dashboard での flag 加算を廃止。表示値 = neg（または pos）− threshold のみ |
 | 2026-03-31 | `get_signal_data()` の足切りフィルターを neg/pos 直接比較に修正（flag_constant_6m はラベル表示専用） |
 | 2026-03-31 | signal_processing.py リファクタリング: プライベートヘルパー抽出（`_fmt_flag_constant`, `_fmt_priority_table`, `_fmt_priority_individual`）、`_get_flag_points` / `FLAG_CONSTANT_PRIORITY_POINTS` を廃止、`get_signal_column_config()` を `render_signal_table()` にインライン化 |
+| 2026-04-04 | `render_non_respondents()` に `selected_filters` 引数を追加し、サイドバーフィルター設定（部門・部署・課・個人）を未記入者セクションに適用 |
+| 2026-04-04 | `render_comments_and_signals()` に `member_df` / `selected_filters` 引数を追加し、`render_non_respondents()` に転送 |
+| 2026-04-04 | `create_time_series_chart()`: `color_by='name'`（個人別）のトレース順を最新データ時点の値の降順でソート。統合ホバーリストが折れ線の上下順と一致 |
+| 2026-04-04 | `member_loader.py` / `config/members.yaml` / `tools/generate_member_yaml.py` を追加（未記入者機能のメンバーリスト管理） |
 
 ---
 

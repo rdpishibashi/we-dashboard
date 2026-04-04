@@ -22,7 +22,13 @@
       "Bash(git tag:*)",
       "Bash(wc:*)",
       "Bash(pip3 list:*)",
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(grep:*)",
+      "Bash(yes)",
+      "Bash(cp ~/Dropbox/Client/ULVAC/WorkEngagement/WE-Dashboard/app.py ~/Dropbox/Client/ULVAC/WorkEngagement/WE-Dashboard-Windows/app.py)",
+      "Bash(install -m 644 ~/Dropbox/Client/ULVAC/WorkEngagement/WE-Dashboard/modules/config.py ~/Dropbox/Client/ULVAC/WorkEngagement/WE-Dashboard-Windows/modules/config.py)",
+      "Bash(install -m 644 ~/Dropbox/Client/ULVAC/WorkEngagement/WE-Dashboard/app.py ~/Dropbox/Client/ULVAC/WorkEngagement/WE-Dashboard-Windows/app.py)",
+      "Bash(install -m 644 ~/Dropbox/Client/ULVAC/WorkEngagement/WE-Dashboard/modules/components.py ~/Dropbox/Client/ULVAC/WorkEngagement/WE-Dashboard-Windows/modules/components.py)"
     ]
   }
 }

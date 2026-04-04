@@ -310,8 +310,42 @@ def determine_groupings(privilege: str, grouping_scope: dict) -> dict:
     return result
 
 
-def determine_features(privilege: str, section_scope: dict) -> dict:
-    """Determine feature access based on privilege class and section scope."""
+def parse_feature_configuration(content: str) -> dict:
+    """Parse Feature Configuration section from markdown.
+
+    Returns:
+        Dict mapping privilege name to response_enabled (bool)
+    """
+    feature_config = {}
+
+    section_match = re.search(r'## Feature Configuration\s*\n([\s\S]*?)(?=\n## |\Z)', content)
+    if not section_match:
+        return feature_config
+
+    section_content = section_match.group(1)
+
+    # Find table rows under ### 幹部職に伝えたいこと
+    table_match = re.search(
+        r'### 幹部職に伝えたいこと[\s\S]*?\n'
+        r'\| Privilege \| response_enabled \|\s*\n'
+        r'\|[-|\s]+\|\s*\n'
+        r'((?:\|[^\n]+\|\s*\n)+)',
+        section_content
+    )
+    if not table_match:
+        return feature_config
+
+    for line in table_match.group(1).strip().split('\n'):
+        cells = [c.strip() for c in line.strip('|').split('|')]
+        if len(cells) >= 2:
+            privilege = cells[0].strip()
+            feature_config[privilege] = cells[1].strip().lower() == 'true'
+
+    return feature_config
+
+
+def determine_features(privilege: str, section_scope: dict, feature_config: dict = None) -> dict:
+    """Determine feature access based on privilege class, section scope, and feature config."""
     class_type, _ = PRIVILEGE_CLASSES.get(privilege, ('anonymous', None))
 
     features = {}
@@ -319,24 +353,37 @@ def determine_features(privilege: str, section_scope: dict) -> dict:
     # 気になった出来事や気づき - only admin has access
     features['気になった出来事や気づき'] = (class_type == 'admin')
 
-    # 共有したいこと
+    # 未記入者 - admin, department_head, and section_manager have access
+    features['未記入者'] = class_type in ('admin', 'department_head', 'section_manager')
+
+    # response_enabled: read from feature_config, fall back to class-based default
+    if feature_config and privilege in feature_config:
+        response_enabled = feature_config[privilege]
+    else:
+        response_enabled = class_type not in ('member', 'member_no_grade_filter', 'anonymous')
+
+    # 幹部職に伝えたいこと
     if class_type == 'anonymous':
-        features['共有したいこと'] = {
+        features['幹部職に伝えたいこと'] = {
             'access': False,
-            'anonymize': True
+            'anonymize': True,
+            'response_enabled': False
         }
     elif class_type in ('member', 'member_no_grade_filter'):
-        # Check if member has access (not 'none' scope)
-        share_scope = section_scope.get('共有したいこと', ('none', [], False))
-        has_access = share_scope[0] != 'none'
-        features['共有したいこと'] = {
-            'access': has_access,
-            'anonymize': True  # Members always see anonymized
+        # response_enabled=True  → access=True, anonymize=True (匿名表示・従来同様)
+        # response_enabled=False → access=False (セクション非表示)
+        features['幹部職に伝えたいこと'] = {
+            'access': response_enabled,
+            'anonymize': True,
+            'response_enabled': response_enabled
         }
     else:
-        features['共有したいこと'] = {
+        # admin/department_head/section_manager: always visible
+        # response_enabled controls whether response UI is shown
+        features['幹部職に伝えたいこと'] = {
             'access': True,
-            'anonymize': False
+            'anonymize': False,
+            'response_enabled': response_enabled
         }
 
     return features
@@ -400,12 +447,13 @@ def generate_base_privileges() -> dict:
                 '計測値': {'type': 'all'},
                 '主な指標': {'type': 'all'},
                 'アクション対象候補': {'type': 'all'},
-                '共有したいこと': {'type': 'all'}
+                '幹部職に伝えたいこと': {'type': 'all'}
             },
             'groupings': {'allowed': 'all'},
             'features': {
                 '気になった出来事や気づき': True,
-                '共有したいこと': {'access': True, 'anonymize': False}
+                '幹部職に伝えたいこと': {'access': True, 'anonymize': False, 'response_enabled': True},
+                '未記入者': True
             }
         },
         'department_head': {
@@ -415,12 +463,13 @@ def generate_base_privileges() -> dict:
                 '計測値': {'type': 'organization'},
                 '主な指標': {'type': 'organization'},
                 'アクション対象候補': {'type': 'organization'},
-                '共有したいこと': {'type': 'organization'}
+                '幹部職に伝えたいこと': {'type': 'organization'}
             },
             'groupings': {'allowed': 'all'},
             'features': {
                 '気になった出来事や気づき': False,
-                '共有したいこと': {'access': True, 'anonymize': False}
+                '幹部職に伝えたいこと': {'access': True, 'anonymize': False, 'response_enabled': True},
+                '未記入者': True
             }
         },
         'section_manager': {
@@ -438,7 +487,7 @@ def generate_base_privileges() -> dict:
                 '計測値': {'type': 'organization'},
                 '主な指標': {'type': 'organization'},
                 'アクション対象候補': {'type': 'organization'},
-                '共有したいこと': {'type': 'organization'}
+                '幹部職に伝えたいこと': {'type': 'organization'}
             },
             'groupings': {'allowed': 'all'},
             'auto_reset_filters': {
@@ -450,7 +499,8 @@ def generate_base_privileges() -> dict:
             },
             'features': {
                 '気になった出来事や気づき': False,
-                '共有したいこと': {'access': True, 'anonymize': False}
+                '幹部職に伝えたいこと': {'access': True, 'anonymize': False, 'response_enabled': True},
+                '未記入者': True
             }
         },
         'member': {
@@ -464,7 +514,7 @@ def generate_base_privileges() -> dict:
                 '計測値': {'type': 'organization'},
                 '主な指標': {'type': 'organization'},
                 'アクション対象候補': {'type': 'none'},
-                '共有したいこと': {'type': 'organization'}
+                '幹部職に伝えたいこと': {'type': 'organization'}
             },
             'groupings': {
                 'allowed': ['なし', 'department', 'section', 'team', 'project', 'grade'],
@@ -476,7 +526,8 @@ def generate_base_privileges() -> dict:
             },
             'features': {
                 '気になった出来事や気づき': False,
-                '共有したいこと': {'access': True, 'anonymize': True}
+                '幹部職に伝えたいこと': {'access': False, 'anonymize': True, 'response_enabled': False},
+                '未記入者': False
             }
         },
         'member_no_grade_filter': {
@@ -490,7 +541,7 @@ def generate_base_privileges() -> dict:
                 '計測値': {'type': 'organization'},
                 '主な指標': {'type': 'organization'},
                 'アクション対象候補': {'type': 'none'},
-                '共有したいこと': {'type': 'none'}
+                '幹部職に伝えたいこと': {'type': 'none'}
             },
             'groupings': {
                 'allowed': ['なし', 'department', 'section', 'team', 'project', 'grade'],
@@ -498,7 +549,8 @@ def generate_base_privileges() -> dict:
             },
             'features': {
                 '気になった出来事や気づき': False,
-                '共有したいこと': {'access': False, 'anonymize': True}
+                '幹部職に伝えたいこと': {'access': False, 'anonymize': True, 'response_enabled': False},
+                '未記入者': False
             }
         },
         'anonymous': {
@@ -508,20 +560,21 @@ def generate_base_privileges() -> dict:
                 '計測値': {'type': 'none'},
                 '主な指標': {'type': 'none'},
                 'アクション対象候補': {'type': 'none'},
-                '共有したいこと': {'type': 'none'}
+                '幹部職に伝えたいこと': {'type': 'none'}
             },
             'groupings': {
                 'allowed': ['なし', 'department', 'section', 'team', 'project']
             },
             'features': {
                 '気になった出来事や気づき': False,
-                '共有したいこと': {'access': False, 'anonymize': True}
+                '幹部職に伝えたいこと': {'access': False, 'anonymize': True, 'response_enabled': False},
+                '未記入者': False
             }
         }
     }
 
 
-def generate_user_privilege(privilege: str, tab_scope: dict, section_scope: dict, grouping_scope: dict, grouping_scope_filtered: dict = None) -> Optional[dict]:
+def generate_user_privilege(privilege: str, tab_scope: dict, section_scope: dict, grouping_scope: dict, grouping_scope_filtered: dict = None, feature_config: dict = None) -> Optional[dict]:
     """Generate a user privilege configuration."""
     if privilege in ('admin', 'anonymous'):
         return None  # These are base classes
@@ -554,7 +607,7 @@ def generate_user_privilege(privilege: str, tab_scope: dict, section_scope: dict
 
     # Build section_scope
     sec_scope = {}
-    for section in ['計測値', '主な指標', 'アクション対象候補', '共有したいこと']:
+    for section in ['計測値', '主な指標', 'アクション対象候補', '幹部職に伝えたいこと']:
         if section in section_scope:
             scope_type, values, anonymize = section_scope[section]
             if scope_type == 'organization' and values:
@@ -632,6 +685,9 @@ def generate_user_privilege(privilege: str, tab_scope: dict, section_scope: dict
         if groupings != base:
             result['groupings'] = groupings
 
+    # Build features (always output per-user to allow response_enabled override)
+    result['features'] = determine_features(privilege, section_scope, feature_config)
+
     return result
 
 
@@ -643,6 +699,7 @@ def generate_yaml_content(md_content: str) -> str:
     grouping_data_default = parse_markdown_table(md_content, r'### 課別・チーム別・プロジェクト別 = すべて')
     grouping_data_filtered = parse_markdown_table(md_content, r'### 課別・チーム別・プロジェクト別 ≠ すべて')
     aliases = parse_section_aliases(md_content)
+    feature_config = parse_feature_configuration(md_content)
 
     # Build scope mappings per privilege
     privilege_tab_scope = {}
@@ -668,7 +725,7 @@ def generate_yaml_content(md_content: str) -> str:
             continue
 
         section_scope = {}
-        for section in ['計測値', '主な指標', 'アクション対象候補', '気になった出来事や気づき', '共有したいこと']:
+        for section in ['計測値', '主な指標', 'アクション対象候補', '気になった出来事や気づき', '幹部職に伝えたいこと']:
             if section in row:
                 section_scope[section] = parse_scope_value(row[section])
 
@@ -753,7 +810,7 @@ def generate_yaml_content(md_content: str) -> str:
             grouping_scope = privilege_grouping_scope.get(privilege, {})
 
             grouping_scope_filtered = privilege_grouping_scope_filtered.get(privilege)
-            user_config = generate_user_privilege(privilege, tab_scope, section_scope, grouping_scope, grouping_scope_filtered)
+            user_config = generate_user_privilege(privilege, tab_scope, section_scope, grouping_scope, grouping_scope_filtered, feature_config)
             if user_config:
                 user_privileges[privilege] = user_config
 
@@ -780,7 +837,7 @@ def generate_yaml_with_comments(data: dict) -> str:
         "# 2. Data Scope by Grouping (= すべて) - grouping scope when no dimension filter is selected",
         "# 3. Data Scope by Grouping (≠ すべて) - grouping scope when a specific dimension is selected",
         "# 4. Data Scope by Section - controls which data is visible in specific UI sections",
-        "#    (計測値, 主な指標, アクション対象候補, 気になった出来事や気づき, 共有したいこと)",
+        "#    (計測値, 主な指標, アクション対象候補, 気になった出来事や気づき, 幹部職に伝えたいこと)",
         ""
     ]
 

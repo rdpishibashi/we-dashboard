@@ -140,7 +140,7 @@ class PrivilegeManager:
 
         Args:
             privilege: User's privilege identifier
-            section: Section name (計測値, 主な指標, アクション対象候補, 共有したいこと)
+            section: Section name (計測値, 主な指標, アクション対象候補, 幹部職に伝えたいこと)
 
         Returns:
             None if all data allowed, list of allowed organization values,
@@ -277,7 +277,7 @@ class PrivilegeManager:
 
         Args:
             privilege: User's privilege identifier
-            section: Section name (計測値, 主な指標, アクション対象候補, 共有したいこと)
+            section: Section name (計測値, 主な指標, アクション対象候補, 幹部職に伝えたいこと)
 
         Returns:
             True if anonymization is required
@@ -400,6 +400,26 @@ class PrivilegeManager:
         feature_config = features.get(feature)
         if isinstance(feature_config, dict):
             return feature_config.get('anonymize', False)
+
+        return False
+
+    def is_response_enabled(self, privilege: str, feature: str) -> bool:
+        """
+        Check if the response functionality is enabled for a feature.
+
+        Args:
+            privilege: User's privilege identifier
+            feature: Feature name (e.g., '幹部職に伝えたいこと')
+
+        Returns:
+            True if responses can be posted
+        """
+        config = self.get_effective_config(privilege)
+        features = config.get('features', {})
+
+        feature_config = features.get(feature)
+        if isinstance(feature_config, dict):
+            return feature_config.get('response_enabled', False)
 
         return False
 
