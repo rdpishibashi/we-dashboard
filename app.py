@@ -59,7 +59,10 @@ from modules.signal_processing import (
     apply_signal_rating_calculations, format_individual_signal_data,
     get_signal_data, render_signal_table
 )
-from modules.statistics import calculate_group_statistics, format_statistics_for_display, format_measured_data
+from modules.statistics import (
+    calculate_group_statistics, format_statistics_for_display, format_measured_data,
+    format_evaluation_measured_data, format_radar_measured_data,
+)
 from modules.charts import (
     create_time_series_chart, create_recent_group_comparison_chart,
     create_box_plot, create_group_rating_distribution, create_radar_chart,
@@ -402,8 +405,8 @@ if uploaded_file is not None:
                         ts_df,
                         selected_metric,
                         group_col,
-                        signal_df=tab_signal_df if group_col == 'name' else None,
-                        end_dt=end_dt if group_col == 'name' else None
+                        signal_df=tab_signal_df,
+                        end_dt=end_dt,
                     )
                     if not stats_df.empty:
                         display_stats = format_statistics_for_display(stats_df)
@@ -501,7 +504,9 @@ if uploaded_file is not None:
                         stats_df = calculate_group_statistics(
                             comparison_df,
                             selected_metric,
-                            None
+                            None,
+                            signal_df=tab_signal_df,
+                            end_dt=end_dt,
                         )
                         if not stats_df.empty:
                             display_stats = format_statistics_for_display(stats_df)
@@ -537,8 +542,8 @@ if uploaded_file is not None:
                             comparison_df,
                             selected_metric,
                             comparison_group,
-                            signal_df=tab_signal_df if comparison_group == 'name' else None,
-                            end_dt=end_dt if comparison_group == 'name' else None
+                            signal_df=tab_signal_df,
+                            end_dt=end_dt,
                         )
                         if not stats_df.empty:
                             display_stats = format_statistics_for_display(stats_df)
@@ -675,6 +680,12 @@ if uploaded_file is not None:
                                 )
                             )
                             st.plotly_chart(fig, **PLOTLY_CHART_KWARGS)
+
+                            with st.expander("計測値", expanded=False):
+                                eval_measured = format_evaluation_measured_data(
+                                    working, selected_metric, None
+                                )
+                                st.dataframe(eval_measured, **DATAFRAME_KWARGS)
                     else:
                         fig_heat = create_group_rating_distribution(
                             evaluation_df,
@@ -684,14 +695,21 @@ if uploaded_file is not None:
                         )
                         st.plotly_chart(fig_heat, **PLOTLY_CHART_KWARGS)
 
+                        with st.expander("計測値", expanded=False):
+                            eval_measured = format_evaluation_measured_data(
+                                evaluation_df, selected_metric, evaluation_group
+                            )
+                            st.dataframe(eval_measured, **DATAFRAME_KWARGS)
+
                 elif analysis_type == 'レーダーチャート':
                     if not evaluation_group or evaluation_group == 'なし':
-                        categories = ['vigor_rating', 'dedication_rating', 'absorption_rating']
-                        avg_values = evaluation_df[categories].mean().tolist()
+                        # theta order: 熱意→活力→没頭 (熱意を12時、活力を11時方向に)
+                        avg = evaluation_df[['dedication_rating', 'vigor_rating', 'absorption_rating']].mean()
+                        avg_values = [avg['dedication_rating'], avg['vigor_rating'], avg['absorption_rating']]
                         avg_values.append(avg_values[0])  # Close the radar
 
                         fig = go.Figure()
-                        theta_labels = ['活力', '熱意', '没頭', '活力']
+                        theta_labels = ['熱意', '活力', '没頭', '熱意']
                         group_name = '全体'
 
                         fig.add_trace(go.Scatterpolar(
@@ -708,6 +726,7 @@ if uploaded_file is not None:
 
                         fig.update_layout(
                             polar=dict(
+                                angularaxis=dict(rotation=330, direction='counterclockwise'),
                                 radialaxis=dict(
                                     visible=True,
                                     range=[0, 10],
@@ -715,12 +734,17 @@ if uploaded_file is not None:
                                 )
                             ),
                             title='ワーク･エンゲージメント構成要素',
-                            height=500                        )
+                            height=500
+                        )
                         st.plotly_chart(
                             fig,
                             width='stretch',
                             config=RADAR_CHART_CONFIG
                         )
+
+                        with st.expander("計測値", expanded=False):
+                            radar_measured = format_radar_measured_data(evaluation_df)
+                            st.dataframe(radar_measured, **DATAFRAME_KWARGS)
                     else:
                         fig_radar = create_radar_chart(
                             evaluation_df.dropna(subset=[evaluation_group]),
@@ -732,6 +756,14 @@ if uploaded_file is not None:
                             width='stretch',
                             config=RADAR_CHART_CONFIG
                         )
+
+                        with st.expander("計測値", expanded=False):
+                            radar_measured = format_radar_measured_data(
+                                evaluation_df.dropna(subset=[evaluation_group]),
+                                evaluation_group,
+                                reference_df=evaluation_df,
+                            )
+                            st.dataframe(radar_measured, **DATAFRAME_KWARGS)
 
         # =============================================================
         # 個人 Tab
@@ -892,6 +924,36 @@ if uploaded_file is not None:
                                     st.divider()
                             else:
                                 st.info("データがありません")
+
+                    # Profile section (immediately after 幹部職に伝えたいこと)
+                    with st.expander("プロフィール", expanded=False):
+                        profile_row = tab_signal_df[
+                            (tab_signal_df['name'] == selected_individual) &
+                            (tab_signal_df['year_month_dt'] == end_dt)
+                        ]
+                        if profile_row.empty:
+                            # Fall back to latest available record for this individual
+                            profile_row = tab_signal_df[
+                                tab_signal_df['name'] == selected_individual
+                            ].sort_values('year_month_dt', ascending=False)
+
+                        if not profile_row.empty:
+                            pr = profile_row.iloc[0]
+                            profile_fields = [
+                                ('部門',       pr.get('division',   '')),
+                                ('部署',       pr.get('department', '')),
+                                ('課',         pr.get('section',    '')),
+                                ('チーム',     pr.get('team',       '')),
+                                ('プロジェクト', pr.get('project',   '')),
+                                ('職位',       pr.get('grade',      '')),
+                            ]
+                            profile_df = pd.DataFrame(
+                                [(k, str(v) if pd.notna(v) and v != '' else '-') for k, v in profile_fields],
+                                columns=['項目', '値']
+                            )
+                            st.dataframe(profile_df, **DATAFRAME_KWARGS)
+                        else:
+                            st.info("プロフィール情報がありません")
 
                 # Signal section
                 st.subheader("シグナル")

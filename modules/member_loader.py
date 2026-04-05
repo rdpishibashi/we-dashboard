@@ -11,7 +11,7 @@ import streamlit as st
 from pathlib import Path
 
 _MEMBERS_YAML = Path(__file__).resolve().parent.parent / 'config' / 'members.yaml'
-_COLUMNS = ['mail_address', 'member_name', 'division', 'department', 'section']
+_COLUMNS = ['mail_address', 'member_name', 'division', 'department', 'section', 'team', 'project', 'grade']
 
 
 @st.cache_data

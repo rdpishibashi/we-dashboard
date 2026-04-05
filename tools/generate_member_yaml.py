@@ -23,7 +23,7 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 XLSX_FILE = PROJECT_ROOT / 'Member.xlsx'
 YAML_FILE = PROJECT_ROOT / 'config' / 'members.yaml'
 
-OUTPUT_COLUMNS = ['mail_address', 'member_name', 'division', 'department', 'section']
+OUTPUT_COLUMNS = ['mail_address', 'member_name', 'division', 'department', 'section', 'team', 'project', 'grade']
 
 
 def main():

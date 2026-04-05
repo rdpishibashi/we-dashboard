@@ -5,7 +5,10 @@ Statistical Calculation Functions for Work Engagement Dashboard
 import pandas as pd
 import numpy as np
 from typing import Optional
-from .config import GROUPING_LABEL_MAP, SIGNAL_LABELS, METRIC_LABELS
+from .config import (
+    GROUPING_LABEL_MAP, SIGNAL_LABELS, METRIC_LABELS,
+    ENGAGEMENT_DIVISOR, RATING_BAND_HIGH_THRESHOLD, RATING_BAND_LOW_THRESHOLD,
+)
 from .utils import get_category_order_with_reference
 
 
@@ -100,6 +103,14 @@ def format_measured_data(
 def format_statistics_for_display(stats_df):
     """Format statistics dataframe for display with consistent decimal places."""
     display_stats = stats_df.copy()
+    if '先月からの差分' in display_stats.columns:
+        display_stats['先月からの差分'] = display_stats['先月からの差分'].apply(
+            lambda x: f"{x:+.2f}" if pd.notna(x) and isinstance(x, (int, float)) else "-"
+        )
+    if '直近３ヶ月の傾き' in display_stats.columns:
+        display_stats['直近３ヶ月の傾き'] = display_stats['直近３ヶ月の傾き'].apply(
+            lambda x: f"{x:+.3f}" if pd.notna(x) and isinstance(x, (int, float)) else "-"
+        )
     if '平均' in display_stats.columns:
         display_stats['平均'] = display_stats['平均'].apply(lambda x: f"{x:.2f}")
     if '傾向の傾き' in display_stats.columns:
@@ -166,7 +177,8 @@ def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, e
                 column_name: str(group_name),
                 '平均': avg_value,
                 '傾向の傾き': slope,
-                '標準偏差': std_value
+                '標準偏差': std_value,
+                '人数': group_data['name'].nunique() if 'name' in group_data.columns else len(group_data),
             })
     else:
         # Calculate statistics for entire dataset
@@ -195,7 +207,8 @@ def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, e
                 column_name: '全体',
                 '平均': avg_value,
                 '傾向の傾き': slope,
-                '標準偏差': std_value
+                '標準偏差': std_value,
+                '人数': clean_data['name'].nunique() if 'name' in clean_data.columns else len(clean_data),
             })
 
     if not stats_list:
@@ -218,6 +231,29 @@ def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, e
 
         # Convert back to string for display
         stats_df[column_name] = stats_df[column_name].astype(str)
+
+    # Add E_delta_1 / E_slope_3m columns (engagement-specific, always in raw scale → ÷5.4)
+    if signal_df is not None and 'E_delta_1' in signal_df.columns and 'E_slope_3m' in signal_df.columns:
+        ref_dt = end_dt
+        if ref_dt is None and 'year_month_dt' in signal_df.columns:
+            ref_dt = signal_df['year_month_dt'].max()
+
+        if ref_dt is not None:
+            latest_signal = signal_df[signal_df['year_month_dt'] == ref_dt]
+
+            if not latest_signal.empty:
+                if group_col and group_col != 'なし' and group_col in latest_signal.columns:
+                    delta_by_group = (
+                        latest_signal.groupby(group_col)['E_delta_1'].mean() / ENGAGEMENT_DIVISOR
+                    )
+                    slope_by_group = (
+                        latest_signal.groupby(group_col)['E_slope_3m'].mean() / ENGAGEMENT_DIVISOR
+                    )
+                    stats_df['先月からの差分'] = stats_df[column_name].map(delta_by_group)
+                    stats_df['直近３ヶ月の傾き'] = stats_df[column_name].map(slope_by_group)
+                else:
+                    stats_df['先月からの差分'] = latest_signal['E_delta_1'].mean() / ENGAGEMENT_DIVISOR
+                    stats_df['直近３ヶ月の傾き'] = latest_signal['E_slope_3m'].mean() / ENGAGEMENT_DIVISOR
 
     # Merge trend columns when grouping by name
     if group_col == 'name' and signal_df is not None and end_dt is not None:
@@ -282,4 +318,154 @@ def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, e
                 other_cols = [c for c in stats_df.columns if c != column_name and c not in trend_labels]
                 stats_df = stats_df[[column_name] + trend_labels + other_cols]
 
+    # 人数 は個人別（group_col == 'name'）では表示しない
+    if group_col == 'name' and '人数' in stats_df.columns:
+        stats_df = stats_df.drop(columns=['人数'])
+
+    # Final column ordering:
+    # group → (signal trends if name) → 先月差分 → 直近傾き → 平均 → 傾向の傾き → 標準偏差 → 人数
+    signal_trend_labels = ['短期傾向', '中期傾向']
+    delta_slope_labels = ['先月からの差分', '直近３ヶ月の傾き']
+    col_order = [column_name]
+    col_order += [c for c in signal_trend_labels if c in stats_df.columns]
+    col_order += [c for c in delta_slope_labels if c in stats_df.columns]
+    col_order += [c for c in ['平均', '傾向の傾き', '標準偏差', '人数'] if c in stats_df.columns]
+    col_order += [c for c in stats_df.columns if c not in col_order]
+    stats_df = stats_df[col_order]
+
     return stats_df
+
+
+def format_evaluation_measured_data(
+    df: pd.DataFrame,
+    metric_col: str,
+    group_col: Optional[str] = None,
+) -> pd.DataFrame:
+    """
+    Format evaluation band (高い/中間/低い) counts and ratios for display.
+    Used in the 評価 tab 計測値 section (評価別比率 analysis type).
+
+    Args:
+        df: DataFrame with metric data (must have 'year_month' column)
+        metric_col: The metric column used for band classification
+        group_col: Optional grouping column (e.g., 'section', 'department')
+
+    Returns:
+        Formatted DataFrame with columns: (group), 年月, 高い, 中間, 低い
+        Each band cell shows "count (ratio%)"
+    """
+    if group_col == 'なし':
+        group_col = None
+
+    working = df.dropna(subset=[metric_col, 'year_month']).copy()
+    if working.empty:
+        return pd.DataFrame()
+
+    working['rating_band'] = np.select(
+        [
+            working[metric_col] >= RATING_BAND_HIGH_THRESHOLD,
+            working[metric_col] <= RATING_BAND_LOW_THRESHOLD,
+        ],
+        ['高い', '低い'],
+        default='中間',
+    )
+
+    category_order = ['高い', '中間', '低い']
+    group_keys = [group_col, 'year_month'] if group_col else ['year_month']
+
+    counts = (
+        working.groupby(group_keys + ['rating_band'])
+        .size()
+        .reset_index(name='count')
+    )
+    totals = counts.groupby(group_keys)['count'].transform('sum').replace(0, np.nan)
+    counts['ratio'] = (counts['count'] / totals * 100).fillna(0)
+    counts['cell'] = counts.apply(
+        lambda r: f"{int(r['count'])} ({r['ratio']:.1f}%)", axis=1
+    )
+
+    pivot = counts.pivot_table(
+        index=group_keys, columns='rating_band', values='cell', aggfunc='first'
+    ).reset_index()
+    pivot.columns.name = None
+
+    # Ensure all band columns exist and fill missing (0-count) cells
+    for band in category_order:
+        if band not in pivot.columns:
+            pivot[band] = '0 (0.0%)'
+        else:
+            pivot[band] = pivot[band].fillna('0 (0.0%)')
+
+    # Sort rows
+    if group_col and group_col in pivot.columns:
+        group_values = pivot[group_col].unique().tolist()
+        group_order = get_category_order_with_reference(group_col, group_values, df)
+        pivot[group_col] = pd.Categorical(pivot[group_col], categories=group_order, ordered=True)
+        pivot = pivot.sort_values([group_col, 'year_month']).reset_index(drop=True)
+        pivot[group_col] = pivot[group_col].astype(str)
+
+        grouping_label = GROUPING_LABEL_MAP.get(group_col, group_col).replace('別', '')
+        pivot = pivot.rename(columns={group_col: grouping_label, 'year_month': '年月'})
+        col_order = [grouping_label, '年月'] + category_order
+    else:
+        pivot = pivot.sort_values('year_month').reset_index(drop=True)
+        pivot = pivot.rename(columns={'year_month': '年月'})
+        col_order = ['年月'] + category_order
+
+    return pivot[[c for c in col_order if c in pivot.columns]]
+
+
+def format_radar_measured_data(
+    df: pd.DataFrame,
+    group_col: Optional[str] = None,
+    reference_df: Optional[pd.DataFrame] = None,
+) -> pd.DataFrame:
+    """
+    Format component metric averages for display in 評価 tab レーダーチャート 計測値 section.
+
+    Args:
+        df: DataFrame with rating data (must have vigor/dedication/absorption columns)
+        group_col: Optional grouping column
+        reference_df: Optional reference DataFrame for category ordering
+
+    Returns:
+        Formatted DataFrame with columns: (group), 活力, 熱意, 没頭
+    """
+    if group_col == 'なし':
+        group_col = None
+    if reference_df is None:
+        reference_df = df
+
+    component_cols = ['vigor_rating', 'dedication_rating', 'absorption_rating']
+    rename_map = {
+        'vigor_rating': '活力',
+        'dedication_rating': '熱意',
+        'absorption_rating': '没頭',
+    }
+
+    available = [c for c in component_cols if c in df.columns]
+    if not available:
+        return pd.DataFrame()
+
+    if group_col and group_col in df.columns:
+        agg = df.groupby(group_col)[available].mean().reset_index()
+
+        group_values = agg[group_col].tolist()
+        group_order = get_category_order_with_reference(group_col, group_values, reference_df)
+        agg[group_col] = pd.Categorical(agg[group_col], categories=group_order, ordered=True)
+        agg = agg.sort_values(group_col).reset_index(drop=True)
+        agg[group_col] = agg[group_col].astype(str)
+
+        grouping_label = GROUPING_LABEL_MAP.get(group_col, group_col).replace('別', '')
+        agg = agg.rename(columns={group_col: grouping_label, **rename_map})
+
+        for col in rename_map.values():
+            if col in agg.columns:
+                agg[col] = agg[col].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "-")
+
+        col_order = [grouping_label] + [rename_map[c] for c in available]
+        return agg[[c for c in col_order if c in agg.columns]]
+    else:
+        row = df[available].mean()
+        result = pd.DataFrame([{'グループ': '全体', **{rename_map[c]: f"{row[c]:.1f}" for c in available}}])
+        return result

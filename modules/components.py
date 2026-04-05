@@ -86,17 +86,20 @@ def prepare_comment_data(
     ].copy()
 
     # Map current_* columns to standard names for filtering and display
+    # section NaN means department_head level (no sub-section) → display as '部門長'
     if 'current_section' in graph_comments.columns:
-        graph_comments['section'] = graph_comments['current_section'].fillna('未設定')
+        graph_comments['section'] = graph_comments['current_section'].fillna('部門長')
     if 'current_department' in graph_comments.columns:
         graph_comments['department'] = graph_comments['current_department'].fillna('未設定')
     if 'current_division' in graph_comments.columns:
         graph_comments['division'] = graph_comments['current_division'].fillna('未設定')
 
     # Ensure no NaN remains in org columns regardless of which source columns exist
-    for col in ['section', 'department', 'division']:
+    for col in ['department', 'division']:
         if col in graph_comments.columns:
             graph_comments[col] = graph_comments[col].fillna('未設定')
+    if 'section' in graph_comments.columns:
+        graph_comments['section'] = graph_comments['section'].fillna('部門長')
 
     # Apply section scope filtering using comment's own organization columns
     # filter_dataframe_by_scope checks division, department, AND section columns
@@ -486,16 +489,24 @@ def render_non_respondents(
     )
 
     st.subheader("未記入者")
+    display_cols = ['division', 'department', 'section']
+    col_config = {
+        'division':    st.column_config.TextColumn('部門'),
+        'department':  st.column_config.TextColumn('部署'),
+        'section':     st.column_config.TextColumn('課'),
+    }
+    for col, label in [('team', 'チーム'), ('project', 'プロジェクト'), ('grade', '職位')]:
+        if col in non_respondents.columns:
+            display_cols.append(col)
+            col_config[col] = st.column_config.TextColumn(label)
+    display_cols.append('member_name')
+    col_config['member_name'] = st.column_config.TextColumn('氏名')
+
     st.dataframe(
-        non_respondents[['division', 'department', 'section', 'member_name']].reset_index(drop=True),
+        non_respondents[display_cols].reset_index(drop=True),
         hide_index=True,
         width='stretch',
-        column_config={
-            'division':    st.column_config.TextColumn('部門'),
-            'department':  st.column_config.TextColumn('部署'),
-            'section':     st.column_config.TextColumn('課'),
-            'member_name': st.column_config.TextColumn('氏名'),
-        }
+        column_config=col_config,
     )
 
 
@@ -544,6 +555,20 @@ def render_comments_and_signals(
     # Get comment scope and prepare comment data
     share_scope = privilege_mgr.get_section_scope(current_privilege, "幹部職に伝えたいこと")
     graph_comments = prepare_comment_data(comment_df, start_dt, end_dt, share_scope)
+
+    # For section_manager and department_head: also include '部門長' comments
+    # (department_head members have section=NaN, which maps to '部門長'.
+    #  Their rows match department-level scope so department_head already sees them.
+    #  section_manager's scope is section-only, so '部門長' rows are excluded by
+    #  filter_dataframe_by_scope. We fetch them separately using the broader 計測値 scope.)
+    base_class = privilege_mgr.get_privilege_base_class(current_privilege)
+    if base_class == 'section_manager':
+        broader_scope = privilege_mgr.get_section_scope(current_privilege, "計測値")
+        if broader_scope is not None and len(broader_scope) > 0:
+            dept_head_comments = prepare_comment_data(comment_df, start_dt, end_dt, broader_scope)
+            dept_head_comments = dept_head_comments[dept_head_comments['section'] == '部門長']
+            if not dept_head_comments.empty:
+                graph_comments = pd.concat([graph_comments, dept_head_comments], ignore_index=True).drop_duplicates()
 
     if not graph_comments.empty:
         # Render concern section

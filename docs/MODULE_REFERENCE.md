@@ -1,6 +1,6 @@
 # WE-Dashboard モジュール API リファレンス
 
-> 最終更新: 2026-04-04
+> 最終更新: 2026-04-05
 
 本ドキュメントは WE-Dashboard アプリケーションを構成する全モジュールの関数レベルリファレンスです。
 各関数のシグネチャ・引数・戻り値・動作仕様を網羅的に記載します。
@@ -23,6 +23,7 @@
 12. [modules/encryption.py — 暗号化](#12-modulesencryptionpy--暗号化)
 13. [modules/response_manager.py — 返信管理](#13-modulesresponse_managerpy--返信管理)
 14. [modules/member_loader.py — メンバーリスト読み込み](#14-modulesmember_loaderpy--メンバーリスト読み込み)
+15. [modules/response_file_manager.py — レスポンスファイル管理](#15-modulesresponse_file_managerpy--レスポンスファイル管理)
 
 ---
 
@@ -54,9 +55,9 @@
 |--------|------|----------|
 | 時系列 | `timeseries` | 月次推移折れ線グラフ、計測値テーブル、統計、シグナル・コメント |
 | グループ比較 | `group_comparison` | グループ間比較棒グラフ、レーダーチャート、統計、シグナル・コメント |
-| 評価 | `evaluation` | 評価バンド積み上げグラフ |
+| 評価 | `evaluation` | 評価バンド積み上げグラフ、計測値セクション（グルーピング別） |
 | 分布 | `distribution` | ボックスプロット、統計テーブル |
-| 個人 | `individual` | 個人推移グラフ、シグナル詳細、コメント（認証ユーザーのみ） |
+| 個人 | `individual` | 個人推移グラフ、プロフィールセクション、シグナル詳細、コメント（認証ユーザーのみ） |
 
 ### セッション状態キー一覧
 
@@ -488,25 +489,28 @@ PRIVILEGE_GROUP_ACCESS = {
 
 #### `get_excel_password()`
 
-Streamlit secrets から Excel パスワードを取得する。
+入力 Excel ファイル用のパスワードを取得する。
+
+- `modules/windows_config.py` が存在する場合（ローカルスタンドアロン動作時）: `windows_config.EXCEL_PASSWORD` を返す。このファイルは git-ignored であり、AES（Fernet）暗号化済みパスワードを起動時に復号して保持する。
+- `windows_config.py` が存在しない場合（Streamlit Cloud 等）: `st.secrets["EXCEL_PASSWORD"]` から取得する。
 
 **引数**: なし
-**戻り値**: `Optional[str]` — `EXCEL_PASSWORD` シークレットが設定されていない場合は `None`。
+**戻り値**: `Optional[str]` — パスワードが設定されていない場合は `None`。
 
 ---
 
 #### `decrypt_excel_if_needed(file_obj)`
 
-Excel ファイルがパスワード保護されている場合に復号する。`get_excel_password()` が `None` を返す場合（パスワード未設定）は入力をそのまま返す。
+パスワード保護された Excel ファイルを復号する。入力ファイルは常にパスワード保護されていることを前提とする。
 
 | 引数 | 型 | 説明 |
 |------|----|------|
-| `file_obj` | `Union[str, file]` | ファイルパス文字列またはファイルオブジェクト |
+| `file_obj` | `Union[str, file]` | ファイルパス文字列またはファイルオブジェクト（`UploadedFile` / `BytesIO`） |
 
-**戻り値**: `Union[BytesIO, str, file]` — 復号済みの `BytesIO` オブジェクト、またはパスワード不要の場合は元のオブジェクト。
+**戻り値**: `BytesIO` — 復号済みファイルオブジェクト。
 
 **例外**:
-- `ValueError`: パスワードが正しくない場合
+- `ValueError`: パスワードが設定されていない場合、またはパスワードが正しくない場合
 
 ---
 
@@ -663,7 +667,9 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 
 **動作**:
 - 各グループの 3 指標の平均値を計算し、グループごとに `go.Scatterpolar` トレースを追加する。
-- 多角形を閉じるために最初の値を末尾に追加する。
+- 軸ラベルは `['熱意', '活力', '没頭']`、値の順序は `[dedication, vigor, absorption]`。
+- 多角形を閉じるために最初の値を末尾に追加する（`theta=['熱意','活力','没頭','熱意']`）。
+- 角度軸は `rotation=330, direction='counterclockwise'` で **活力を 12 時位置**に配置する。
 - 動径軸は `[0, 10]` の範囲（`dtick=1`）で表示する。
 
 **戻り値**: `Figure`（高さ 500px）
@@ -903,7 +909,7 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 
 **動作**:
 1. `year_month_dt` で `[start_dt, end_dt]` の範囲にフィルタリングする。
-2. `current_*` 列を `section`, `department`, `division` にマッピングし、欠損値を `"未設定"` で補完する。
+2. `current_*` 列を `section`, `department`, `division` にマッピングする。`section` の欠損値（部署長・課未設定）は `'部門長'` で補完し、`department` / `division` の欠損値は `'未設定'` で補完する。
 3. `filter_dataframe_by_scope` でスコープフィルタリングを適用する（`division`, `department`, `section` の OR 条件）。
 
 **注意**: コメントデータはメインデータと結合しない。コメント自身の組織列（`current_*`）を使用する。
@@ -998,9 +1004,10 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 
 **動作**:
 1. `has_feature_access` で `'未記入者'` 機能へのアクセス権を確認する（admin / department_head / section_manager のみ）。
-2. `get_data_scope_for_tab` で権限スコープを取得し、`member_df` をスコープフィルタリングする。
+2. `get_section_scope(privilege, 'アクション対象候補')` で権限スコープを取得し、`member_df` をスコープフィルタリングする。
 3. `selected_filters` が指定されている場合、`division` / `department` / `section` / `individual` の各フィルターを `scoped_members` に適用する（`individual` は `member_name` 列で一致）。
 4. `df` の最新 `year_month` に回答が存在しないメンバーを特定し、部署順 → 課順 → 氏名順でソートして `st.dataframe` で表示する。
+5. 表示列は `division`, `department`, `section` に加え、`member_df` に `team`, `project`, `grade` 列が存在する場合は動的に追加する（`member_name` は末尾）。
 
 **アクセス権**: `admin`, `department_head`, `section_manager` のみ表示。`member` / `member_no_grade_filter` / `anonymous` は非表示。
 
@@ -1027,7 +1034,9 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 | `member_df` | `Optional[DataFrame]` | 未記入者セクション用アクティブメンバーリスト（`None` の場合はセクションをスキップ） |
 | `selected_filters` | `Optional[dict]` | サイドバーフィルターの選択値辞書（`render_non_respondents` に転送） |
 
-**動作**: `is_authenticated=False` の場合は何も表示しない。`render_action_candidates` → `prepare_comment_data` → `render_concern_section` → `render_comment_section` → `render_non_respondents` の順で処理する。
+**動作**: `is_authenticated=False` の場合は何も表示しない。`render_action_candidates` → `prepare_comment_data` → （section_manager の場合は部門長コメント追加）→ `render_concern_section` → `render_comment_section` → `render_non_respondents` の順で処理する。
+
+**section_manager の部門長コメント表示**: `get_privilege_base_class()` で base class が `section_manager` と判定された場合、`get_section_scope(privilege, '計測値')` の広スコープで '部門長' 行を取得し、通常スコープで取得したコメントデータに結合する。これにより、課レベルスコープのみでは除外されていた部署長の投稿が管理職ユーザーに表示される。
 
 **戻り値**: `None`
 
@@ -1231,6 +1240,7 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 | `get_section_aliases(privilege, tab)` | 権限・タブ別の課エイリアスマッピングを取得する |
 | `should_use_section_aliases(privilege, tab)` | 課エイリアスを使用すべきかどうかを確認する |
 | `get_effective_scope(privilege, tab, grouping, dimension_filtered)` | タブとグルーピングの組み合わせから有効スコープを計算する |
+| `get_privilege_base_class(privilege)` | 権限識別子の基本クラス（`admin` / `department_head` / `section_manager` 等）を返す |
 
 #### `get_effective_config(privilege)`
 
@@ -1280,6 +1290,25 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 特定権限・タブの組み合わせで適用すべき課エイリアスマッピングを取得する。
 
 **戻り値**: `dict` — `{課名: エイリアス表示名}` 形式。エイリアスなしの場合は `{}`。
+
+---
+
+#### `get_privilege_base_class(privilege)`
+
+権限識別子が属する基本権限クラスを返す。
+
+| 引数 | 型 | 説明 |
+|------|----|------|
+| `privilege` | `str` | ユーザーの権限識別子（例: `'sw'`, `'dev1'`, `'admin'`） |
+
+**動作**:
+- 引数が基本クラス（`admin`, `department_head`, `section_manager`, `member`, `member_no_grade_filter`, `anonymous`）そのものであればそのまま返す。
+- ユーザー固有権限（例: `'sw'`, `'dev1'`）の場合は `user_privileges` の `inherits` フィールドを参照して基本クラスを返す。
+- 不明な場合は `'unknown'` を返す。
+
+**戻り値**: `str` — `'admin'` / `'department_head'` / `'section_manager'` / `'member'` / `'member_no_grade_filter'` / `'anonymous'` / `'unknown'`
+
+**主な用途**: `render_comments_and_signals()` が section_manager クラスの検出に使用し、部門長コメントの追加表示を制御する。
 
 ---
 
@@ -1407,6 +1436,8 @@ DataFrame の個人名列をマスク文字列 `'***'` で匿名化する。
 | `stats_df` | `DataFrame` | `calculate_group_statistics` の出力 DataFrame |
 
 **フォーマット**:
+- `先月からの差分`: 小数点 2 桁（`+/-` 符号付き、例: `+0.12`）
+- `直近３ヶ月の傾き`: 小数点 3 桁（`+/-` 符号付き、例: `-0.023`）
 - `平均`: 小数点 2 桁
 - `傾向の傾き`: 小数点 3 桁
 - `標準偏差`: 小数点 2 桁
@@ -1436,9 +1467,55 @@ DataFrame の個人名列をマスク文字列 `'***'` で匿名化する。
 - `signal_df` と `end_dt` が指定されている場合、最新波の `trend_recent`（短期傾向）と `trend_refined`（中期傾向）列をマージする。
 - 氏名列 → トレンド列 → 統計列の順に列を並べ替える。
 
+**E_delta_1 / E_slope_3m（`group_col != 'name'` の場合）**:
+- `signal_df` と `end_dt` が指定されている場合、最新波の `E_delta_1`（先月との差分）と `E_slope_3m`（直近3ヶ月の傾き）をグループ別平均として追加する。
+- 両列とも `ENGAGEMENT_DIVISOR`（5.4）で除算して 0–10 スケールに正規化する。
+- 列順序: グループ列 → `先月からの差分` → `直近３ヶ月の傾き` → `平均` → `傾向の傾き` → `標準偏差` → `人数`。
+
+**人数列（`group_col != 'name'` の場合）**:
+- グループ内のユニーク氏名数を `人数` として追加する。
+- `group_col == 'name'`（個人別）の場合は追加しない。
+
 **グループ順序**: `get_category_order_with_reference` で `group_order_config.json` に基づく順序を適用する。
 
 **戻り値**: `DataFrame`（グループ別統計を含む。データがない場合は空の `DataFrame`）
+
+---
+
+#### `format_evaluation_measured_data(df, metric_col, group_col=None)`
+
+評価タブ用の計測値テーブルを生成する（評価バンド別構成比）。
+
+| 引数 | 型 | 説明 |
+|------|----|------|
+| `df` | `DataFrame` | ピボット DataFrame |
+| `metric_col` | `str` | 分析対象のメトリクス列名 |
+| `group_col` | `Optional[str]` | グルーピング列名（`None` の場合は全体集計） |
+
+**動作**:
+- `RATING_BAND_HIGH_THRESHOLD` / `RATING_BAND_LOW_THRESHOLD` に基づき、各行を `高い` / `中間` / `低い` の 3 バンドに分類する。
+- グループ別にバンド構成を pivot し、`count (ratio%)` 形式の文字列（例: `12 (45.3%)`）で表示する。
+- データなしの場合は `"0 (0.0%)"` を補完する。
+
+**戻り値**: `DataFrame`
+
+---
+
+#### `format_radar_measured_data(df, group_col=None, reference_df=None)`
+
+評価タブのレーダーチャート用計測値テーブルを生成する（コンポーネント別平均）。
+
+| 引数 | 型 | 説明 |
+|------|----|------|
+| `df` | `DataFrame` | `vigor_rating`, `dedication_rating`, `absorption_rating` 列を含む DataFrame |
+| `group_col` | `Optional[str]` | グルーピング列名（`None` の場合は全体平均） |
+| `reference_df` | `Optional[DataFrame]` | グループ順序参照用 DataFrame |
+
+**動作**:
+- グループ別に `活力` / `熱意` / `没頭` の平均値を計算する。
+- グループ順序は `get_category_order_with_reference` で設定に基づきソートする。
+
+**戻り値**: `DataFrame`
 
 ---
 
@@ -1744,6 +1821,9 @@ Google Sheet から返信一覧を読み込む。セッション状態にキャ�
 | `division` | 部門 |
 | `department` | 部署 |
 | `section` | 課 |
+| `team` | チーム |
+| `project` | プロジェクト |
+| `grade` | 職位 |
 
 ### 関数リファレンス
 
@@ -1752,7 +1832,62 @@ Google Sheet から返信一覧を読み込む。セッション状態にキャ�
 `config/members.yaml` からアクティブメンバーリストを読み込む。
 
 **引数**: なし
-**戻り値**: `DataFrame` — `mail_address`, `member_name`, `division`, `department`, `section` 列を含む DataFrame。`members.yaml` が存在しない場合は空 DataFrame（未記入者セクションはサイレントスキップ）。
+**戻り値**: `DataFrame` — `mail_address`, `member_name`, `division`, `department`, `section`, `team`, `project`, `grade` 列を含む DataFrame。`members.yaml` が存在しない場合は空 DataFrame（未記入者セクションはサイレントスキップ）。
+
+---
+
+## 15. modules/response_file_manager.py — レスポンスファイル管理
+
+**行数**: 80 行
+**役割**: パスワード保護された応答 Excel ファイルの保存・読み込みを提供する。ローカルスタンドアロン動作（`windows_config.py` 存在時）と Streamlit Cloud（`st.secrets` 使用時）の両方に対応する。
+
+**パスワード取得の優先順位:**
+1. `modules/windows_config.py` が存在する場合 → `windows_config.RESPONSE_PASSWORD`（AES復号済み、ローカルスタンドアロン）
+2. 存在しない場合 → `st.secrets["RESPONSE_PASSWORD"]`（Streamlit Cloud）
+
+### 関数リファレンス
+
+#### `get_response_password()`
+
+レスポンスファイル用パスワードを取得する。`get_excel_password()` と同じ優先順位ロジックを使用する。
+
+**引数**: なし
+**戻り値**: `Optional[str]`
+
+---
+
+#### `save_responses(df, path, sheet_name)`
+
+DataFrame をパスワード保護された Excel ファイルとして保存する。
+
+| 引数 | 型 | デフォルト | 説明 |
+|------|----|-----------|------|
+| `df` | `DataFrame` | — | 保存する DataFrame |
+| `path` | `str` | — | 出力ファイルパス（例: `"responses.xlsx"`） |
+| `sheet_name` | `str` | `'responses'` | ワークブック内のシート名 |
+
+**動作**: 平文 xlsx をメモリ上に生成し、`msoffcrypto` で暗号化してファイルに書き込む。
+
+**例外**:
+- `ValueError`: パスワードが設定されていない場合
+- `IOError`: ファイルの書き込みに失敗した場合
+
+---
+
+#### `load_responses(path, sheet_name)`
+
+パスワード保護された応答 Excel ファイルを読み込む。
+
+| 引数 | 型 | デフォルト | 説明 |
+|------|----|-----------|------|
+| `path` | `str` | — | 暗号化済みファイルのパス |
+| `sheet_name` | `str` | `'responses'` | 読み込むシート名 |
+
+**戻り値**: `DataFrame`
+
+**例外**:
+- `ValueError`: パスワードが設定されていない、または復号化に失敗した場合
+- `FileNotFoundError`: ファイルが存在しない場合
 
 ---
 
