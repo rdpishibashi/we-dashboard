@@ -189,7 +189,12 @@ auth_users.json
 
 # Mac environment
 .DS_Store
-account.md
 
 # Streamlit secrets (contains passwords and sensitive data)
 .streamlit/secrets.toml
+
+# WE-Dashboard
+#  Windows standalone app password config (hardcoded passwords, never commit)
+#  Accounts
+modules/windows_config.py
+account.md
