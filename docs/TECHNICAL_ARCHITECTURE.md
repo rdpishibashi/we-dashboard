@@ -36,14 +36,16 @@ WE-Dashboard/
 │   ├── components.py         # 再利用可能UIコンポーネント
 │   ├── config.py             # 設定・定数
 │   ├── data_loader.py        # データ読み込み
-│   ├── encryption.py         # 暗号化ユーティリティ
-│   ├── filter_helpers.py     # サイドバーフィルターカスケードロジック
-│   ├── member_loader.py      # メンバーリスト読み込み（未記入者機能用）
-│   ├── privilege_manager.py  # 権限ベースフィルタリング
-│   ├── response_manager.py   # 返信管理（Google Sheets連携）
-│   ├── signal_processing.py  # シグナルデータ処理
-│   ├── statistics.py         # 統計計算
-│   └── utils.py              # ユーティリティ関数
+│   ├── encryption.py             # 暗号化ユーティリティ
+│   ├── filter_helpers.py         # サイドバーフィルターカスケードロジック
+│   ├── member_loader.py          # メンバーリスト読み込み（未記入者機能用）
+│   ├── privilege_manager.py      # 権限ベースフィルタリング
+│   ├── response_file_manager.py  # レスポンスファイル保存/読み込み（パスワード保護Excel）
+│   ├── response_manager.py       # 返信管理（Google Sheets連携）
+│   ├── signal_processing.py      # シグナルデータ処理
+│   ├── statistics.py             # 統計計算
+│   ├── utils.py                  # ユーティリティ関数
+│   └── windows_config.py         # ローカルスタンドアロン用パスワード設定（git-ignored、AES暗号化）
 ├── config/
 │   ├── privileges_configuration.md  # 権限設定（ソースオブトゥルース）
 │   ├── privileges.yaml              # 権限設定（自動生成）
@@ -51,7 +53,8 @@ WE-Dashboard/
 ├── tools/
 │   ├── generate_privileges_yaml.py  # 権限YAML生成ツール
 │   ├── generate_member_yaml.py      # メンバーYAML生成ツール
-│   └── split_by_division.py         # 部門別データ分割ツール
+│   ├── split_by_division.py         # 部門別データ分割ツール
+│   └── encrypt_passwords.py         # パスワード暗号化ツール（windows_config.py 更新用）
 ├── docs/
 ├── auth_users.json           # 認証情報（開発用）
 ├── auth_users.dat            # 認証情報（本番用・エンコード済）
@@ -130,7 +133,8 @@ pivot_df（正規化済み評価データ）とsignal_df（シグナルデータ
 
 ```python
 # 正しいパターン
-graph_comments['section'] = graph_comments['current_section'].fillna('未設定')
+# section NaN は部署長（課未所属）を意味するため '部門長' で補完
+graph_comments['section'] = graph_comments['current_section'].fillna('部門長')
 graph_comments['department'] = graph_comments['current_department'].fillna('未設定')
 graph_comments['division'] = graph_comments['current_division'].fillna('未設定')
 graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
@@ -248,9 +252,15 @@ graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
 
 | 関数 | 説明 |
 |------|------|
-| `get_excel_password()` | Streamlit secretsからパスワード取得 |
-| `decrypt_excel_if_needed(file_obj)` | パスワード保護Excelの復号 |
+| `get_excel_password()` | 入力Excelパスワード取得（`windows_config.py` 優先、次いで `st.secrets`） |
+| `decrypt_excel_if_needed(file_obj)` | パスワード保護Excelの復号（常にパスワード必須） |
 | `load_data(uploaded_file)` | データ読込・前処理（キャッシュ対応） |
+
+**パスワード取得の優先順位:**
+1. `modules/windows_config.py` が存在する場合 → `EXCEL_PASSWORD`（AES復号済み、ローカルスタンドアロン）
+2. 存在しない場合 → `st.secrets["EXCEL_PASSWORD"]`（Streamlit Cloud）
+
+`windows_config.py` は git-ignored であり、ローカル環境にのみ存在する。Streamlit Cloud にはデプロイされず、`st.secrets` にフォールバックする。パスワードは AES（Fernet）暗号化済みで保存され、平文はファイルに書かれない。
 
 **データ変換処理:**
 1. rating2シートを読み込み、signal_dfを構築（組織カラムマッピング、年月カラム生成）
@@ -364,6 +374,24 @@ Member.xlsx → tools/generate_member_yaml.py → config/members.yaml → member
 ```
 
 ---
+
+### 3.9 modules/response_file_manager.py（レスポンスファイル管理モジュール）
+
+パスワード保護された応答 Excel ファイルの保存・読み込みを提供する。ローカルスタンドアロン（Mac/Windows）と Streamlit Cloud の両方で動作する。
+
+**主要関数:**
+
+| 関数 | 説明 |
+|------|------|
+| `get_response_password()` | レスポンスファイル用パスワード取得 |
+| `save_responses(df, path)` | DataFrame をパスワード保護Excelとして保存 |
+| `load_responses(path)` | パスワード保護Excelを読み込み DataFrame として返す |
+
+**パスワード取得の優先順位:**（`get_excel_password()` と同じロジック）
+1. `modules/windows_config.py` が存在する場合 → `RESPONSE_PASSWORD`（AES復号済み）
+2. 存在しない場合 → `st.secrets["RESPONSE_PASSWORD"]`
+
+**ファイル確認方法:** パスワードを知っていれば Excel / LibreOffice で直接開くことができる。専用のエクスポートツールは不要。
 
 ### 3.10 modules/response_manager.py（返信管理モジュール）
 
@@ -529,7 +557,7 @@ config/privileges.yaml            ← 生成された設定ファイル
 **カスケードリセット:**
 親フィルター変更時、子フィルターが自動リセットされます。
 ```
-部門 → 職位 → 部署 → 課 → チーム → プロジェクト → 個人
+部門 → 部署 → 課 → チーム → プロジェクト → 職位 → 個人
 ```
 
 ---
@@ -575,11 +603,43 @@ config/privileges.yaml            ← 生成された設定ファイル
 | 項目 | 実装状況 |
 |------|----------|
 | パスワードハッシュ | SHA-256 |
-| Excelパスワード保護 | msoffcryptoで復号 |
+| Excelパスワード保護 | msoffcryptoで復号（入力ファイル・レスポンスファイル） |
 | 権限ベースアクセス制御 | PRIVILEGE_GROUP_ACCESSで実装 |
 | 認証情報の保護 | .dat形式でBase64+pickle |
-| シークレット管理 | Streamlit Secretsを使用 |
+| シークレット管理（Cloud） | Streamlit Secrets を使用 |
+| シークレット管理（ローカル） | `modules/windows_config.py`（git-ignored、AES Fernet 暗号化 + バイトコード保護） |
 | 未認証ユーザー制限 | 個人情報関連機能を非表示 |
+
+### 6.0 ローカルスタンドアロン動作時のパスワード管理
+
+`streamlit run app.py` をローカル PC（Mac/Windows）で実行する場合、`.streamlit/secrets.toml` はファイルシステム上に平文で存在するため、閲覧可能になる。これを避けるため、ローカル環境では `modules/windows_config.py` に **AES（Fernet）暗号化済みパスワード** を保存する方式を採用している。
+
+```
+windows_config.py（git-ignored）
+  ├─ _KEY                   — Fernet AES キー（バイナリに埋め込み）
+  ├─ _EXCEL_PASSWORD_ENC    — 暗号化済み入力Excelパスワード
+  ├─ _RESPONSE_PASSWORD_ENC — 暗号化済みレスポンスファイルパスワード
+  ├─ EXCEL_PASSWORD         — 起動時に復号されたパスワード（メモリ上のみ）
+  └─ RESPONSE_PASSWORD      — 起動時に復号されたパスワード（メモリ上のみ）
+```
+
+平文パスワードはファイルに書かれない。PyInstaller でビルドされた `.exe` に埋め込まれると、暗号化キーと暗号文の両方をバイトコードから抽出しなければ復号できない。
+
+**パスワード更新手順:**
+1. `python tools/encrypt_passwords.py` を実行（入力は非表示）
+2. 出力された `_EXCEL_PASSWORD_ENC` / `_RESPONSE_PASSWORD_ENC` を `windows_config.py` に貼り付け
+3. `windows_config.py` は git-ignored のためリポジトリにはコミットされない
+
+**優先順位ロジック（`get_excel_password()` / `get_response_password()`）:**
+```python
+try:
+    from modules import windows_config  # ローカル環境のみ存在（暗号化済みパスワードを復号）
+    return windows_config.EXCEL_PASSWORD
+except ImportError:
+    return st.secrets.get("EXCEL_PASSWORD")  # Streamlit Cloud
+```
+
+`windows_config.py` が存在しない Streamlit Cloud では自動的に `st.secrets` にフォールバックする。
 
 ### 6.1 未認証ユーザー向け機能制限
 
@@ -668,6 +728,22 @@ google-auth>=2.0.0   # Google認証
 | 2026-04-04 | `render_comments_and_signals()` に `member_df` / `selected_filters` 引数を追加し、`render_non_respondents()` に転送 |
 | 2026-04-04 | `create_time_series_chart()`: `color_by='name'`（個人別）のトレース順を最新データ時点の値の降順でソート。統合ホバーリストが折れ線の上下順と一致 |
 | 2026-04-04 | `member_loader.py` / `config/members.yaml` / `tools/generate_member_yaml.py` を追加（未記入者機能のメンバーリスト管理） |
+| 2026-04-05 | サイドバーフィルター順序変更: 職位（grade）を プロジェクト の後・個人 の前に移動（部門→部署→課→チーム→プロジェクト→職位→個人）|
+| 2026-04-05 | ローカルスタンドアロン用パスワード管理を追加: `modules/windows_config.py`（git-ignored）に `EXCEL_PASSWORD` / `RESPONSE_PASSWORD` をハードコード。`get_excel_password()` が `windows_config.py` 優先で取得し、存在しない場合は `st.secrets` にフォールバック |
+| 2026-04-05 | `modules/response_file_manager.py` を追加: `msoffcrypto` を使用したパスワード保護レスポンス Excel の保存・読み込み |
+| 2026-04-05 | `decrypt_excel_if_needed()` を簡略化: 入力ファイルは常にパスワード保護を前提とし、非パスワードファイルへのフォールバックパスを削除 |
+| 2026-04-05 | `modules/windows_config.py` のパスワード管理を強化: 平文ハードコードから AES（Fernet）暗号化方式に変更。`tools/encrypt_passwords.py` を追加（開発者がパスワードを更新する際に使用）。配布 `.exe` ではバイトコード＋暗号化の二重保護となる |
+| 2026-04-05 | `calculate_group_statistics()` に `E_delta_1`（先月差分）・`E_slope_3m`（3ヶ月傾き）列を追加。`signal_df` の最新波データから取得し `ENGAGEMENT_DIVISOR`（5.4）で正規化。グループ別集計時のみ（`group_col != 'name'`）に表示 |
+| 2026-04-05 | `calculate_group_statistics()` に `人数`（ユニーク氏名数）列を追加。`group_col == 'name'`（個人別）の場合は追加しない |
+| 2026-04-05 | `format_statistics_for_display()` に `先月からの差分`・`直近３ヶ月の傾き` 列のフォーマット（符号付き小数）を追加 |
+| 2026-04-05 | 評価タブに計測値セクション追加: グルーピングに応じた `format_evaluation_measured_data()` / `format_radar_measured_data()` によるバンド集計・コンポーネント平均テーブルを `st.expander` で表示 |
+| 2026-04-05 | `format_evaluation_measured_data()` / `format_radar_measured_data()` を `statistics.py` に追加 |
+| 2026-04-05 | レーダーチャート軸設定変更: `theta=['熱意','活力','没頭']`、`rotation=330, direction='counterclockwise'` で活力を 12 時位置に配置 |
+| 2026-04-05 | `config/members.yaml` / `tools/generate_member_yaml.py` / `modules/member_loader.py` に `team`, `project`, `grade` 列を追加。未記入者テーブルで動的表示（列が存在する場合のみ追加） |
+| 2026-04-05 | 個人タブにプロフィールセクション追加: `st.expander` 内で部門・部署・課・チーム・プロジェクト・職位を表示（`tab_signal_df` から取得） |
+| 2026-04-05 | `prepare_comment_data()` の section 欠損補完を `'未設定'` → `'部門長'` に変更。課未所属メンバー（部署長）のコメントが「部門長」として表示される |
+| 2026-04-05 | `render_comments_and_signals()` に section_manager 向け部門長コメント表示を追加: `get_privilege_base_class()` で base class を検出し、`計測値` スコープで '部門長' 行を取得して結合 |
+| 2026-04-05 | `PrivilegeManager.get_privilege_base_class(privilege)` メソッドを追加: ユーザー固有権限から基本クラス名を返す |
 
 ---
 
@@ -689,13 +765,16 @@ google-auth>=2.0.0   # Google認証
 
 ```python
 # 全組織列をマッピングしてからフィルタリング
-graph_comments['section'] = graph_comments['current_section'].fillna('未設定')
+# section NaN は部署長（課未所属）→ '部門長' で補完
+graph_comments['section'] = graph_comments['current_section'].fillna('部門長')
 graph_comments['department'] = graph_comments['current_department'].fillna('未設定')
 graph_comments['division'] = graph_comments['current_division'].fillna('未設定')
 
 # filter_dataframe_by_scopeは全組織列をチェック
 graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
 ```
+
+**section_manager の部門長コメント表示**: section_manager の課スコープでは `section='部門長'` の行がフィルターアウトされるため、`計測値` スコープ（部署名を含む広スコープ）で部門長行を別取得し、通常コメントデータに結合する。
 
 ### 9.3 ネストされたExpander
 
@@ -713,6 +792,7 @@ graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
 | 列名の不一致 | comment_dfは`current_section`、main_dfは`section` | マッピング後にフィルタリング |
 | マネジメント選択時にトレンド列が空 | signal_dfをteam列でフィルタリング | 名前でフィルタリング（rating2のteam値は異なる場合あり） |
 | 部署全体が非表示 | exclude_sectionsで未設定を除外 | exclude_sectionsは無効化済み |
+| section_managerが部門長コメントを見れない | 課スコープでは section='部門長' がフィルターアウトされる | `計測値`スコープで部門長行を取得して結合 |
 
 ### 9.5 signal_dfのフィルタリング
 

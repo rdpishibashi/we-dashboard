@@ -9,8 +9,15 @@ This guide explains how to password-protect your Excel files so users can upload
 1. You password-protect the Excel file in Excel
 2. Users receive the protected file but don't know the password
 3. Users upload the file to the dashboard
-4. Dashboard automatically opens it using the password stored in Streamlit secrets
+4. Dashboard automatically opens it using the configured password
 5. Users can only view data through the dashboard
+
+The password is configured in one of two ways depending on the runtime environment:
+
+| 環境 | パスワード設定場所 |
+|------|------------------|
+| Streamlit Cloud | `.streamlit/secrets.toml` または Streamlit Cloud の Secrets 設定 |
+| ローカル（Mac/Windows） | `modules/windows_config.py`（git-ignored） |
 
 ---
 
@@ -36,7 +43,7 @@ This guide explains how to password-protect your Excel files so users can upload
 
 ---
 
-## Step 2: Configure Streamlit Cloud Secrets
+## Step 2a: Configure Streamlit Cloud Secrets
 
 ### Finding the Secrets Section:
 
@@ -66,9 +73,31 @@ Click **Save** or **Deploy** (the button name varies)
 
 ---
 
+## Step 2b: Configure Local Standalone (Mac/Windows)
+
+ローカルで `streamlit run app.py` を実行する場合、`.streamlit/secrets.toml` はファイルシステム上に平文で存在するため推奨しません。代わりに `modules/windows_config.py` を使用します。
+
+パスワードは AES（Fernet）で暗号化して保存します。平文はファイルに書かれません。
+
+1. `tools/encrypt_passwords.py` を実行してパスワードを暗号化する:
+
+```bash
+python tools/encrypt_passwords.py
+```
+
+入力は非表示で求められます。出力として暗号化済みバイト列が表示されます。
+
+2. 表示された `_EXCEL_PASSWORD_ENC` / `_RESPONSE_PASSWORD_ENC` の値を `modules/windows_config.py` に貼り付ける。
+
+3. `windows_config.py` は `.gitignore` で除外済みのため、**Git にコミットされません**。
+
+アプリは起動時に `windows_config.py` を自動検出し、AES 復号して `st.secrets` より優先して使用します。
+
+---
+
 ## Step 3: Test the Configuration
 
-### Local Testing (Optional):
+### Local Testing (Streamlit Cloud approach):
 
 Create a file `.streamlit/secrets.toml` in your project directory:
 
@@ -77,6 +106,10 @@ EXCEL_PASSWORD = "MySecurePassword123!"
 ```
 
 ⚠️ **Add this to .gitignore!** Never commit secrets to Git.
+
+### Local Testing (Standalone approach):
+
+`modules/windows_config.py` を Step 2b に従って作成します。`secrets.toml` は不要です。
 
 ### Deploy to Streamlit Cloud:
 
@@ -118,14 +151,17 @@ EXCEL_PASSWORD = "MySecurePassword123!"
 ## Security Notes
 
 ✅ **Secure:**
-- Password is stored in Streamlit secrets (encrypted)
+- Streamlit Cloud: パスワードは Streamlit Secrets に暗号化して保存
+- ローカル: パスワードは `windows_config.py` に AES（Fernet）暗号化して保存（git-ignored）。平文は記録されない
+- PyInstaller ビルド時にバイトコードとして埋め込まれ、暗号化キーと暗号文の両方を抽出しないと復号不可
 - Users cannot view password in code or browser
 - File is password-protected at rest
+- レスポンスファイルも同じパスワード管理で保護可能
 
 ❌ **Not Protected Against:**
 - Users taking screenshots of dashboard
 - Users with admin access to Streamlit Cloud
-- Someone with physical access to your computer
+- 高度なリバースエンジニアリング（バイナリからキーと暗号文を抽出して復号）
 
 For maximum security, also implement:
 - Role-based access control (already implemented)

@@ -419,10 +419,17 @@ def create_radar_chart(df, group_col, title):
         grouping_label = grouping_label.replace('別', '')
 
     fig = go.Figure()
-    theta_labels = ['活力', '熱意', '没頭', '活力']
+    # 熱意を3時→12時、活力を11時に配置するため順序を [熱意, 活力, 没頭] に変更し
+    # rotation=90 で熱意を12時方向に回転
+    theta_labels = ['熱意', '活力', '没頭', '熱意']
 
     for group_name in group_order:
-        values = grouped.loc[group_name].tolist()
+        # values order must match theta: 熱意, 活力, 没頭
+        values = [
+            grouped.loc[group_name]['dedication_rating'],
+            grouped.loc[group_name]['vigor_rating'],
+            grouped.loc[group_name]['absorption_rating'],
+        ]
         values.append(values[0])  # 閉じるため
 
         fig.add_trace(go.Scatterpolar(
@@ -439,6 +446,7 @@ def create_radar_chart(df, group_col, title):
 
     fig.update_layout(
         polar=dict(
+            angularaxis=dict(rotation=330, direction='counterclockwise'),
             radialaxis=dict(
                 visible=True,
                 range=[0, 10],

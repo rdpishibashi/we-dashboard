@@ -359,6 +359,20 @@ class PrivilegeManager:
 
         return allowed if allowed else ['なし', 'department', 'section', 'team', 'project']
 
+    def get_privilege_base_class(self, privilege: str) -> str:
+        """
+        Return the base privilege class for a given privilege identifier.
+
+        Returns:
+            One of 'admin', 'department_head', 'section_manager',
+            'member', 'member_no_grade_filter', 'anonymous', or 'unknown'.
+        """
+        # If it IS a base class directly
+        if self.get_base_privilege(privilege):
+            return privilege
+        user_config = self.get_user_privilege(privilege)
+        return user_config.get('inherits', 'unknown')
+
     def has_feature_access(self, privilege: str, feature: str) -> bool:
         """
         Check if privilege has access to a specific feature.
