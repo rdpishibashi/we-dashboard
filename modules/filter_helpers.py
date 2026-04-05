@@ -208,18 +208,18 @@ def reset_child_filters(parent_level: str):
     """
     Reset all child filters below the specified parent level.
 
-    Cascade: 部門 → 職位 → 部署 → dimension → individual
+    Cascade: 部門 → 部署 → 課 → チーム → プロジェクト → 職位 → 個人
 
     Args:
-        parent_level: 'division' | 'grade' | 'department' | 'dimension' | 'dimension_value'
+        parent_level: 'division' | 'department' | 'section' | 'team' | 'project' | 'grade'
     """
     reset_mapping = {
-        'division': ['unified_grade', 'unified_department', 'unified_section', 'unified_team', 'unified_project', 'unified_individual'],
-        'grade': ['unified_department', 'unified_section', 'unified_team', 'unified_project', 'unified_individual'],
-        'department': ['unified_section', 'unified_team', 'unified_project', 'unified_individual'],
-        'section': ['unified_team', 'unified_project', 'unified_individual'],
-        'team': ['unified_project', 'unified_individual'],
-        'project': ['unified_individual']
+        'division':   ['unified_department', 'unified_section', 'unified_team', 'unified_project', 'unified_grade', 'unified_individual'],
+        'department': ['unified_section', 'unified_team', 'unified_project', 'unified_grade', 'unified_individual'],
+        'section':    ['unified_team', 'unified_project', 'unified_grade', 'unified_individual'],
+        'team':       ['unified_project', 'unified_grade', 'unified_individual'],
+        'project':    ['unified_grade', 'unified_individual'],
+        'grade':      ['unified_individual'],
     }
 
     if parent_level in reset_mapping:
@@ -322,32 +322,7 @@ def render_unified_sidebar_filters(
         # Apply division filter
         current_df = apply_unified_filter(current_df, 'division', selected_division)
 
-        # 2. 職位 (Grade) Filter
-        grade_options = get_cascaded_options(
-            current_df, 'grade', privilege_mgr, current_privilege
-        )
-
-        # Apply grade_filter restriction if configured (e.g., non_managers only)
-        if current_privilege:
-            grade_filter = privilege_mgr.get_grade_filter_for_grouping(current_privilege, 'grade')
-            if grade_filter:
-                grade_options = [g for g in grade_options if g in grade_filter]
-
-        selected_grade = st.selectbox(
-            "職位",
-            ["すべて"] + grade_options,
-            key="unified_grade"
-        )
-        selected_filters['grade'] = selected_grade
-
-        # Check if grade changed → reset children
-        if should_reset_child_filters('unified_grade', selected_grade):
-            reset_child_filters('grade')
-
-        # Apply grade filter
-        current_df = apply_unified_filter(current_df, 'grade', selected_grade)
-
-        # 3. 部署 (Department) Filter
+        # 2. 部署 (Department) Filter
         department_options = get_cascaded_options(
             current_df, 'department', privilege_mgr, current_privilege
         )
@@ -366,7 +341,7 @@ def render_unified_sidebar_filters(
         # Apply department filter
         current_df = apply_unified_filter(current_df, 'department', selected_department)
 
-        # 4. 課 (Section) Filter
+        # 3. 課 (Section) Filter
         section_options = get_cascaded_options(
             current_df, 'section', privilege_mgr, current_privilege
         )
@@ -390,7 +365,7 @@ def render_unified_sidebar_filters(
             dimension_info=('課', selected_section)
         )
 
-        # 5. チーム (Team) Filter
+        # 4. チーム (Team) Filter
         team_options = get_cascaded_options(
             current_df, 'team', privilege_mgr, current_privilege
         )
@@ -410,7 +385,7 @@ def render_unified_sidebar_filters(
             dimension_info=('チーム', selected_team)
         )
 
-        # 6. プロジェクト (Project) Filter
+        # 5. プロジェクト (Project) Filter
         project_options = get_cascaded_options(
             current_df, 'project', privilege_mgr, current_privilege
         )
@@ -436,6 +411,31 @@ def render_unified_sidebar_filters(
             selected_filters['dimension_value'] = 'filtered'
         else:
             selected_filters['dimension_value'] = 'すべて'
+
+        # 6. 職位 (Grade) Filter
+        grade_options = get_cascaded_options(
+            current_df, 'grade', privilege_mgr, current_privilege
+        )
+
+        # Apply grade_filter restriction if configured (e.g., non_managers only)
+        if current_privilege:
+            grade_filter = privilege_mgr.get_grade_filter_for_grouping(current_privilege, 'grade')
+            if grade_filter:
+                grade_options = [g for g in grade_options if g in grade_filter]
+
+        selected_grade = st.selectbox(
+            "職位",
+            ["すべて"] + grade_options,
+            key="unified_grade"
+        )
+        selected_filters['grade'] = selected_grade
+
+        # Check if grade changed → reset children
+        if should_reset_child_filters('unified_grade', selected_grade):
+            reset_child_filters('grade')
+
+        # Apply grade filter
+        current_df = apply_unified_filter(current_df, 'grade', selected_grade)
 
         # 7. 個人 (Individual) Filter — only show if user has individual access
         allowed_groupings = privilege_mgr.get_allowed_groupings(current_privilege) if current_privilege else []

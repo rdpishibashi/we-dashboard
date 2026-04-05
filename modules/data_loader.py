@@ -11,11 +11,19 @@ from .config import ENGAGEMENT_DIVISOR, COMPONENT_DIVISOR
 
 def get_excel_password():
     """
-    Get Excel password from Streamlit secrets.
+    Get Excel password for input files.
+
+    When modules/windows_config.py exists (local standalone mode, git-ignored),
+    reads from it. Otherwise reads from Streamlit secrets (Cloud deployment).
 
     Returns:
         Password string or None if not configured
     """
+    try:
+        from modules import windows_config
+        return windows_config.EXCEL_PASSWORD
+    except ImportError:
+        pass
     try:
         return st.secrets.get("EXCEL_PASSWORD")
     except (AttributeError, FileNotFoundError):
@@ -24,54 +32,42 @@ def get_excel_password():
 
 def decrypt_excel_if_needed(file_obj):
     """
-    Decrypt Excel file if password-protected.
+    Decrypt a password-protected Excel file.
+
+    Input files are always expected to be password-protected.
 
     Args:
-        file_obj: File object or path to Excel file
+        file_obj: File object (UploadedFile / BytesIO) or path string
 
     Returns:
-        Decrypted file object (BytesIO) or original file object
+        Decrypted file as BytesIO
+
+    Raises:
+        ValueError: If password is not configured or incorrect
     """
     import io
     import msoffcrypto
 
     password = get_excel_password()
+    if not password:
+        raise ValueError("Excelパスワードが設定されていません。管理者に連絡してください。")
 
-    if password is None:
-        # No password configured, return as-is
-        return file_obj
+    if isinstance(file_obj, str):
+        with open(file_obj, 'rb') as f:
+            file_data = io.BytesIO(f.read())
+    else:
+        file_obj.seek(0)
+        file_data = io.BytesIO(file_obj.read())
 
     try:
-        # Read file into memory
-        if isinstance(file_obj, str):
-            # It's a file path
-            with open(file_obj, 'rb') as f:
-                file_data = io.BytesIO(f.read())
-        else:
-            # It's already a file object
-            file_data = io.BytesIO(file_obj.read())
-            file_obj.seek(0)  # Reset for potential retry
-
-        # Try to decrypt
         decrypted = io.BytesIO()
         office_file = msoffcrypto.OfficeFile(file_data)
         office_file.load_key(password=password)
         office_file.decrypt(decrypted)
         decrypted.seek(0)
-
         return decrypted
-
     except Exception as e:
-        error_msg = str(e).lower()
-        if 'password' in error_msg or 'key' in error_msg:
-            raise ValueError(f"Excelファイルのパスワードが正しくありません。管理者に連絡してください。")
-
-        # File might not be encrypted, try returning original
-        if isinstance(file_obj, str):
-            return file_obj
-        else:
-            file_obj.seek(0)
-            return file_obj
+        raise ValueError(f"Excelファイルの復号化に失敗しました。パスワードが正しくない可能性があります。({e})")
 
 
 @st.cache_data
