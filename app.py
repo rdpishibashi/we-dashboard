@@ -176,10 +176,28 @@ if uploaded_file is not None:
         # Success message will be shown in upload section at bottom
     except Exception as e:
         st.error(f"データ読み込みエラー: {e}")
+        # Allow re-upload via sidebar instead of stopping the app
+        with st.sidebar.expander("データ", expanded=True):
+            new_uploaded_file = st.file_uploader(
+                "データファイルをアップロード",
+                type=['xlsx', 'xls'],
+                help="ワーク･エンゲージメント・データのExcelファイルをアップロードしてください",
+                key='data_file_uploader_error'
+            )
+            if new_uploaded_file is not None:
+                st.session_state['current_uploaded_file'] = new_uploaded_file
+                st.rerun()
         st.stop()
 
-    # Load member list for 未記入者 section (silently skipped if members.yaml is missing)
+    # Load member list from members.yaml (source of truth for member status)
     member_df = load_members()
+
+    # Derive leave addresses from member_df (leave = retired/transferred)
+    leave_addresses = set()
+    if not member_df.empty and 'leave' in member_df.columns:
+        leave_addresses = set(
+            member_df[member_df['leave'] == 'leave']['mail_address'].dropna()
+        )
 
     # Compute latest_year_month from full comment data (before period filtering)
     latest_year_month = comment_df['year_month_dt'].max() if not comment_df.empty else None
@@ -281,11 +299,11 @@ if uploaded_file is not None:
             key="global_metric_select"
         )
 
-        # Apply period filter to main DataFrame
+        # Apply period filter to main DataFrame (.copy() ensures .loc assignment is safe)
         filtered_df = filtered_df[
             (filtered_df['year_month_dt'] >= start_dt) &
             (filtered_df['year_month_dt'] <= end_dt)
-        ]
+        ].copy()
 
         # Apply period filter to signal DataFrame (needed for unified filters)
         filtered_signal_df = signal_df[
@@ -297,17 +315,79 @@ if uploaded_file is not None:
         tab_labels = privilege_mgr.get_allowed_tabs(current_privilege)
         base_grouping_options = privilege_mgr.get_allowed_groupings(current_privilege)
 
-        # Unified organization filters + grouping selector
-        # Renders: 表示カテゴリ + 部門 → 職位 → 部署 → (課|チーム|プロジェクト) → 個人
+        # ── 表示カテゴリ (Grouping selectbox) ──
+        from modules.config import GROUPING_LABEL_MAP
+        _cleaned_grouping_opts = list(dict.fromkeys(base_grouping_options or ['なし'])) or ['なし']
+        _grouping_key = 'unified_grouping'
+        _grouping_default_idx = 0
+        if _grouping_key in st.session_state and st.session_state[_grouping_key] in _cleaned_grouping_opts:
+            _grouping_default_idx = _cleaned_grouping_opts.index(st.session_state[_grouping_key])
+        unified_grouping = st.sidebar.selectbox(
+            "表示カテゴリ",
+            _cleaned_grouping_opts,
+            index=_grouping_default_idx,
+            format_func=lambda x: GROUPING_LABEL_MAP.get(x, x),
+            key=_grouping_key
+        )
+
+        # ── 転属・退職メンバーを含む (checkbox) ──
+        # Rendered here in app.py to guarantee execution order:
+        # render → read value → filter DataFrames → call filter_helpers
+        include_leave = False
+        if leave_addresses:
+            if "include_leave_members" not in st.session_state:
+                st.session_state["include_leave_members"] = False
+            include_leave = st.sidebar.checkbox(
+                "転属・退職メンバーを含む",
+                key="include_leave_members"
+            )
+            if not include_leave:
+                filtered_df = filtered_df[~filtered_df['mail_address'].isin(leave_addresses)]
+                filtered_signal_df = filtered_signal_df[~filtered_signal_df['mail_address'].isin(leave_addresses)]
+            else:
+                # Leave members have current_* fields cleared by Admin GAS (→ '' or '未設定').
+                # Restore their org info from members.yaml so they appear in the correct
+                # department/section dropdowns and charts.
+                if not member_df.empty:
+                    leave_member_info = member_df[member_df['leave'] == 'leave'][
+                        ['mail_address', 'division', 'department', 'section', 'team', 'project', 'grade']
+                    ].copy()
+                    if not leave_member_info.empty:
+                        _org_cols = ['division', 'department', 'section', 'team', 'project', 'grade']
+                        for col in _org_cols:
+                            if col not in leave_member_info.columns:
+                                continue
+                            addr_to_val = leave_member_info.set_index('mail_address')[col]
+                            for _fdf in [filtered_df, filtered_signal_df]:
+                                if col not in _fdf.columns:
+                                    continue
+                                # Match leave member rows where org field is empty/unset
+                                # (Admin GAS clears to '' which fillna converts to '未設定',
+                                #  but handle both '' and '未設定' for safety)
+                                _leave_mask = _fdf['mail_address'].isin(leave_addresses)
+                                _empty_mask = _fdf[col].isin(['', '未設定']) | _fdf[col].isna()
+                                _mask = _leave_mask & _empty_mask
+                                if not _mask.any():
+                                    continue
+                                # Map mail_address → org value; use index-aligned ops to avoid shape mismatch
+                                _mapped = _fdf.loc[_mask, 'mail_address'].map(addr_to_val)
+                                # Keep only rows where members.yaml has a valid (non-empty) value
+                                _valid = _mapped[_mapped.notna() & (_mapped != '')]
+                                if not _valid.empty:
+                                    _fdf.loc[_valid.index, col] = _valid
+
+        # Unified organization filters (cascading dropdowns)
+        # 表示カテゴリ and leave checkbox are already rendered above
         from modules.filter_helpers import render_unified_sidebar_filters
 
-        filtered_df, filtered_signal_df, selected_filters, unified_grouping = render_unified_sidebar_filters(
+        filtered_df, filtered_signal_df, selected_filters, _ = render_unified_sidebar_filters(
             filtered_df,
             filtered_signal_df,
             privilege_mgr,
             current_privilege,
             is_authenticated(),
-            grouping_options=base_grouping_options
+            grouping_options=None,   # grouping already rendered above
+            leave_addresses=None     # leave filtering already applied above
         )
 
         # データアップロード section (collapsible, at bottom of sidebar)

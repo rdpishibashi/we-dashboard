@@ -9,9 +9,10 @@ members:
   division: 品質保証部門
   department: 品質保証部
   section: 品質保証裾野
-  team: ''
+  team: Management
   project: ''
   grade: 課長
+  leave: ''
 - mail_address: kazuhito_sekino@ulvac.com
   member_name: 関野 一仁
   division: 品質保証部門
@@ -20,6 +21,7 @@ members:
   team: ''
   project: ''
   grade: 特命職
+  leave: ''
 - mail_address: endou_takahito@ulvac.com
   member_name: 遠藤 敬仁
   division: 品質保証部門
@@ -28,6 +30,7 @@ members:
   team: ''
   project: ''
   grade: 主管
+  leave: ''
 - mail_address: kouichi_takizawa@ulvac.com
   member_name: 滝澤 功一
   division: 品質保証部門
@@ -36,6 +39,7 @@ members:
   team: ''
   project: ''
   grade: 主管
+  leave: ''
 - mail_address: kinichi_nagamoto@ulvac.com
   member_name: 永元 欣一
   division: 品質保証部門
@@ -44,6 +48,7 @@ members:
   team: ''
   project: ''
   grade: 主事補
+  leave: ''
 - mail_address: naohiro_tachibana@ulvac.com
   member_name: 橘 直宏
   division: 品質保証部門
@@ -52,6 +57,7 @@ members:
   team: ''
   project: ''
   grade: サプライヤー
+  leave: ''
 - mail_address: yuuichi_yoshida@ulvac.com
   member_name: 吉田 雄一
   division: 設計部門
@@ -60,6 +66,7 @@ members:
   team: Management
   project: ENTRON-X
   grade: 部長
+  leave: ''
 - mail_address: shouta_nakatsugawa@ulvac.com
   member_name: 中津川 翔太
   division: 設計部門
@@ -68,6 +75,7 @@ members:
   team: ''
   project: ENTRON-X
   grade: 特命職
+  leave: ''
 - mail_address: yuuya_bannai@ulvac.com
   member_name: 坂内 雄也
   division: 設計部門
@@ -76,6 +84,7 @@ members:
   team: ''
   project: ENTRON-X
   grade: 特命職
+  leave: ''
 - mail_address: kousuke_hoshiya@ulvac.com
   member_name: 星谷 光祐
   division: 設計部門
@@ -84,6 +93,7 @@ members:
   team: ''
   project: ENTRON-X
   grade: 主事補
+  leave: ''
 - mail_address: kazuhiro_musha@ulvac.com
   member_name: 武者 和博
   division: 設計部門
@@ -92,6 +102,7 @@ members:
   team: ''
   project: ENTRON-X
   grade: 主管
+  leave: ''
 - mail_address: shuuji_saitou@ulvac.com
   member_name: 齋藤 修司
   division: 設計部門
@@ -100,6 +111,7 @@ members:
   team: ''
   project: ENTRON-X
   grade: 主管
+  leave: ''
 - mail_address: yoshiyuki_hadachi@ulvac.com
   member_name: 羽立 良幸
   division: 設計部門
@@ -108,6 +120,7 @@ members:
   team: ''
   project: ENTRON-X
   grade: 主管
+  leave: ''
 - mail_address: genki_sekine@ulvac.com
   member_name: 関根 元気
   division: 設計部門
@@ -116,6 +129,7 @@ members:
   team: ''
   project: ENTRON-X
   grade: 主事
+  leave: ''
 - mail_address: akira_jinzu@ulvac.com
   member_name: 神通 晶
   division: 設計部門
@@ -124,6 +138,7 @@ members:
   team: Management
   project: ''
   grade: 課長
+  leave: ''
 - mail_address: etsurou_kashiwagi@ulvac.com
   member_name: 柏木 悦郎
   division: 設計部門
@@ -132,6 +147,16 @@ members:
   team: ''
   project: 現行機
   grade: 主事
+  leave: ''
+- mail_address: hideki_mataga@ulvac.com
+  member_name: 又賀 秀輝
+  division: 設計部門
+  department: 機電設計部
+  section: 第一設計課
+  team: ''
+  project: 現行機
+  grade: 主管
+  leave: leave
 - mail_address: masanobu_kamii@ulvac.com
   member_name: 神井 正敦
   division: 設計部門
@@ -140,6 +165,7 @@ members:
   team: ''
   project: 現行機
   grade: 主管
+  leave: ''
 - mail_address: shigeru_sugiyama@ulvac.com
   member_name: 杉山 成
   division: 設計部門
@@ -148,6 +174,7 @@ members:
   team: ''
   project: 現行機
   grade: 主管
+  leave: ''
 - mail_address: hikotaka_tada@ulvac.com
   member_name: 多田 彦剛
   division: 設計部門
@@ -156,6 +183,7 @@ members:
   team: ''
   project: 現行機
   grade: 主管
+  leave: ''
 - mail_address: kazuyuki_koizumi@ulvac.com
   member_name: 小泉 一幸
   division: 設計部門
@@ -164,6 +192,7 @@ members:
   team: ''
   project: 現行機
   grade: 主管
+  leave: ''
 - mail_address: fumiaki_ogawa@ulvac.com
   member_name: 小川 史晃
   division: 設計部門
@@ -172,6 +201,7 @@ members:
   team: ''
   project: 現行機
   grade: 主事補
+  leave: ''
 - mail_address: fumiki_higashi@ulvac.com
   member_name: 東 史紀
   division: 設計部門
@@ -180,6 +210,7 @@ members:
   team: ''
   project: 現行機
   grade: 主事補
+  leave: ''
 - mail_address: shoutarou_kudou@ulvac.com
   member_name: 工藤 翔太郎
   division: 設計部門
@@ -188,6 +219,16 @@ members:
   team: ''
   project: 現行機
   grade: 主事補
+  leave: ''
+- mail_address: ji-yong_kim@ulvac.com
+  member_name: 金 志勇
+  division: 設計部門
+  department: 機電設計部
+  section: 第一設計課
+  team: ''
+  project: 現行機
+  grade: 一般職
+  leave: leave
 - mail_address: ka-in_kim@ulvac.com
   member_name: 金 佳仁
   division: 設計部門
@@ -196,6 +237,7 @@ members:
   team: ''
   project: 現行機
   grade: 一般職
+  leave: ''
 - mail_address: yuudai_tachida@ulvac.com
   member_name: 立田 雄大
   division: 設計部門
@@ -204,6 +246,7 @@ members:
   team: ''
   project: Sproject
   grade: 一般職
+  leave: ''
 - mail_address: asako_tokuda@ulvac.com
   member_name: 徳田 麻子
   division: 設計部門
@@ -212,6 +255,7 @@ members:
   team: ''
   project: ''
   grade: 一般職
+  leave: ''
 - mail_address: yuuji_saitou@ulvac.com
   member_name: 斉藤 裕二
   division: 設計部門
@@ -220,6 +264,7 @@ members:
   team: ''
   project: 現行機
   grade: 主事補
+  leave: ''
 - mail_address: sung-ho_lee@ulvac.com
   member_name: 李 誠鎬
   division: 設計部門
@@ -228,6 +273,7 @@ members:
   team: ''
   project: 現行機
   grade: 主任
+  leave: ''
 - mail_address: takashi_amatatsu@ulvac.com
   member_name: 天辰 貴志
   division: 設計部門
@@ -236,6 +282,7 @@ members:
   team: Management
   project: ''
   grade: 課長
+  leave: ''
 - mail_address: yuuichi_kihara@ulvac.com
   member_name: 木原 裕一
   division: 設計部門
@@ -244,6 +291,7 @@ members:
   team: ''
   project: ENTRON-X
   grade: 主管
+  leave: ''
 - mail_address: teruhiko_hoshihara@ulvac.com
   member_name: 星原 輝彦
   division: 設計部門
@@ -252,6 +300,7 @@ members:
   team: ''
   project: 現行機
   grade: 主事
+  leave: ''
 - mail_address: naoyoshi_suzuki@ulvac.com
   member_name: 鈴木 尚宜
   division: 設計部門
@@ -260,6 +309,7 @@ members:
   team: ''
   project: ENTRON-X
   grade: 主事
+  leave: ''
 - mail_address: junichi_masuyama@ulvac.com
   member_name: 益山 純一
   division: 設計部門
@@ -268,6 +318,7 @@ members:
   team: ''
   project: 現行機
   grade: 主事
+  leave: ''
 - mail_address: tetsuya_kaneda@ulvac.com
   member_name: 金田 哲也
   division: 設計部門
@@ -276,6 +327,7 @@ members:
   team: ''
   project: 現行機
   grade: 主事
+  leave: ''
 - mail_address: hironaka_abe@ulvac.com
   member_name: 阿部 紘央
   division: 設計部門
@@ -284,6 +336,7 @@ members:
   team: ''
   project: 現行機
   grade: 主事補
+  leave: ''
 - mail_address: kengo_kawashiri@ulvac.com
   member_name: 川尻 健悟
   division: 設計部門
@@ -292,6 +345,16 @@ members:
   team: ''
   project: ENTRON-X
   grade: 主事補
+  leave: ''
+- mail_address: shoutarou_tsukada@ulvac.com
+  member_name: 塚田 昇太郎
+  division: 設計部門
+  department: 機電設計部
+  section: 第二設計課
+  team: ''
+  project: ENTRON-X
+  grade: 一般職
+  leave: leave
 - mail_address: shou_yanogawa@ulvac.com
   member_name: 矢野川 翔
   division: 設計部門
@@ -300,6 +363,7 @@ members:
   team: ''
   project: ''
   grade: 一般職
+  leave: ''
 - mail_address: shigeomi_tanaka@ulvac.com
   member_name: 田中 繁臣
   division: 設計部門
@@ -308,6 +372,7 @@ members:
   team: Management
   project: ''
   grade: 課長
+  leave: ''
 - mail_address: toshihiko1_miura@ulvac.com
   member_name: 三浦 俊彦
   division: 設計部門
@@ -316,6 +381,7 @@ members:
   team: ''
   project: Sproject
   grade: 特命職
+  leave: ''
 - mail_address: kouichi_sota@ulvac.com
   member_name: 曽田 光一
   division: 設計部門
@@ -324,6 +390,7 @@ members:
   team: ''
   project: 現行機
   grade: 特命職
+  leave: ''
 - mail_address: kei_tsukahara@ulvac.com
   member_name: 塚原 慶
   division: 設計部門
@@ -332,6 +399,7 @@ members:
   team: ''
   project: 現行機
   grade: 主管
+  leave: ''
 - mail_address: kouta_suzuki@ulvac.com
   member_name: 鈴木 孝太
   division: 設計部門
@@ -340,6 +408,7 @@ members:
   team: ''
   project: 現行機
   grade: 主事
+  leave: ''
 - mail_address: youichi_kaji@ulvac.com
   member_name: 加治 洋一
   division: 設計部門
@@ -348,6 +417,7 @@ members:
   team: ''
   project: 現行機
   grade: 主事
+  leave: ''
 - mail_address: masaru_kurokawa@ulvac.com
   member_name: 黒川 勉
   division: 設計部門
@@ -356,6 +426,7 @@ members:
   team: ''
   project: 現行機
   grade: 主事
+  leave: ''
 - mail_address: yasutomo_uchida@ulvac.com
   member_name: 内田 康友
   division: 設計部門
@@ -364,6 +435,7 @@ members:
   team: ''
   project: ENTRON-X
   grade: 主事
+  leave: ''
 - mail_address: hideki_takasugi@ulvac.com
   member_name: 高杉 英樹
   division: 設計部門
@@ -372,6 +444,7 @@ members:
   team: ''
   project: 現行機
   grade: 主事
+  leave: ''
 - mail_address: tomoaki_yamaguchi@ulvac.com
   member_name: 山口 智明
   division: 設計部門
@@ -380,6 +453,7 @@ members:
   team: ''
   project: ENTRON-X
   grade: 主事補
+  leave: ''
 - mail_address: masato_takayama@ulvac.com
   member_name: 高山 将斗
   division: 設計部門
@@ -388,6 +462,25 @@ members:
   team: ''
   project: 現行機
   grade: 主事補
+  leave: ''
+- mail_address: ki-ha_kim@ulvac.com
+  member_name: 金 璣夏
+  division: 設計部門
+  department: 機電設計部
+  section: 第三設計課
+  team: ''
+  project: 現行機
+  grade: 一般職
+  leave: leave
+- mail_address: kyung-dae_lee@ulvac.com
+  member_name: 李 炅大
+  division: 設計部門
+  department: 機電設計部
+  section: 第三設計課
+  team: ''
+  project: 現行機
+  grade: 一般職
+  leave: leave
 - mail_address: chae-sung_lim@ulvac.com
   member_name: 林 菜盛
   division: 設計部門
@@ -396,6 +489,7 @@ members:
   team: ''
   project: 現行機
   grade: 一般職
+  leave: ''
 - mail_address: hoi-jun_ju@ulvac.com
   member_name: 朱 會準
   division: 設計部門
@@ -404,6 +498,7 @@ members:
   team: ''
   project: 現行機
   grade: 一般職
+  leave: ''
 - mail_address: ai_fujiwara@ulvac.com
   member_name: 藤原 愛
   division: 設計部門
@@ -412,6 +507,7 @@ members:
   team: ''
   project: 現行機
   grade: 一般職
+  leave: ''
 - mail_address: luke_wakabayashi@ulvac.com
   member_name: 若林 留功
   division: 設計部門
@@ -420,6 +516,7 @@ members:
   team: ''
   project: 現行機
   grade: 主管
+  leave: ''
 - mail_address: ryuuki_nomura@ulvac.com
   member_name: 野村 竜生
   division: 設計部門
@@ -428,6 +525,7 @@ members:
   team: ''
   project: ENTRON-X
   grade: 主事補
+  leave: ''
 - mail_address: yuki_tajiri@ulvac.com
   member_name: 田尻 勇樹
   division: 設計部門
@@ -436,6 +534,7 @@ members:
   team: Management
   project: ''
   grade: 部長
+  leave: ''
 - mail_address: ryouichi_mishio@ulvac.com
   member_name: 三塩 亮一
   division: 設計部門
@@ -444,6 +543,7 @@ members:
   team: Management
   project: ENTRON-X
   grade: 課長
+  leave: ''
 - mail_address: naokata_tazawa@ulvac.com
   member_name: 田沢 尚方
   division: 設計部門
@@ -452,6 +552,7 @@ members:
   team: ''
   project: 現行機
   grade: 主管
+  leave: ''
 - mail_address: akihiko_mutou@ulvac.com
   member_name: 武藤 昭彦
   division: 設計部門
@@ -460,6 +561,7 @@ members:
   team: ''
   project: 現行機
   grade: 主管
+  leave: ''
 - mail_address: mitsuru_ishii@ulvac.com
   member_name: 石井 充
   division: 設計部門
@@ -468,6 +570,7 @@ members:
   team: ''
   project: 現行機
   grade: 主管
+  leave: ''
 - mail_address: toshio_kanbara@ulvac.com
   member_name: 神原 利夫
   division: 設計部門
@@ -476,6 +579,7 @@ members:
   team: ''
   project: 現行機
   grade: 主管
+  leave: ''
 - mail_address: takayuki_katsumata@ulvac.com
   member_name: 勝間田 高幸
   division: 設計部門
@@ -484,6 +588,7 @@ members:
   team: ''
   project: 現行機
   grade: 主管
+  leave: ''
 - mail_address: yuuki_mikura@ulvac.com
   member_name: 三倉 勇樹
   division: 設計部門
@@ -492,6 +597,7 @@ members:
   team: ''
   project: ENTRON-X
   grade: 主管
+  leave: ''
 - mail_address: takashi_hamada@ulvac.com
   member_name: 浜田 孝
   division: 設計部門
@@ -500,6 +606,7 @@ members:
   team: ''
   project: 現行機
   grade: 主事
+  leave: ''
 - mail_address: tomoyoshi_nihei@ulvac.com
   member_name: 二瓶 朋圭
   division: 設計部門
@@ -508,6 +615,7 @@ members:
   team: ''
   project: 現行機
   grade: 主事
+  leave: ''
 - mail_address: masaya_arai@ulvac.com
   member_name: 新井 雅哉
   division: 設計部門
@@ -516,6 +624,7 @@ members:
   team: ''
   project: ENTRON-X
   grade: 主事
+  leave: ''
 - mail_address: rentarou_netsu@ulvac.com
   member_name: 根津 蓮太郎
   division: 設計部門
@@ -524,6 +633,7 @@ members:
   team: ''
   project: 現行機
   grade: 主事補
+  leave: ''
 - mail_address: daiki_morita@ulvac.com
   member_name: 森田 大貴
   division: 設計部門
@@ -532,6 +642,16 @@ members:
   team: ''
   project: 現行機
   grade: 主任
+  leave: ''
+- mail_address: koutarou_oosaki@ulvac.com
+  member_name: 大﨑 晃太郎
+  division: 設計部門
+  department: システム開発部
+  section: ソフトウェア開発課
+  team: ''
+  project: 現行機
+  grade: 一般職
+  leave: leave
 - mail_address: kouhei_ogawa@ulvac.com
   member_name: 小川 航平
   division: 設計部門
@@ -540,6 +660,16 @@ members:
   team: ''
   project: 現行機
   grade: 一般職
+  leave: ''
+- mail_address: daisuke_takasaki@ulvac.com
+  member_name: 髙﨑 大輔
+  division: 設計部門
+  department: システム開発部
+  section: ソフトウェア開発課
+  team: ''
+  project: 現行機
+  grade: 主事補
+  leave: absence
 - mail_address: tarou_kaitou@ulvac.com
   member_name: 海藤 太郎
   division: 設計部門
@@ -548,6 +678,7 @@ members:
   team: ''
   project: 現行機
   grade: 主管
+  leave: ''
 - mail_address: shinichirou_mori@ulvac.com
   member_name: 森 伸一郎
   division: 設計部門
@@ -556,6 +687,7 @@ members:
   team: ''
   project: 現行機
   grade: 主管
+  leave: ''
 - mail_address: nobuaki_mochizuki@ulvac.com
   member_name: 望月 信明
   division: 設計部門
@@ -564,6 +696,7 @@ members:
   team: Management
   project: ''
   grade: 特命職
+  leave: ''
 - mail_address: yosinori_fujii@ulvac.com
   member_name: 藤井 佳詞
   division: 設計部門
@@ -572,6 +705,7 @@ members:
   team: ''
   project: 現行機
   grade: 主管
+  leave: ''
 - mail_address: akifumi_sano@ulvac.com
   member_name: 佐野 昭文
   division: 設計部門
@@ -580,6 +714,7 @@ members:
   team: ''
   project: 現行機
   grade: 主管
+  leave: ''
 - mail_address: shougo_kabe@ulvac.com
   member_name: 加部 正悟
   division: 設計部門
@@ -588,6 +723,7 @@ members:
   team: ''
   project: 現行機
   grade: 主管
+  leave: ''
 - mail_address: dai_takahashi@ulvac.com
   member_name: 高橋 大
   division: 設計部門
@@ -596,6 +732,7 @@ members:
   team: ''
   project: 現行機
   grade: 主事
+  leave: ''
 - mail_address: yoshihiro_katsumata@ulvac.com
   member_name: 勝又 義広
   division: 設計部門
@@ -604,6 +741,7 @@ members:
   team: ''
   project: 現行機
   grade: 主事補
+  leave: ''
 - mail_address: satoshi_kurose@ulvac.com
   member_name: 黒瀬 智史
   division: 設計部門
@@ -612,6 +750,7 @@ members:
   team: ''
   project: 現行機
   grade: 主事補
+  leave: ''
 - mail_address: naoko_morino@ulvac.com
   member_name: 守野 通子
   division: 設計部門
@@ -620,6 +759,7 @@ members:
   team: ''
   project: 現行機
   grade: 一般職
+  leave: ''
 - mail_address: patricia_alcantara@ulvac.com
   member_name: Alcantara Patricia
   division: 設計部門
@@ -628,6 +768,7 @@ members:
   team: ''
   project: 現行機
   grade: 一般職
+  leave: ''
 - mail_address: kazushige_watanabe@ulvac.com
   member_name: 渡邊 一茂
   division: 設計部門
@@ -636,6 +777,7 @@ members:
   team: ''
   project: 現行機
   grade: 一般職
+  leave: ''
 - mail_address: shigeru_shimada@ulvac.com
   member_name: 島田 茂
   division: 設計部門
@@ -644,3 +786,4 @@ members:
   team: ''
   project: 現行機
   grade: 主事
+  leave: ''

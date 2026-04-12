@@ -98,11 +98,13 @@ def load_data(uploaded_file):
     except Exception as e:
         raise ValueError(f"ファイルの処理中にエラーが発生しました: {e}")
 
+    # Open Excel file once and read all sheets from it
+    xls = pd.ExcelFile(decrypted_file, engine='openpyxl')
+
     # Load rating2 sheet (sole data source for both signal_df and pivot_df)
-    try:
-        signal_raw_df = pd.read_excel(decrypted_file, sheet_name='rating2', engine='openpyxl')
-    except Exception as e:
-        raise ValueError(f"rating2シートの読み込みに失敗しました: {e}")
+    if 'rating2' not in xls.sheet_names:
+        raise ValueError("rating2シートが見つかりません。")
+    signal_raw_df = pd.read_excel(xls, sheet_name='rating2')
 
     signal_df = signal_raw_df.copy()
     signal_df['year'] = pd.to_numeric(signal_df['year'], errors='coerce')
@@ -162,10 +164,9 @@ def load_data(uploaded_file):
     pivot_df['absorption_rating'] = pivot_df['absorption_rating'] / COMPONENT_DIVISOR
 
     # Load comment sheet for concern and comment data
-    try:
-        comment_raw_df = pd.read_excel(decrypted_file, sheet_name='comment', engine='openpyxl')
-    except Exception as e:
-        raise ValueError(f"commentシートの読み込みに失敗しました: {e}")
+    if 'comment' not in xls.sheet_names:
+        raise ValueError("commentシートが見つかりません。")
+    comment_raw_df = pd.read_excel(xls, sheet_name='comment')
 
     comment_df = comment_raw_df.copy()
     comment_df['year'] = pd.to_numeric(comment_df['year'], errors='coerce')
