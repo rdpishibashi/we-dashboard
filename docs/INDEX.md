@@ -16,6 +16,7 @@ Work Engagement Dashboard プロジェクトのドキュメントインデック
 | [PRIVILEGE_SYSTEM.md](./PRIVILEGE_SYSTEM.md) | ユーザー権限クラスの設計・設定方法・アクセス制御ロジック | 管理者・開発者 |
 | [MODULE_REFERENCE.md](./MODULE_REFERENCE.md) | `modules/` 配下の各モジュールの関数・クラスAPIリファレンス | 開発者 |
 | [PASSWORD_PROTECTION_SETUP.md](./PASSWORD_PROTECTION_SETUP.md) | Excelファイルへのパスワード設定手順とダッシュボードとの連携設定 | 管理者 |
+| [LEAVE_MEMBER_TOGGLE.md](./LEAVE_MEMBER_TOGGLE.md) | 転属・退職メンバー表示トグルの設計・実装仕様と実装時の教訓 | 開発者 |
 
 ---
 
@@ -44,6 +45,10 @@ Excelファイルの読み込みに始まり、DataFrame への変換・加工�
 ### PASSWORD_PROTECTION_SETUP.md — Excelパスワード保護設定ガイド
 
 Excelファイルにパスワードを設定し、ユーザーがExcelで直接開けない状態でダッシュボードからのみデータを参照できるようにするための設定手順を解説します。ExcelでのOpenXML暗号化手順、Streamlit Secretsへのパスワード登録、`msoffcrypto` を利用した自動復号の仕組みを説明します。
+
+### LEAVE_MEMBER_TOGGLE.md — 転属・退職メンバー表示トグル仕様
+
+「転属・退職メンバーを含む」チェックボックスの設計・実装仕様を解説します。3値の leave ステータス設計、`members.yaml` をデータソースとした leave 判定ロジック、Admin GAS による `current_*` フィールドクリア時の組織情報復元方法、`@st.cache_data` アンダースコア引数の落とし穴など、実装で遭遇した問題とその解決策を詳細に記載しています。
 
 ---
 
@@ -88,4 +93,4 @@ Excelファイルにパスワードを設定し、ユーザーがExcelで直接�
 
 ---
 
-*最終更新: 2026-03-08*
+*最終更新: 2026-04-12*

@@ -431,6 +431,10 @@ def render_non_respondents(
     if member_df is None or member_df.empty:
         return
 
+    # Exclude leave (retired/transferred) members — they are not expected to respond
+    if 'leave' in member_df.columns:
+        member_df = member_df[member_df['leave'] != 'leave'].copy()
+
     latest_ym = end_dt.strftime('%Y-%m')
 
     # Mail addresses of members who submitted data in the latest period

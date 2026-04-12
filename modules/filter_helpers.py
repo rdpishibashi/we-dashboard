@@ -233,7 +233,8 @@ def render_unified_sidebar_filters(
     privilege_mgr,
     current_privilege: str,
     is_authenticated_user: bool,
-    grouping_options: List[str] = None
+    grouping_options: List[str] = None,
+    leave_addresses: set = None
 ) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[str, str], str]:
     """
     Render unified sidebar filter cascade and return filtered DataFrames.
@@ -252,10 +253,17 @@ def render_unified_sidebar_filters(
         current_privilege: User's privilege class
         is_authenticated_user: Whether user is authenticated
         grouping_options: List of allowed grouping options
+        leave_addresses: Set of mail addresses for leave (retired/transferred) members
 
     Returns:
         Tuple of (filtered_df, filtered_signal_df, selected_filters_dict, grouping_choice)
     """
+    # Exclude leave members unless user opts in via checkbox.
+    # Must filter BEFORE building dropdown options so leave members don't
+    # appear in filter choices when the toggle is off.
+    # Leave member filtering is applied in app.py before this function is called.
+    # (leave_addresses parameter is kept for API compatibility but unused here)
+
     # Pre-filter by broadest privilege scope (union of all tab scopes)
     # This excludes completely out-of-scope data from dropdown options
     # while still allowing per-tab scope to control chart data
@@ -271,34 +279,9 @@ def render_unified_sidebar_filters(
     # Dictionary to store selected values
     selected_filters = {}
 
-    # ── 表示カテゴリ (Grouping) — rendered BEFORE filters ──
-    # Use provided grouping options or default
-    if grouping_options is None:
-        grouping_options = ['なし']
-
-    # Remove duplicates while preserving order
-    cleaned_options = list(dict.fromkeys(grouping_options))
-    if not cleaned_options:
-        cleaned_options = ['なし']
-
-    # Get current selection
-    grouping_key = 'unified_grouping'
-    default_idx = 0
-    if grouping_key in st.session_state and st.session_state[grouping_key] in cleaned_options:
-        default_idx = cleaned_options.index(st.session_state[grouping_key])
-
-    # Import GROUPING_LABEL_MAP
-    from modules.config import GROUPING_LABEL_MAP
-
-    # Render grouping selectbox directly in sidebar (like 表示指標)
-    format_func = lambda x: GROUPING_LABEL_MAP.get(x, x)
-    grouping_choice = st.sidebar.selectbox(
-        "表示カテゴリ",
-        cleaned_options,
-        index=default_idx,
-        format_func=format_func,
-        key=grouping_key
-    )
+    # Note: 表示カテゴリ selectbox and leave checkbox are rendered in app.py
+    # before this function is called. grouping_choice is returned from session state.
+    grouping_choice = st.session_state.get('unified_grouping', 'なし')
 
     # ── フィルター設定 (Organization filters) ──
     st.sidebar.markdown("---")

@@ -23,7 +23,7 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 XLSX_FILE = PROJECT_ROOT / 'Member.xlsx'
 YAML_FILE = PROJECT_ROOT / 'config' / 'members.yaml'
 
-OUTPUT_COLUMNS = ['mail_address', 'member_name', 'division', 'department', 'section', 'team', 'project', 'grade']
+OUTPUT_COLUMNS = ['mail_address', 'member_name', 'division', 'department', 'section', 'team', 'project', 'grade', 'leave']
 
 
 def main():
@@ -34,17 +34,18 @@ def main():
     df = pd.read_excel(XLSX_FILE, engine='openpyxl')
 
     # Verify required columns exist
-    missing = [c for c in OUTPUT_COLUMNS + ['leave'] if c not in df.columns]
+    missing = [c for c in OUTPUT_COLUMNS if c not in df.columns]
     if missing:
         print(f"Error: missing columns in MemberSS.xlsx: {missing}")
         sys.exit(1)
 
-    # Filter out members on leave (leave == 'Y'); NaN = active
-    active = df[df['leave'].fillna('').ne('Y')].copy()
-    left_count = len(df) - len(active)
-
-    result = active[OUTPUT_COLUMNS].fillna('').copy()
+    # Include ALL members with their leave status.
+    # leave values: NaN/''/active, 'absence' = long-term leave (still employed),
+    #               'leave' = retired/transferred
+    # Filtering is done at display time in the dashboard, not here.
+    result = df[OUTPUT_COLUMNS].fillna('').copy()
     members = result.to_dict(orient='records')
+    leave_count = len(df[df['leave'].fillna('').isin(['leave', 'Y'])])
 
     # Write YAML
     YAML_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -57,12 +58,14 @@ def main():
                   default_flow_style=False, sort_keys=False)
 
     print(f"Generated {YAML_FILE}")
-    print(f"  Active members : {len(members)}")
-    print(f"  On leave       : {left_count}")
+    print(f"  Total members  : {len(members)}")
+    print(f"  On leave       : {leave_count}")
+    print(f"  Active+absence : {len(members) - leave_count}")
     print()
 
     # Summary by division
-    by_div = result.groupby('division').size().reset_index(name='count')
+    active_result = result[~result['leave'].isin(['leave', 'Y'])]
+    by_div = active_result.groupby('division').size().reset_index(name='count')
     for _, row in by_div.iterrows():
         print(f"  {row['division']}: {row['count']}")
 
