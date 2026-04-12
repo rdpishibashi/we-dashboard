@@ -31,33 +31,7 @@ grade_groups:
 # Section aliases for grouped display in 課別 grouping
 # Note: dev (department head) sees individual sections, NOT combined aliases
 # All section managers in 開発部 (dev1, dev2, uti, uks1) see BOTH combined aliases
-section_aliases:
-  開発部_1課_UTI技術発展処:
-    display_name: 開発部 1課・UTI技術発展処
-    members:
-    - 開発部 1課
-    - UTI技術発展処
-    visible_to:
-    - develop1
-    - develop2
-    visible_in_tabs:
-    - 時系列
-    - グループ比較
-    - 評価
-    - 分布
-  開発部_2課_UK_S1-Project:
-    display_name: 開発部 2課・UK S1-Project
-    members:
-    - 開発部 2課
-    - UK S1-Project
-    visible_to:
-    - develop1
-    - develop2
-    visible_in_tabs:
-    - 時系列
-    - グループ比較
-    - 評価
-    - 分布
+section_aliases: {}
 
 # Privilege class definitions
 privileges:
@@ -399,59 +373,59 @@ user_privileges:
         access: true
         anonymize: false
         response_enabled: false
-  dev:
+  qm:
     inherits: department_head
     data_scope:
       時系列:
         values: &id003
-        - 開発部
+        - 品質保証部
       グループ比較:
         values:
-        - 開発部
+        - 品質保証部
       評価:
         values:
-        - 開発部
+        - 品質保証部
       分布:
         values:
-        - 開発部
+        - 品質保証部
       個人:
         values:
-        - 開発部
+        - 品質保証部
       default:
         values: *id003
     section_scope:
       計測値:
         values:
-        - 開発部
+        - 品質保証部
       主な指標:
         values:
-        - 開発部
+        - 品質保証部
       アクション対象候補:
         values:
-        - 開発部
+        - 品質保証部
       幹部職に伝えたいこと:
         values:
-        - 開発部
+        - 品質保証部
     grouping_scope:
       none:
         values:
-        - 開発部
+        - 品質保証部
       organization:
         values:
-        - 開発部
+        - 品質保証部
       grade:
         values:
-        - 開発部
+        - 品質保証部
       name:
         values:
-        - 開発部
+        - 品質保証部
     features:
       気になった出来事や気づき: false
       未記入者: true
       幹部職に伝えたいこと:
         access: true
         anonymize: false
-        response_enabled: true
+        response_enabled: false
   sw:
     inherits: section_manager
     data_scope:
@@ -814,239 +788,139 @@ user_privileges:
         access: true
         anonymize: false
         response_enabled: false
-  dev1:
-    inherits: section_manager
+  soft:
+    inherits: member
     data_scope:
       時系列:
         values: &id024
-        - 開発部
+        - システム開発部
+        - 機電設計部
       グループ比較:
         values:
-        - 開発部
+        - システム開発部
+        - 機電設計部
       評価:
         values:
-        - 開発部
-      分布:
-        values:
-        - 開発部 1課
-        - UTI技術発展処
-      個人:
-        values:
-        - 開発部 1課
-        - UTI技術発展処
+        - システム開発部
+        - 機電設計部
       default:
         values: *id024
     section_scope:
       計測値:
         values:
-        - 開発部
+        - システム開発部
+        - 機電設計部
       主な指標:
         values:
-        - 開発部
+        - システム開発部
+        - 機電設計部
       アクション対象候補:
-        values:
-        - 開発部 1課
-        - UTI技術発展処
+        type: none
       幹部職に伝えたいこと:
         values:
-        - 開発部 1課
-        - UTI技術発展処
+        - ソフトウェア開発課
+        anonymize: true
     grouping_scope:
       none:
-        values:
-        - 開発部
-      organization:
-        values:
-        - 開発部
-      grade:
-        values:
-        - 開発部
-      name:
-        values:
-        - 開発部 1課
-        - UTI技術発展処
-    features:
-      気になった出来事や気づき: false
-      未記入者: true
-      幹部職に伝えたいこと:
-        access: true
-        anonymize: false
-        response_enabled: true
-  dev2:
-    inherits: section_manager
-    data_scope:
-      時系列:
         values: &id025
-        - 開発部
-      グループ比較:
-        values:
-        - 開発部
-      評価:
-        values:
-        - 開発部
-      分布:
-        values:
-        - 開発部 2課
-        - UK S1-Project
-      個人:
-        values:
-        - 開発部 2課
-        - UK S1-Project
-      default:
-        values: *id025
-    section_scope:
-      計測値:
-        values:
-        - 開発部
-      主な指標:
-        values:
-        - 開発部
-      アクション対象候補:
-        values:
-        - 開発部 2課
-        - UK S1-Project
-      幹部職に伝えたいこと:
-        values:
-        - 開発部 2課
-        - UK S1-Project
-    grouping_scope:
-      none:
-        values:
-        - 開発部
+        - システム開発部
+        - 機電設計部
       organization:
         values:
-        - 開発部
+        - システム開発部
+        - 機電設計部
       grade:
         values:
-        - 開発部
+        - システム開発部
+        - 機電設計部
+        grade_filter: non_managers
       name:
+        type: none
+    grouping_scope_filtered:
+      none:
+        values: *id025
+      organization:
+        type: none
+      grade:
         values:
-        - 開発部 2課
-        - UK S1-Project
+        - ソフトウェア開発課
+        grade_filter: non_managers
+      name:
+        type: none
     features:
       気になった出来事や気づき: false
-      未記入者: true
+      未記入者: false
       幹部職に伝えたいこと:
-        access: true
-        anonymize: false
-        response_enabled: true
-  uti:
-    inherits: section_manager
+        access: false
+        anonymize: true
+        response_enabled: false
+  prod:
+    inherits: member
     data_scope:
       時系列:
         values: &id026
-        - 開発部
+        - システム開発部
+        - 機電設計部
       グループ比較:
         values:
-        - 開発部
+        - システム開発部
+        - 機電設計部
       評価:
         values:
-        - 開発部
-      分布:
-        values:
-        - 開発部 1課
-        - UTI技術発展処
-      個人:
-        values:
-        - 開発部 1課
-        - UTI技術発展処
+        - システム開発部
+        - 機電設計部
       default:
         values: *id026
     section_scope:
       計測値:
         values:
-        - 開発部
+        - システム開発部
+        - 機電設計部
       主な指標:
         values:
-        - 開発部
+        - システム開発部
+        - 機電設計部
       アクション対象候補:
-        values:
-        - 開発部 1課
-        - UTI技術発展処
+        type: none
       幹部職に伝えたいこと:
         values:
-        - 開発部 1課
-        - UTI技術発展処
+        - 製品技術課
+        anonymize: true
     grouping_scope:
       none:
-        values:
-        - 開発部
-      organization:
-        values:
-        - 開発部
-      grade:
-        values:
-        - 開発部
-      name:
-        values:
-        - 開発部 1課
-        - UTI技術発展処
-    features:
-      気になった出来事や気づき: false
-      未記入者: true
-      幹部職に伝えたいこと:
-        access: true
-        anonymize: false
-        response_enabled: true
-  uks:
-    inherits: section_manager
-    data_scope:
-      時系列:
         values: &id027
-        - 開発部
-      グループ比較:
-        values:
-        - 開発部
-      評価:
-        values:
-        - 開発部
-      分布:
-        values:
-        - 開発部 2課
-        - UK S1-Project
-      個人:
-        values:
-        - 開発部 2課
-        - UK S1-Project
-      default:
-        values: *id027
-    section_scope:
-      計測値:
-        values:
-        - 開発部
-      主な指標:
-        values:
-        - 開発部
-      アクション対象候補:
-        values:
-        - 開発部 2課
-        - UK S1-Project
-      幹部職に伝えたいこと:
-        values:
-        - 開発部 2課
-        - UK S1-Project
-    grouping_scope:
-      none:
-        values:
-        - 開発部
+        - システム開発部
+        - 機電設計部
       organization:
         values:
-        - 開発部
+        - システム開発部
+        - 機電設計部
       grade:
         values:
-        - 開発部
+        - システム開発部
+        - 機電設計部
+        grade_filter: non_managers
       name:
+        type: none
+    grouping_scope_filtered:
+      none:
+        values: *id027
+      organization:
+        type: none
+      grade:
         values:
-        - 開発部 2課
-        - UK S1-Project
+        - 製品技術課
+        grade_filter: non_managers
+      name:
+        type: none
     features:
       気になった出来事や気づき: false
-      未記入者: true
+      未記入者: false
       幹部職に伝えたいこと:
-        access: true
-        anonymize: false
-        response_enabled: true
-  soft:
+        access: false
+        anonymize: true
+        response_enabled: false
+  mechele1:
     inherits: member
     data_scope:
       時系列:
@@ -1076,7 +950,7 @@ user_privileges:
         type: none
       幹部職に伝えたいこと:
         values:
-        - ソフトウェア開発課
+        - 第一設計課
         anonymize: true
     grouping_scope:
       none:
@@ -1101,7 +975,7 @@ user_privileges:
         type: none
       grade:
         values:
-        - ソフトウェア開発課
+        - 第一設計課
         grade_filter: non_managers
       name:
         type: none
@@ -1112,7 +986,7 @@ user_privileges:
         access: false
         anonymize: true
         response_enabled: false
-  prod:
+  mechele2:
     inherits: member
     data_scope:
       時系列:
@@ -1142,7 +1016,7 @@ user_privileges:
         type: none
       幹部職に伝えたいこと:
         values:
-        - 製品技術課
+        - 第二設計課
         anonymize: true
     grouping_scope:
       none:
@@ -1167,7 +1041,7 @@ user_privileges:
         type: none
       grade:
         values:
-        - 製品技術課
+        - 第二設計課
         grade_filter: non_managers
       name:
         type: none
@@ -1178,7 +1052,7 @@ user_privileges:
         access: false
         anonymize: true
         response_enabled: false
-  mechele1:
+  mechele3:
     inherits: member
     data_scope:
       時系列:
@@ -1208,7 +1082,7 @@ user_privileges:
         type: none
       幹部職に伝えたいこと:
         values:
-        - 第一設計課
+        - 第三設計課
         anonymize: true
     grouping_scope:
       none:
@@ -1233,7 +1107,7 @@ user_privileges:
         type: none
       grade:
         values:
-        - 第一設計課
+        - 第三設計課
         grade_filter: non_managers
       name:
         type: none
@@ -1244,51 +1118,43 @@ user_privileges:
         access: false
         anonymize: true
         response_enabled: false
-  mechele2:
+  qa:
     inherits: member
     data_scope:
       時系列:
         values: &id034
-        - システム開発部
-        - 機電設計部
+        - 品質保証部
       グループ比較:
         values:
-        - システム開発部
-        - 機電設計部
+        - 品質保証部
       評価:
         values:
-        - システム開発部
-        - 機電設計部
+        - 品質保証部
       default:
         values: *id034
     section_scope:
       計測値:
         values:
-        - システム開発部
-        - 機電設計部
+        - 品質保証部
       主な指標:
         values:
-        - システム開発部
-        - 機電設計部
+        - 品質保証部
       アクション対象候補:
         type: none
       幹部職に伝えたいこと:
         values:
-        - 第二設計課
+        - 品質保証部
         anonymize: true
     grouping_scope:
       none:
         values: &id035
-        - システム開発部
-        - 機電設計部
+        - 品質保証部
       organization:
         values:
-        - システム開発部
-        - 機電設計部
+        - 品質保証部
       grade:
         values:
-        - システム開発部
-        - 機電設計部
+        - 品質保証部
         grade_filter: non_managers
       name:
         type: none
@@ -1299,190 +1165,8 @@ user_privileges:
         type: none
       grade:
         values:
-        - 第二設計課
+        - 品質保証裾野
         grade_filter: non_managers
-      name:
-        type: none
-    features:
-      気になった出来事や気づき: false
-      未記入者: false
-      幹部職に伝えたいこと:
-        access: false
-        anonymize: true
-        response_enabled: false
-  mechele3:
-    inherits: member
-    data_scope:
-      時系列:
-        values: &id036
-        - システム開発部
-        - 機電設計部
-      グループ比較:
-        values:
-        - システム開発部
-        - 機電設計部
-      評価:
-        values:
-        - システム開発部
-        - 機電設計部
-      default:
-        values: *id036
-    section_scope:
-      計測値:
-        values:
-        - システム開発部
-        - 機電設計部
-      主な指標:
-        values:
-        - システム開発部
-        - 機電設計部
-      アクション対象候補:
-        type: none
-      幹部職に伝えたいこと:
-        values:
-        - 第三設計課
-        anonymize: true
-    grouping_scope:
-      none:
-        values: &id037
-        - システム開発部
-        - 機電設計部
-      organization:
-        values:
-        - システム開発部
-        - 機電設計部
-      grade:
-        values:
-        - システム開発部
-        - 機電設計部
-        grade_filter: non_managers
-      name:
-        type: none
-    grouping_scope_filtered:
-      none:
-        values: *id037
-      organization:
-        type: none
-      grade:
-        values:
-        - 第三設計課
-        grade_filter: non_managers
-      name:
-        type: none
-    features:
-      気になった出来事や気づき: false
-      未記入者: false
-      幹部職に伝えたいこと:
-        access: false
-        anonymize: true
-        response_enabled: false
-  develop1:
-    inherits: member_no_grade_filter
-    data_scope:
-      時系列:
-        values: &id038
-        - 開発部
-      グループ比較:
-        values:
-        - 開発部
-      評価:
-        values:
-        - 開発部
-      default:
-        values: *id038
-    section_scope:
-      計測値:
-        values:
-        - 開発部
-      主な指標:
-        values:
-        - 開発部
-      アクション対象候補:
-        type: none
-      幹部職に伝えたいこと:
-        values:
-        - 開発部 1課
-        - UTI技術発展処
-        anonymize: true
-    grouping_scope:
-      none:
-        values: &id039
-        - 開発部
-      organization:
-        values:
-        - 開発部
-      grade:
-        values:
-        - 開発部
-      name:
-        type: none
-    grouping_scope_filtered:
-      none:
-        values: *id039
-      organization:
-        type: none
-      grade:
-        values:
-        - 開発部 1課
-        - UTI技術発展処
-      name:
-        type: none
-    features:
-      気になった出来事や気づき: false
-      未記入者: false
-      幹部職に伝えたいこと:
-        access: false
-        anonymize: true
-        response_enabled: false
-  develop2:
-    inherits: member_no_grade_filter
-    data_scope:
-      時系列:
-        values: &id040
-        - 開発部
-      グループ比較:
-        values:
-        - 開発部
-      評価:
-        values:
-        - 開発部
-      default:
-        values: *id040
-    section_scope:
-      計測値:
-        values:
-        - 開発部
-      主な指標:
-        values:
-        - 開発部
-      アクション対象候補:
-        type: none
-      幹部職に伝えたいこと:
-        values:
-        - 開発部 2課
-        - UK S1-Project
-        anonymize: true
-    grouping_scope:
-      none:
-        values: &id041
-        - 開発部
-      organization:
-        values:
-        - 開発部
-      grade:
-        values:
-        - 開発部
-      name:
-        type: none
-    grouping_scope_filtered:
-      none:
-        values: *id041
-      organization:
-        type: none
-      grade:
-        values:
-        - 開発部 2課
-        - UK S1-Project
       name:
         type: none
     features:

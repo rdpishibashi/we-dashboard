@@ -8,15 +8,15 @@ members:
   member_name: 細野 宏樹
   division: 品質保証部門
   department: 品質保証部
-  section: ''
-  team: Management
+  section: 品質保証裾野
+  team: ''
   project: ''
   grade: 課長
 - mail_address: kazuhito_sekino@ulvac.com
   member_name: 関野 一仁
   division: 品質保証部門
   department: 品質保証部
-  section: ''
+  section: 品質保証裾野
   team: ''
   project: ''
   grade: 特命職
@@ -24,7 +24,7 @@ members:
   member_name: 遠藤 敬仁
   division: 品質保証部門
   department: 品質保証部
-  section: ''
+  section: 品質保証裾野
   team: ''
   project: ''
   grade: 主管
@@ -32,7 +32,7 @@ members:
   member_name: 滝澤 功一
   division: 品質保証部門
   department: 品質保証部
-  section: ''
+  section: 品質保証裾野
   team: ''
   project: ''
   grade: 主管
@@ -40,7 +40,7 @@ members:
   member_name: 永元 欣一
   division: 品質保証部門
   department: 品質保証部
-  section: ''
+  section: 品質保証裾野
   team: ''
   project: ''
   grade: 主事補
@@ -48,7 +48,7 @@ members:
   member_name: 橘 直宏
   division: 品質保証部門
   department: 品質保証部
-  section: ''
+  section: 品質保証裾野
   team: ''
   project: ''
   grade: サプライヤー
@@ -388,6 +388,22 @@ members:
   team: ''
   project: 現行機
   grade: 主事補
+- mail_address: chae-sung_lim@ulvac.com
+  member_name: 林 菜盛
+  division: 設計部門
+  department: 機電設計部
+  section: 第三設計課
+  team: ''
+  project: 現行機
+  grade: 一般職
+- mail_address: hoi-jun_ju@ulvac.com
+  member_name: 朱 會準
+  division: 設計部門
+  department: 機電設計部
+  section: 第三設計課
+  team: ''
+  project: 現行機
+  grade: 一般職
 - mail_address: ai_fujiwara@ulvac.com
   member_name: 藤原 愛
   division: 設計部門
@@ -628,179 +644,3 @@ members:
   team: ''
   project: 現行機
   grade: 主事
-- mail_address: yasuyuki_taura@ulvac.com
-  member_name: 田浦 誉之
-  division: 開発部門
-  department: 開発部
-  section: ''
-  team: ''
-  project: ''
-  grade: 部長
-- mail_address: ryousuke_fukaya@ulvac.com
-  member_name: 深谷 亮介
-  division: 開発部門
-  department: 開発部
-  section: 開発部 1課
-  team: PVD
-  project: 台湾、米国
-  grade: 課長
-- mail_address: masashi_okada@ulvac.com
-  member_name: 岡田 雅司
-  division: 開発部門
-  department: 開発部
-  section: 開発部 1課
-  team: PVD
-  project: 台湾
-  grade: 主管
-- mail_address: lingbo_shen@ulvac.com
-  member_name: 瀋 凌波
-  division: 開発部門
-  department: 開発部
-  section: 開発部 1課
-  team: PVD
-  project: 台湾
-  grade: 主管
-- mail_address: ken_uchida@ulvac.com
-  member_name: 内田 賢
-  division: 開発部門
-  department: 開発部
-  section: 開発部 1課
-  team: PVD
-  project: 台湾、米国
-  grade: 主事
-- mail_address: kouhei_fukumoto@ulvac.com
-  member_name: 福本 航平
-  division: 開発部門
-  department: 開発部
-  section: 開発部 1課
-  team: PVD
-  project: 台湾
-  grade: 主事補
-- mail_address: mi-reu_yoo@ulvac.com
-  member_name: ユ ミル
-  division: 開発部門
-  department: 開発部
-  section: 開発部 1課
-  team: PVD
-  project: 台湾
-  grade: 一般職
-- mail_address: kanji_yaginuma@ulvac.com
-  member_name: 柳沼 寛寿
-  division: 開発部門
-  department: 開発部
-  section: 開発部 2課
-  team: PVD
-  project: 韓国、日本
-  grade: 課長
-- mail_address: nobuyuki_katou@ulvac.com
-  member_name: 加藤 伸幸
-  division: 開発部門
-  department: 開発部
-  section: 開発部 2課
-  team: CVD
-  project: 韓国、日本
-  grade: 特命職・専門職
-- mail_address: akira_igari@ulvac.com
-  member_name: 猪狩 晃
-  division: 開発部門
-  department: 開発部
-  section: 開発部 2課
-  team: CVD
-  project: 韓国、日本
-  grade: 主管
-- mail_address: tadayuki_satou@ulvac.com
-  member_name: 佐藤 正幸
-  division: 開発部門
-  department: 開発部
-  section: 開発部 2課
-  team: RISE、PVD
-  project: 韓国、日本
-  grade: 主管
-- mail_address: kengo_tsutsumi@ulvac.com
-  member_name: 堤 賢吾
-  division: 開発部門
-  department: 開発部
-  section: 開発部 2課
-  team: RISE
-  project: 韓国
-  grade: 主管
-- mail_address: jouji_hiroishi@ulvac.com
-  member_name: 廣石 城司
-  division: 開発部門
-  department: 開発部
-  section: 開発部 2課
-  team: PVD
-  project: 韓国、日本
-  grade: 主事
-- mail_address: kazuya_takanohashi@ulvac.com
-  member_name: 鷹箸 和矢
-  division: 開発部門
-  department: 開発部
-  section: 開発部 2課
-  team: PVD
-  project: 韓国、日本
-  grade: 主事補
-- mail_address: tomoyuki_ootsuki@ulvac.com
-  member_name: 大槻 智之
-  division: 開発部門
-  department: 開発部
-  section: 開発部 2課
-  team: PVD
-  project: 日本
-  grade: 主任
-- mail_address: sung-hee_ahn@ulvac.com
-  member_name: 安 城熙
-  division: 開発部門
-  department: 開発部
-  section: 開発部 2課
-  team: PVD
-  project: 日本
-  grade: 一般職
-- mail_address: toyohisa_katashima@ulvac.com
-  member_name: 片島 豊久
-  division: 開発部門
-  department: 開発部
-  section: 開発部 2課
-  team: PVD
-  project: 韓国、日本
-  grade: エキスパート
-- mail_address: hiroki_yamamoto@ulvac.com
-  member_name: 山本 弘輝
-  division: 開発部門
-  department: 開発部
-  section: UTI技術発展処
-  team: PVD
-  project: 台湾
-  grade: 特命職・専門職
-- mail_address: rintarou_ihara@ulvac.com
-  member_name: 庵原 林太郎
-  division: 開発部門
-  department: 開発部
-  section: UTI技術発展処
-  team: PVD
-  project: 台湾
-  grade: 主事補
-- mail_address: yuusuke_sawai@ulvac.com
-  member_name: 澤居 優圭
-  division: 開発部門
-  department: 開発部
-  section: UTI技術発展処
-  team: PVD
-  project: 台湾
-  grade: 主任
-- mail_address: youhei_ono@ulvac.com
-  member_name: 小野 洋平
-  division: 開発部門
-  department: 開発部
-  section: UK S1-Project
-  team: RISE、PVD
-  project: 韓国
-  grade: 特命職・専門職
-- mail_address: hidenori_fukumoto@ulvac.com
-  member_name: 福本 英範
-  division: 開発部門
-  department: 開発部
-  section: UK S1-Project
-  team: PVD
-  project: 韓国
-  grade: 主管

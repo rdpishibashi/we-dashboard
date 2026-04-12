@@ -47,7 +47,11 @@ def format_measured_data(
 
     if group_col:
         # Group by year_month and grouping column
-        measured_data = df.groupby(['year_month', group_col])[metric_col].mean().reset_index()
+        agg = df.groupby(['year_month', group_col]).agg(
+            **{metric_col: (metric_col, 'mean'),
+               '人数': ('name', 'nunique') if 'name' in df.columns else (metric_col, 'count')}
+        ).reset_index()
+        measured_data = agg
 
         # Sort by grouping value using category order, then by year_month
         group_values = measured_data[group_col].unique().tolist()
@@ -78,12 +82,15 @@ def format_measured_data(
             metric_col: metric_label
         })
 
-        # Reorder: grouping column, then 年月, then metric
-        measured_data = measured_data[[grouping_label, '年月', metric_label]]
+        # Reorder: grouping column, then 年月, then metric, then 人数
+        measured_data = measured_data[[grouping_label, '年月', metric_label, '人数']]
     else:
         # No grouping - show overall average by month
-        measured_data = df.groupby('year_month')[metric_col].mean().reset_index()
-        measured_data = measured_data.sort_values('year_month')
+        agg = df.groupby('year_month').agg(
+            **{metric_col: (metric_col, 'mean'),
+               '人数': ('name', 'nunique') if 'name' in df.columns else (metric_col, 'count')}
+        ).reset_index()
+        measured_data = agg.sort_values('year_month')
 
         # Format metric with 1 decimal place
         measured_data[metric_col] = measured_data[metric_col].apply(
