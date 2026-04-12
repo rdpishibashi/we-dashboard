@@ -255,6 +255,43 @@ _fdf.loc[_valid.index, col] = _valid                         # インデック�
 
 ---
 
+## Streamlit Cloud でのデータ準備（split_by_division.py）
+
+### 問題と背景
+
+Streamlit Cloud では、ユーザーが `tools/split_by_division.py` で生成した部門別ファイル  
+（`EngagementData-{部門名}.xlsx`）をアップロードして使用する。
+
+このスクリプトは当初、`current_division == division` でのみ行を抽出していた。  
+Admin GAS は退職メンバーの `current_division` を空文字にクリアするため、  
+**退職メンバーの行はどの部門ファイルにも含まれなかった**。  
+チェックボックスをONにしても `filtered_df` に該当行がなく、表示されなかった。
+
+### 修正内容
+
+`split_by_division.py` を以下のように修正：
+
+```python
+# members.yaml から leave メンバーの mail_address → division マッピングを取得
+leave_div_map = _load_leave_division_map()   # {mail: division}
+
+# 各部門ファイルに以下を含める
+active_mask = df["current_division"] == division          # 在籍メンバー
+leave_mask  = df["mail_address"].isin(leave_addrs)        # その部門のleaveメンバー
+filtered = df[active_mask | leave_mask].copy()
+```
+
+`config/members.yaml` の `division` フィールドを使って、leave メンバーを  
+元の所属部門のファイルに含めることで、チェックボックスON時に正しく表示される。
+
+### 設計上の注意
+
+- `current_division` が空でも `members.yaml` に `division` があれば正しく分類される
+- `members.yaml` に存在しない退職メンバー（古い在籍者）は引き続きどのファイルにも含まれない（仕様通り）
+- ファイル再生成後、Streamlit Cloud に再アップロードする必要がある
+
+---
+
 ## 関連ファイル
 
 | ファイル | 役割 |
@@ -265,6 +302,7 @@ _fdf.loc[_valid.index, col] = _valid                         # インデック�
 | `modules/components.py` | `render_non_respondents()` — leave メンバーを未記入者から除外 |
 | `config/members.yaml` | メンバーステータスのソースオブトゥルース |
 | `tools/generate_member_yaml.py` | `Member.xlsx` → `members.yaml` 生成 |
+| `tools/split_by_division.py` | 部門別 Excel 生成（leave メンバーを members.yaml の division で振り分け） |
 
 ---
 

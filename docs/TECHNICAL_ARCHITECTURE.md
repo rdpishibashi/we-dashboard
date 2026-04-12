@@ -53,7 +53,7 @@ WE-Dashboard/
 ├── tools/
 │   ├── generate_privileges_yaml.py  # 権限YAML生成ツール
 │   ├── generate_member_yaml.py      # メンバーYAML生成ツール
-│   ├── split_by_division.py         # 部門別データ分割ツール
+│   ├── split_by_division.py         # 部門別データ分割ツール（leave メンバーを members.yaml で振り分け）
 │   └── encrypt_passwords.py         # パスワード暗号化ツール（windows_config.py 更新用）
 ├── docs/
 ├── auth_users.json           # 認証情報（開発用）
@@ -744,6 +744,8 @@ google-auth>=2.0.0   # Google認証
 | 2026-04-05 | `prepare_comment_data()` の section 欠損補完を `'未設定'` → `'部門長'` に変更。課未所属メンバー（部署長）のコメントが「部門長」として表示される |
 | 2026-04-05 | `render_comments_and_signals()` に section_manager 向け部門長コメント表示を追加: `get_privilege_base_class()` で base class を検出し、`計測値` スコープで '部門長' 行を取得して結合 |
 | 2026-04-05 | `PrivilegeManager.get_privilege_base_class(privilege)` メソッドを追加: ユーザー固有権限から基本クラス名を返す |
+| 2026-04-12 | 転属・退職メンバー表示トグル実装（`app.py` / `modules/member_loader.py`）: `@st.cache_data` の `_` プレフィックス引数問題修正、チェックボックス描画を `app.py` に移動、leave メンバーの org 情報を `members.yaml` から復元。詳細: `docs/LEAVE_MEMBER_TOGGLE.md` |
+| 2026-04-12 | `tools/split_by_division.py` を修正: パスワードを `.streamlit/secrets.toml` から読み込む、退職メンバー（`leave == "leave"`）を `members.yaml` の `division` に基づいて部門別ファイルに含める（Admin GAS が `current_division` をクリアするため、`current_division` フィールドでは判定不可） |
 
 ---
 
