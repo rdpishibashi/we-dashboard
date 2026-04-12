@@ -1,28 +1,5 @@
 # Privilege Configuration
 
-## Privilege Classes
-
-Maps each privilege to its base class. Valid class types: `admin`, `anonymous`, `department_head`, `section_manager`, `member`, `member_no_grade_filter`.
-
-| Privilege | class_type |
-|-----------|------------|
-| admin | admin |
-| anonymous | anonymous |
-| sd | department_head |
-| sw | section_manager |
-| pd | section_manager |
-| soft | member |
-| prod | member |
-| me | department_head |
-| me1 | section_manager |
-| me2 | section_manager |
-| me3 | section_manager |
-| mechele1 | member |
-| mechele2 | member |
-| mechele3 | member |
-| qm | department_head |
-| qa | member |
-
 ## Data Scope by Privilege and Tab
 
 | Privilege | 時系列 | グループ比較 | 評価 | 分布 | 個人 |
@@ -41,10 +18,26 @@ Maps each privilege to its base class. Valid class types: `admin`, `anonymous`, 
 | mechele1 | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | なし | なし |
 | mechele2 | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | なし | なし |
 | mechele3 | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | なし | なし |
-| qm | 品質保証部 | 品質保証部 | 品質保証部 | 品質保証部 | 品質保証部 |
-| qa | 品質保証部 | 品質保証部 | 品質保証部 | なし | なし |
+| dev | 開発部 | 開発部 | 開発部 | 開発部 | 開発部 |
+| dev1 | 開発部 | 開発部 | 開発部 | 開発部 1課 + UTI技術発展処 | 開発部 1課 + UTI技術発展処 |
+| dev2 | 開発部 | 開発部 | 開発部 | 開発部 2課 + UK S1-Project | 開発部 2課 + UK S1-Project |
+| uti | 開発部 | 開発部 | 開発部 | 開発部 1課 + UTI技術発展処 | 開発部 1課 + UTI技術発展処 |
+| uks | 開発部 | 開発部 | 開発部 | 開発部 2課 + UK S1-Project | 開発部 2課 + UK S1-Project |
+| develop1 | 開発部 | 開発部 | 開発部 | なし | なし |
+| develop2 | 開発部 | 開発部 | 開発部 | なし | なし |
+
 
 ## Section Aliases
+
+### 開発部 1課・UTI技術発展処
+- **Members**: 開発部 1課, UTI技術発展処
+- **Visible to**: develop1, develop2
+- **In tabs**: 時系列, グループ比較, 評価, 分布
+
+### 開発部 2課・UK S1-Project
+- **Members**: 開発部 2課, UK S1-Project
+- **Visible to**: develop1, develop2
+- **In tabs**: 時系列, グループ比較, 評価, 分布
 
 
 ## Data Scope by Grouping
@@ -65,8 +58,13 @@ Maps each privilege to its base class. Valid class types: `admin`, `anonymous`, 
 | mechele1 | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | システム開発部 + 機電設計部（非管理職） | なし |
 | mechele2 | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | システム開発部 + 機電設計部（非管理職） | なし |
 | mechele3 | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | システム開発部 + 機電設計部（非管理職） | なし |
-| qm | 品質保証部 | 品質保証部 | 品質保証部 | 品質保証部 |
-| qa | 品質保証部 | 品質保証部 | 品質保証部（非管理職） | なし |
+| dev | 開発部 | 開発部 | 開発部 | 開発部 |
+| dev1 | 開発部 | 開発部 | 開発部 | 開発部 1課 + UTI技術発展処 |
+| dev2 | 開発部 | 開発部 | 開発部 | 開発部 2課 + UK S1-Project |
+| uti | 開発部 | 開発部 | 開発部 | 開発部 1課 + UTI技術発展処 |
+| uks | 開発部 | 開発部 | 開発部 | 開発部 2課 + UK S1-Project |
+| develop1 | 開発部 | 開発部 | 開発部 | なし |
+| develop2 | 開発部 | 開発部 | 開発部 | なし |
 
 ### 課別・チーム別・プロジェクト別 ≠ すべて
 Overrides from = すべて. Omitted privileges inherit all values. — means same as = すべて.
@@ -83,7 +81,8 @@ Overrides from = すべて. Omitted privileges inherit all values. — means sam
 | mechele1 | — | なし | 第一設計課（非管理職） | — |
 | mechele2 | — | なし | 第二設計課（非管理職） | — |
 | mechele3 | — | なし | 第三設計課（非管理職） | — |
-| qa | — | なし | 品質保証裾野（非管理職） | — |
+| develop1 | — | なし | 開発部 1課 + UTI技術発展処 | — |
+| develop2 | — | なし | 開発部 2課 + UK S1-Project | — |
 
 ## Data Scope by Section
 
@@ -103,8 +102,14 @@ Overrides from = すべて. Omitted privileges inherit all values. — means sam
 | mechele1 | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | なし | なし | 第一設計課（個人名なし）     |
 | mechele2 | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | なし | なし | 第二設計課（個人名なし） |
 | mechele3 | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | なし | なし | 第三設計課（個人名なし） |
-| qm | 品質保証部 | 品質保証部 | 品質保証部 | なし | 品質保証部 |
-| qa | 品質保証部 | 品質保証部 | なし | なし | 品質保証部（個人名なし） |
+| dev | 開発部 | 開発部 | 開発部 | なし | 開発部 |
+| dev1 | 開発部 | 開発部 | 開発部 1課 + UTI技術発展処 | なし | 開発部 1課 + UTI技術発展処 |
+| dev2 | 開発部 | 開発部 | 開発部 2課 + UK S1-Project | なし | 開発部 2課 + UK S1-Project |
+| uti | 開発部 | 開発部 | 開発部 1課 + UTI技術発展処 | なし | 開発部 1課 + UTI技術発展処 |
+| uks | 開発部 | 開発部 | 開発部 2課 + UK S1-Project | なし | 開発部 2課 + UK S1-Project |
+| develop1 | 開発部 | 開発部 | なし | なし | 開発部 1課 + UTI技術発展処（個人名なし） |
+| develop2 | 開発部 | 開発部 | なし | なし | 開発部 2課 + UK S1-Project（個人名なし） |
+
 
 ## Feature Configuration
 
@@ -116,16 +121,23 @@ response_enabled = false: member/member_no_grade_filter クラスはセクショ
 |-----------|-----------------|
 | admin | true |
 | sd | false |
+| me | false |
+| dev | true |
 | sw | false |
 | pd | false |
-| soft | false |
-| prod | false |
-| me | false |
 | me1 | false |
 | me2 | false |
 | me3 | false |
+| dev1 | true |
+| dev2 | true |
+| uti | true |
+| uks | true |
+| soft | false |
+| prod | false |
 | mechele1 | false |
 | mechele2 | false |
 | mechele3 | false |
-| qm | false |
-| qa | false |
+| develop1 | false |
+| develop2 | false |
+| anonymous | false |
+

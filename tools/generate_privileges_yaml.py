@@ -50,36 +50,29 @@ ALL_TABS = ['時系列', 'グループ比較', '評価', '分布', '個人']
 # All available groupings
 ALL_GROUPINGS = ['なし', 'department', 'section', 'team', 'project', 'grade', 'name']
 
-# Privilege class hierarchy mapping
+# Privilege class hierarchy mapping - loaded from privileges_configuration.md at runtime
 # Format: privilege -> (class_type, inherits_from)
-PRIVILEGE_CLASSES = {
-    'admin': ('admin', None),
-    'anonymous': ('anonymous', None),
-    # Department heads
-    'sd': ('department_head', 'department_head'),
-    'me': ('department_head', 'department_head'),
-    'dev': ('department_head', 'department_head'),
-    # Section managers - SD/ME department
-    'sw': ('section_manager', 'section_manager'),
-    'pd': ('section_manager', 'section_manager'),
-    'me1': ('section_manager', 'section_manager'),
-    'me2': ('section_manager', 'section_manager'),
-    'me3': ('section_manager', 'section_manager'),
-    # Section managers - Dev department
-    'dev1': ('section_manager', 'section_manager'),
-    'dev2': ('section_manager', 'section_manager'),
-    'uti': ('section_manager', 'section_manager'),
-    'uks': ('section_manager', 'section_manager'),
-    # Members - SD/ME department (with grade filtering)
-    'soft': ('member', 'member'),
-    'prod': ('member', 'member'),
-    'mechele1': ('member', 'member'),
-    'mechele2': ('member', 'member'),
-    'mechele3': ('member', 'member'),
-    # Members - Dev department (without grade filtering)
-    'develop1': ('member_no_grade_filter', 'member_no_grade_filter'),
-    'develop2': ('member_no_grade_filter', 'member_no_grade_filter'),
-}
+# inherits_from is None for base classes (admin, anonymous), otherwise same as class_type
+PRIVILEGE_CLASSES: dict = {}  # populated by load_privilege_classes()
+
+
+def load_privilege_classes(content: str) -> dict:
+    """Load privilege class mapping from the Privilege Classes table in markdown.
+
+    Returns:
+        Dict mapping privilege -> (class_type, inherits_from)
+        inherits_from is None for base classes (admin, anonymous), otherwise same as class_type
+    """
+    base_classes = {'admin', 'anonymous'}
+    rows = parse_markdown_table(content, r'## Privilege Classes')
+    result = {}
+    for row in rows:
+        privilege = row.get('Privilege', '').strip()
+        class_type = row.get('class_type', '').strip()
+        if privilege and class_type:
+            inherits = None if class_type in base_classes else class_type
+            result[privilege] = (class_type, inherits)
+    return result
 
 
 def parse_markdown_table(content: str, header_pattern: str) -> list[dict]:
@@ -693,6 +686,13 @@ def generate_user_privilege(privilege: str, tab_scope: dict, section_scope: dict
 
 def generate_yaml_content(md_content: str) -> str:
     """Generate the full YAML content from markdown."""
+    # Load privilege classes first (source of truth for class mapping)
+    global PRIVILEGE_CLASSES
+    PRIVILEGE_CLASSES = load_privilege_classes(md_content)
+    if not PRIVILEGE_CLASSES:
+        print("Error: No privilege classes found in markdown. Add a '## Privilege Classes' table.")
+        sys.exit(1)
+
     # Parse tables
     tab_data = parse_markdown_table(md_content, r'## Data Scope by Privilege and Tab')
     section_data = parse_markdown_table(md_content, r'## Data Scope by Section')
