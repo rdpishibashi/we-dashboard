@@ -32,29 +32,22 @@ def get_excel_password():
 
 def decrypt_excel_if_needed(file_obj):
     """
-    Decrypt a password-protected Excel file.
+    Return a readable BytesIO for an Excel file, decrypting if needed.
 
-    Input files are always expected to be password-protected.
+    - パスワード保護あり → 設定済みパスワードで復号して返す
+    - パスワード保護なし → そのまま返す
 
     Args:
         file_obj: File object (UploadedFile / BytesIO) or path string
 
     Returns:
-        Decrypted file as BytesIO
+        BytesIO ready for pd.read_excel()
 
     Raises:
-        ValueError: If password is not configured or incorrect
+        ValueError: If the file is encrypted but decryption fails
     """
     import io
     import msoffcrypto
-
-    password = get_excel_password()
-    if not password:
-        raise ValueError(
-            "Excelパスワードが設定されていません。"
-            "Streamlit Cloud の場合は App Settings → Secrets に "
-            "EXCEL_PASSWORD を設定してください。"
-        )
 
     if isinstance(file_obj, str):
         with open(file_obj, 'rb') as f:
@@ -63,10 +56,26 @@ def decrypt_excel_if_needed(file_obj):
         file_obj.seek(0)
         file_data = io.BytesIO(file_obj.read())
 
+    # Check whether the file is encrypted
+    office_file = msoffcrypto.OfficeFile(file_data)
+    if not office_file.is_encrypted():
+        file_data.seek(0)
+        return file_data
+
+    # File is encrypted — decrypt with configured password
+    password = get_excel_password()
+    if not password:
+        raise ValueError(
+            "Excelファイルはパスワード保護されていますが、パスワードが設定されていません。"
+            "Streamlit Cloud の場合は App Settings → Secrets に "
+            "EXCEL_PASSWORD を設定してください。"
+        )
+
     try:
-        decrypted = io.BytesIO()
+        file_data.seek(0)
         office_file = msoffcrypto.OfficeFile(file_data)
         office_file.load_key(password=password)
+        decrypted = io.BytesIO()
         office_file.decrypt(decrypted)
         decrypted.seek(0)
         return decrypted
