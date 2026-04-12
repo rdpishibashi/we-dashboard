@@ -50,7 +50,11 @@ def decrypt_excel_if_needed(file_obj):
 
     password = get_excel_password()
     if not password:
-        raise ValueError("Excelパスワードが設定されていません。管理者に連絡してください。")
+        raise ValueError(
+            "Excelパスワードが設定されていません。"
+            "Streamlit Cloud の場合は App Settings → Secrets に "
+            "EXCEL_PASSWORD を設定してください。"
+        )
 
     if isinstance(file_obj, str):
         with open(file_obj, 'rb') as f:
