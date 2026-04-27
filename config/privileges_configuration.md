@@ -66,7 +66,7 @@ Maps each privilege to its base class. Valid class types: `admin`, `anonymous`, 
 | mechele2 | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | システム開発部 + 機電設計部（非管理職） | なし |
 | mechele3 | システム開発部 + 機電設計部 | システム開発部 + 機電設計部 | システム開発部 + 機電設計部（非管理職） | なし |
 | qm | 品質保証部 | 品質保証部 | 品質保証部 | 品質保証部 |
-| qa | 品質保証部 | 品質保証部 | 品質保証部（非管理職） | なし |
+| qa | 品質保証部 | 品質保証部 | なし | なし |
 
 ### 課別・チーム別・プロジェクト別 ≠ すべて
 Overrides from = すべて. Omitted privileges inherit all values. — means same as = すべて.
@@ -83,7 +83,7 @@ Overrides from = すべて. Omitted privileges inherit all values. — means sam
 | mechele1 | — | なし | 第一設計課（非管理職） | — |
 | mechele2 | — | なし | 第二設計課（非管理職） | — |
 | mechele3 | — | なし | 第三設計課（非管理職） | — |
-| qa | — | なし | 品質保証裾野（非管理職） | — |
+| qa | — | なし | なし | — |
 
 ## Data Scope by Section
 

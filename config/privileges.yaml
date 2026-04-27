@@ -1153,9 +1153,7 @@ user_privileges:
         values:
         - 品質保証部
       grade:
-        values:
-        - 品質保証部
-        grade_filter: non_managers
+        type: none
       name:
         type: none
     grouping_scope_filtered:
@@ -1164,11 +1162,19 @@ user_privileges:
       organization:
         type: none
       grade:
-        values:
-        - 品質保証裾野
-        grade_filter: non_managers
+        type: none
       name:
         type: none
+    groupings:
+      allowed:
+      - なし
+      - department
+      - section
+      - team
+      - project
+      - grade
+      denied:
+      - name
     features:
       気になった出来事や気づき: false
       未記入者: false
