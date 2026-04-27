@@ -1168,12 +1168,12 @@ user_privileges:
     groupings:
       allowed:
       - なし
+      denied:
       - department
       - section
       - team
       - project
       - grade
-      denied:
       - name
     features:
       気になった出来事や気づき: false
