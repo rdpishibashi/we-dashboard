@@ -126,7 +126,8 @@ def render_action_candidates(
     main_df: pd.DataFrame,
     end_dt: pd.Timestamp,
     privilege_mgr,
-    current_privilege: str
+    current_privilege: str,
+    key_prefix: str = "default"
 ) -> None:
     """
     Render the アクション対象候補 section.
@@ -137,6 +138,7 @@ def render_action_candidates(
         end_dt: End date for signal data
         privilege_mgr: PrivilegeManager instance
         current_privilege: Current user's privilege
+        key_prefix: Unique prefix for widget keys (must differ across tabs)
     """
     # Apply section scope filtering for アクション対象候補
     action_scope = privilege_mgr.get_section_scope(current_privilege, "アクション対象候補")
@@ -145,11 +147,26 @@ def render_action_candidates(
     if action_scope is None or len(action_scope) > 0:
         st.subheader("アクション対象候補")
 
+        selected_name = None
         try:
             signals = get_signal_data(action_signal_df, main_df, end_dt)
-            render_signal_table(signals, SIGNAL_TABLE_COLUMNS)
+            selected_name = render_signal_table(signals, SIGNAL_TABLE_COLUMNS, key=f"{key_prefix}_signal_table")
         except Exception as e:
             st.error(f"シグナルデータの取得に失敗しました: {e}")
+
+        # Use a per-table key to detect selection changes. A shared key would be
+        # overwritten by tables with no selection (e.g. gc_no_group after ts),
+        # making every rerun look like a new selection.
+        last_key = f"_last_{key_prefix}_selection"
+        if selected_name != st.session_state.get(last_key):
+            st.session_state[last_key] = selected_name
+            if selected_name:
+                # Write to a non-widget intermediate key; the 個人 tab transfers
+                # it to individual_selector just before the widget is created.
+                st.session_state["_nav_individual"] = selected_name
+
+        if selected_name:
+            st.info(f"**{selected_name}** を選択しました。「個人」タブで詳細を確認できます。")
 
 
 def render_concern_section(
@@ -554,7 +571,7 @@ def render_comments_and_signals(
         return
 
     # Render action candidates
-    render_action_candidates(signal_df, main_df, end_dt, privilege_mgr, current_privilege)
+    render_action_candidates(signal_df, main_df, end_dt, privilege_mgr, current_privilege, key_prefix=key_prefix)
 
     # Get comment scope and prepare comment data
     share_scope = privilege_mgr.get_section_scope(current_privilege, "幹部職に伝えたいこと")

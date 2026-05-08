@@ -57,7 +57,8 @@ SIGNAL_LABELS = {
     'intervention_priority': '介入必要度',
     'level': 'レベル',
     'trend_recent': '短期傾向',
-    'trend_refined': '中期傾向',
+    'trend_base': '中期傾向',
+    'trend_refined': '総合傾向',
     'big_change': '短期変動',
     'stability_6': '中期安定性',
     'engagement_rating': 'エンゲージメント',
@@ -96,10 +97,10 @@ POSITIVE_TRENDS = ['上昇加速', '上昇継続', '回復期待', '回復', '�
 NEGATIVE_TRENDS = ['低下懸念', '悪化', '低下危機', '低下加速', '低下継続', '低下警戒', '下降']
 
 # Signal table display columns
-SIGNAL_TABLE_COLUMNS = ['name', 'section', 'intervention_priority', 'trend_recent', 'trend_refined', 'big_change', 'stability_6', 'flag_constant_6m']
+SIGNAL_TABLE_COLUMNS = ['name', 'section', 'intervention_priority', 'trend_recent', 'trend_base', 'trend_refined', 'big_change', 'stability_6', 'flag_constant_6m']
 INDIVIDUAL_SIGNAL_COLUMNS = [
     'intervention_priority', 'level', 'trend_recent',
-    'trend_refined', 'big_change', 'stability_6', 'flag_constant_6m',
+    'trend_base', 'trend_refined', 'big_change', 'stability_6', 'flag_constant_6m',
     'strength_short', 'weakness_short', 'strength_mid', 'weakness_mid'
 ]
 
@@ -142,9 +143,9 @@ GROUPING_LABEL_MAP = {
 # =============================================================================
 # Centralized tab definitions to avoid hardcoded tab names scattered in code
 
-TAB_NAMES = ['時系列', 'グループ比較', '評価', '分布', '個人']
-TAB_NAMES_AUTHENTICATED = ['時系列', 'グループ比較', '評価', '分布', '個人']
-TAB_NAMES_ANONYMOUS = ['時系列', 'グループ比較', '評価', '分布']  # 個人 tab hidden
+TAB_NAMES = ['時系列', 'カテゴリ比較', '評価', '分布', '個人']
+TAB_NAMES_AUTHENTICATED = ['時系列', 'カテゴリ比較', '評価', '分布', '個人']
+TAB_NAMES_ANONYMOUS = ['時系列', 'カテゴリ比較', '評価', '分布']  # 個人 tab hidden
 
 # Tab-specific configuration
 TAB_CONFIG = {
@@ -157,9 +158,9 @@ TAB_CONFIG = {
         'has_signals': True,
         'has_comments': True,
     },
-    'グループ比較': {
+    'カテゴリ比較': {
         'key': 'group_comparison',
-        'subheader': 'グループ比較',
+        'subheader': 'カテゴリ比較',
         'has_grouping': True,
         'has_measured_data': True,
         'has_statistics': True,

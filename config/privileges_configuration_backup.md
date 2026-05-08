@@ -2,7 +2,7 @@
 
 ## Data Scope by Privilege and Tab
 
-| Privilege | 時系列 | グループ比較 | 評価 | 分布 | 個人 |
+| Privilege | 時系列 | カテゴリ比較 | 評価 | 分布 | 個人 |
 |---|---|---|---|---|---|
 | admin | 全て | 全て | 全て | 全て | 全て |
 | anonymous | なし | なし | なし | なし | なし |
@@ -32,12 +32,12 @@
 ### 開発部 1課・UTI技術発展処
 - **Members**: 開発部 1課, UTI技術発展処
 - **Visible to**: develop1, develop2
-- **In tabs**: 時系列, グループ比較, 評価, 分布
+- **In tabs**: 時系列, カテゴリ比較, 評価, 分布
 
 ### 開発部 2課・UK S1-Project
 - **Members**: 開発部 2課, UK S1-Project
 - **Visible to**: develop1, develop2
-- **In tabs**: 時系列, グループ比較, 評価, 分布
+- **In tabs**: 時系列, カテゴリ比較, 評価, 分布
 
 
 ## Data Scope by Grouping

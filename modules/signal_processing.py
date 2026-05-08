@@ -221,7 +221,7 @@ def format_individual_signal_data(signal_data):
             lambda x: LEVEL_LABELS.get(str(x), str(x)) if pd.notna(x) else "-"
         )
 
-    for col in ['trend_recent', 'trend_refined', 'big_change', 'stability_6']:
+    for col in ['trend_recent', 'trend_base', 'trend_refined', 'big_change', 'stability_6']:
         if col in display_signal.columns:
             display_signal[col] = display_signal[col].apply(
                 lambda x: str(x) if pd.notna(x) else "-"
@@ -257,31 +257,58 @@ def style_signal_columns(df, priority_is_neg):
     return df.style.apply(_style_row, axis=1)
 
 
-def render_signal_table(signals, display_cols):
-    """Render the action-candidates signal table with formatting, styling, and help popovers."""
+def render_signal_table(signals, display_cols, key=None):
+    """Render the action-candidates signal table with formatting, styling, and help popovers.
+
+    Returns the name of the selected person, or None if no row is selected.
+    """
     if signals.empty:
         st.info("アクション対象候補はいません")
-        return
+        return None
 
     missing_cols = [col for col in display_cols if col not in signals.columns]
     if missing_cols:
         st.error(f"signal データに必要なカラムがありません: {', '.join(missing_cols)}")
-        return
+        return None
 
-    priority_is_neg = signals['_priority_is_neg'].reset_index(drop=True)
-    display_df = signals[display_cols].copy().reset_index(drop=True)
+    signals_indexed = signals.reset_index(drop=True)
+    priority_is_neg = signals_indexed['_priority_is_neg']
+    display_df = signals_indexed[display_cols].copy()
     display_df = format_signal_display_columns(display_df)
     display_df = display_df.rename(columns=SIGNAL_LABELS)
 
     priority_label = SIGNAL_LABELS['intervention_priority']
     styled_df = style_signal_columns(display_df, priority_is_neg)
-    st.dataframe(
+
+    # When the individual report was shown (_clear_action_selection flag set by
+    # the 個人 tab), increment the shared version counter so ALL signal tables
+    # get a new widget key → selection state resets automatically.
+    # The first table to run in the rerun clears the flag; subsequent tables
+    # read the already-incremented version, so all tables reset consistently.
+    version = st.session_state.get("_signal_tables_version", 0)
+    if st.session_state.pop("_clear_action_selection", False):
+        version += 1
+        st.session_state["_signal_tables_version"] = version
+
+    effective_key = f"{key}_v{version}" if key else key
+
+    event = st.dataframe(
         styled_df,
         column_config={
             priority_label: st.column_config.TextColumn(priority_label, width="small")
         },
+        on_select="rerun",
+        selection_mode="single-row",
+        key=effective_key,
         **DATAFRAME_KWARGS,
     )
+
+    selected_name = None
+    if event.selection.rows:
+        row_idx = event.selection.rows[0]
+        # Guard against stale index when filter change shrinks the signals list
+        if row_idx < len(signals_indexed) and 'name' in signals_indexed.columns:
+            selected_name = signals_indexed.at[row_idx, 'name']
 
     col1, col2, _ = st.columns([27, 27, 26])
     with col1:
@@ -294,9 +321,9 @@ def render_signal_table(signals, display_cols):
                 "大きな値ほど緊急度は高い。"
             )
     with col2:
-        with st.popover("中期傾向について"):
+        with st.popover("総合傾向について"):
             st.markdown(
-                "| **中期傾向** | **説明** |\n"
+                "| **総合傾向** | **説明** |\n"
                 "| --- | --- |\n"
                 "| 上昇加速 | 上昇傾向の中、急上昇している |\n"
                 "| 上昇継続 | 上昇傾向が継続している |\n"
@@ -312,3 +339,5 @@ def render_signal_table(signals, display_cols):
                 "| 下降加速 | 下降傾向の中、急激に落ち込んでいる |\n"
                 "| 安定維持 | 安定した状態を維持している |"
             )
+
+    return selected_name

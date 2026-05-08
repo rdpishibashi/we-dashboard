@@ -90,7 +90,7 @@ privileges:
     data_scope:
       時系列:
         type: organization
-      グループ比較:
+      カテゴリ比較:
         type: organization
       評価:
         type: organization
@@ -115,7 +115,7 @@ privileges:
       on_tab_change:
         from:
         - 時系列
-        - グループ比較
+        - カテゴリ比較
         - 評価
         to:
         - 個人
@@ -133,7 +133,7 @@ privileges:
     tabs:
       allowed:
       - 時系列
-      - グループ比較
+      - カテゴリ比較
       - 評価
       denied:
       - 個人
@@ -175,7 +175,7 @@ privileges:
     tabs:
       allowed:
       - 時系列
-      - グループ比較
+      - カテゴリ比較
       - 評価
       denied:
       - 個人
@@ -248,7 +248,7 @@ user_privileges:
         values: &id001
         - システム開発部
         - 機電設計部
-      グループ比較:
+      カテゴリ比較:
         values:
         - システム開発部
         - 機電設計部
@@ -314,7 +314,7 @@ user_privileges:
         values: &id002
         - システム開発部
         - 機電設計部
-      グループ比較:
+      カテゴリ比較:
         values:
         - システム開発部
         - 機電設計部
@@ -379,7 +379,7 @@ user_privileges:
       時系列:
         values: &id003
         - 品質保証部
-      グループ比較:
+      カテゴリ比較:
         values:
         - 品質保証部
       評価:
@@ -433,7 +433,7 @@ user_privileges:
         values: &id004
         - システム開発部
         - 機電設計部
-      グループ比較:
+      カテゴリ比較:
         values:
         - システム開発部
         - 機電設計部
@@ -505,7 +505,7 @@ user_privileges:
         values: &id008
         - システム開発部
         - 機電設計部
-      グループ比較:
+      カテゴリ比較:
         values:
         - システム開発部
         - 機電設計部
@@ -579,7 +579,7 @@ user_privileges:
         values: &id012
         - システム開発部
         - 機電設計部
-      グループ比較:
+      カテゴリ比較:
         values:
         - システム開発部
         - 機電設計部
@@ -651,7 +651,7 @@ user_privileges:
         values: &id016
         - システム開発部
         - 機電設計部
-      グループ比較:
+      カテゴリ比較:
         values:
         - システム開発部
         - 機電設計部
@@ -723,7 +723,7 @@ user_privileges:
         values: &id020
         - システム開発部
         - 機電設計部
-      グループ比較:
+      カテゴリ比較:
         values:
         - システム開発部
         - 機電設計部
@@ -795,7 +795,7 @@ user_privileges:
         values: &id024
         - システム開発部
         - 機電設計部
-      グループ比較:
+      カテゴリ比較:
         values:
         - システム開発部
         - 機電設計部
@@ -861,7 +861,7 @@ user_privileges:
         values: &id026
         - システム開発部
         - 機電設計部
-      グループ比較:
+      カテゴリ比較:
         values:
         - システム開発部
         - 機電設計部
@@ -927,7 +927,7 @@ user_privileges:
         values: &id028
         - システム開発部
         - 機電設計部
-      グループ比較:
+      カテゴリ比較:
         values:
         - システム開発部
         - 機電設計部
@@ -993,7 +993,7 @@ user_privileges:
         values: &id030
         - システム開発部
         - 機電設計部
-      グループ比較:
+      カテゴリ比較:
         values:
         - システム開発部
         - 機電設計部
@@ -1059,7 +1059,7 @@ user_privileges:
         values: &id032
         - システム開発部
         - 機電設計部
-      グループ比較:
+      カテゴリ比較:
         values:
         - システム開発部
         - 機電設計部
@@ -1124,7 +1124,7 @@ user_privileges:
       時系列:
         values: &id034
         - 品質保証部
-      グループ比較:
+      カテゴリ比較:
         values:
         - 品質保証部
       評価:
@@ -1168,12 +1168,12 @@ user_privileges:
     groupings:
       allowed:
       - なし
-      denied:
       - department
       - section
       - team
       - project
       - grade
+      denied:
       - name
     features:
       気になった出来事や気づき: false

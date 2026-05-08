@@ -17,6 +17,7 @@ Work Engagement Dashboard プロジェクトのドキュメントインデック
 | [MODULE_REFERENCE.md](./MODULE_REFERENCE.md) | `modules/` 配下の各モジュールの関数・クラスAPIリファレンス | 開発者 |
 | [PASSWORD_PROTECTION_SETUP.md](./PASSWORD_PROTECTION_SETUP.md) | Excelファイルへのパスワード設定手順とダッシュボードとの連携設定 | 管理者 |
 | [LEAVE_MEMBER_TOGGLE.md](./LEAVE_MEMBER_TOGGLE.md) | 転属・退職メンバー表示トグルの設計・実装仕様と実装時の教訓 | 開発者 |
+| [SESSION_STATE_PATTERNS.md](./SESSION_STATE_PATTERNS.md) | セッションステートの所有権モデル・クロスタブナビゲーションパターン・将来の定数化計画 | 開発者 |
 
 ---
 
@@ -45,6 +46,10 @@ Excelファイルの読み込みに始まり、DataFrame への変換・加工�
 ### PASSWORD_PROTECTION_SETUP.md — Excelパスワード保護設定ガイド
 
 Excelファイルにパスワードを設定し、ユーザーがExcelで直接開けない状態でダッシュボードからのみデータを参照できるようにするための設定手順を解説します。ExcelでのOpenXML暗号化手順、Streamlit Secretsへのパスワード登録、`msoffcrypto` を利用した自動復号の仕組みを説明します。
+
+### SESSION_STATE_PATTERNS.md — セッションステート設計パターン
+
+Streamlit の実行モデル制約（タブ切り替えの rerun なし・ウィジェット生成後のキー書き換え禁止など）と、それを踏まえたセッションステートの所有権モデルを記述しています。クロスタブナビゲーションパターン・ウィジェットキーバージョニングパターン・複数インスタンス干渉の防止策を実装例付きで解説します。また将来の `config.py` 定数化計画（定数名・変更対象ファイル・手順）も記載しており、コード改善の準備資料として使用できます。
 
 ### LEAVE_MEMBER_TOGGLE.md — 転属・退職メンバー表示トグル仕様
 
@@ -93,4 +98,4 @@ Excelファイルにパスワードを設定し、ユーザーがExcelで直接�
 
 ---
 
-*最終更新: 2026-04-12*
+*最終更新: 2026-05-09*
