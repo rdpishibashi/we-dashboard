@@ -25,7 +25,7 @@ Maps each privilege to its base class. Valid class types: `admin`, `anonymous`, 
 
 ## Data Scope by Privilege and Tab
 
-| Privilege | 時系列 | グループ比較 | 評価 | 分布 | 個人 |
+| Privilege | 時系列 | カテゴリ比較 | 評価 | 分布 | 個人 |
 |---|---|---|---|---|---|
 | admin | 全て | 全て | 全て | 全て | 全て |
 | anonymous | なし | なし | なし | なし | なし |

@@ -28,7 +28,8 @@
       "Bash(cp ~/Dropbox/Client/ULVAC/WorkEngagement/WE-Dashboard/app.py ~/Dropbox/Client/ULVAC/WorkEngagement/WE-Dashboard-Windows/app.py)",
       "Bash(install -m 644 ~/Dropbox/Client/ULVAC/WorkEngagement/WE-Dashboard/modules/config.py ~/Dropbox/Client/ULVAC/WorkEngagement/WE-Dashboard-Windows/modules/config.py)",
       "Bash(install -m 644 ~/Dropbox/Client/ULVAC/WorkEngagement/WE-Dashboard/app.py ~/Dropbox/Client/ULVAC/WorkEngagement/WE-Dashboard-Windows/app.py)",
-      "Bash(install -m 644 ~/Dropbox/Client/ULVAC/WorkEngagement/WE-Dashboard/modules/components.py ~/Dropbox/Client/ULVAC/WorkEngagement/WE-Dashboard-Windows/modules/components.py)"
+      "Bash(install -m 644 ~/Dropbox/Client/ULVAC/WorkEngagement/WE-Dashboard/modules/components.py ~/Dropbox/Client/ULVAC/WorkEngagement/WE-Dashboard-Windows/modules/components.py)",
+      "Bash(git *)"
     ],
     "additionalDirectories": [
       "/Users/ryozo/Dropbox/Client/ULVAC/WorkEngagement/WorkEngagementSystem"

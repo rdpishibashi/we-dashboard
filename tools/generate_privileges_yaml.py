@@ -45,7 +45,7 @@ GRADE_GROUPS = {
 }
 
 # All available tabs
-ALL_TABS = ['時系列', 'グループ比較', '評価', '分布', '個人']
+ALL_TABS = ['時系列', 'カテゴリ比較', '評価', '分布', '個人']
 
 # All available groupings
 ALL_GROUPINGS = ['なし', 'department', 'section', 'team', 'project', 'grade', 'name']
@@ -470,7 +470,7 @@ def generate_base_privileges() -> dict:
             'tabs': {'allowed': 'all'},
             'data_scope': {
                 '時系列': {'type': 'organization'},
-                'グループ比較': {'type': 'organization'},
+                'カテゴリ比較': {'type': 'organization'},
                 '評価': {'type': 'organization'},
                 '個人': {'type': 'organization'},
                 '分布': {'type': 'organization'},
@@ -485,7 +485,7 @@ def generate_base_privileges() -> dict:
             'groupings': {'allowed': 'all'},
             'auto_reset_filters': {
                 'on_tab_change': {
-                    'from': ['時系列', 'グループ比較', '評価'],
+                    'from': ['時系列', 'カテゴリ比較', '評価'],
                     'to': ['個人', '分布'],
                     'reset_to': 'user_section'
                 }
@@ -499,7 +499,7 @@ def generate_base_privileges() -> dict:
         'member': {
             'inherits': 'section_manager',
             'tabs': {
-                'allowed': ['時系列', 'グループ比較', '評価'],
+                'allowed': ['時系列', 'カテゴリ比較', '評価'],
                 'denied': ['個人', '分布']
             },
             'data_scope': {'default': {'type': 'organization'}},
@@ -526,7 +526,7 @@ def generate_base_privileges() -> dict:
         'member_no_grade_filter': {
             'inherits': 'section_manager',
             'tabs': {
-                'allowed': ['時系列', 'グループ比較', '評価'],
+                'allowed': ['時系列', 'カテゴリ比較', '評価'],
                 'denied': ['個人', '分布']
             },
             'data_scope': {'default': {'type': 'organization'}},

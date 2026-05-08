@@ -211,7 +211,7 @@ if uploaded_file is not None:
 
 #### 機能
 - **フィルター設定**：期間・組織などでの絞り込み
-- **レポート種別**：時系列、グループ比較、評価、分布、個人の各レポートタブで表示内容を選択
+- **レポート種別**：時系列、カテゴリ比較、評価、分布、個人の各レポートタブで表示内容を選択
 - **インタラクティブ操作**：グラフ上でズーム、全画面表示、ホバー、凡例クリックによる選択など
 
 #### 使い方
@@ -236,7 +236,7 @@ if uploaded_file is not None:
 
 ##### グラフの種類
 - **時系列**：年月推移の表示カテゴリ別折れ線グラフ
-- **グループ比較**：年月別棒グラフ
+- **カテゴリ比較**：年月別棒グラフ
 - **評価（評価別比率）**：高い／中間／低い比率棒グラフ
 - **評価（レーダーチャート）**：構成要素別レーダーチャート
 - **分布**：平均／最大／最小／四分位の統計表示と点数別ヒストグラム
@@ -503,14 +503,14 @@ if uploaded_file is not None:
                 )
 
         # =============================================================
-        # グループ比較 Tab
+        # カテゴリ比較 Tab
         # =============================================================
-        if "グループ比較" in tab_map:
-          with tab_map["グループ比較"]:
-            st.subheader("グループ比較")
+        if "カテゴリ比較" in tab_map:
+          with tab_map["カテゴリ比較"]:
+            st.subheader("カテゴリ比較")
 
             # Apply per-tab data scope filtering
-            tab_scope = privilege_mgr.get_data_scope_for_tab(current_privilege, "グループ比較") if current_privilege else None
+            tab_scope = privilege_mgr.get_data_scope_for_tab(current_privilege, "カテゴリ比較") if current_privilege else None
             tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope)
             tab_signal_df = filter_dataframe_by_scope(filtered_signal_df, tab_scope)
 
@@ -522,7 +522,7 @@ if uploaded_file is not None:
             # Apply grouping-specific filters (scope, grade, aliases, team overrides)
             comparison_df, tab_signal_df = apply_grouping_filters(
                 comparison_df, tab_signal_df, privilege_mgr, current_privilege,
-                comparison_group, "グループ比較", selected_filters
+                comparison_group, "カテゴリ比較", selected_filters
             )
 
             if comparison_df.empty:
@@ -886,14 +886,30 @@ if uploaded_file is not None:
                         if st.session_state.get("reset_local_filters", False):
                             st.session_state[individual_key] = individuals[0]
 
-                        individual_idx = 0
-                        if individual_key in st.session_state and st.session_state[individual_key] in individuals:
-                            individual_idx = individuals.index(st.session_state[individual_key])
+                        # Transfer navigation request from action candidates.
+                        # Consumed here so it does not persist across reruns.
+                        # Signal all action candidate tables to reset their row
+                        # selection on the next rerun (user has seen the report).
+                        if "_nav_individual" in st.session_state:
+                            nav_name = st.session_state["_nav_individual"]
+                            del st.session_state["_nav_individual"]
+                            if nav_name in individuals:
+                                st.session_state[individual_key] = nav_name
+                            st.session_state["_clear_action_selection"] = True
+                            # Note: st.tabs() tab switches do not trigger reruns,
+                            # so the selection cannot be cleared the instant the
+                            # user returns to 時系列/カテゴリ比較. The flag is
+                            # processed on the next user-initiated interaction.
+
+                        # Ensure a valid value exists before widget creation.
+                        # Do NOT pass index= with key= — combining them causes a
+                        # Streamlit warning when session state is also set via API.
+                        if individual_key not in st.session_state or st.session_state[individual_key] not in individuals:
+                            st.session_state[individual_key] = individuals[0]
 
                         selected_individual = st.selectbox(
                             "表示対象者を選択",
                             individuals,
-                            index=individual_idx,
                             key=individual_key
                         )
 
@@ -1206,7 +1222,7 @@ else:
     st.markdown("""
     #### 機能
     - **フィルター設定**：期間・組織などでの絞り込み
-    - **レポート種別**：時系列、グループ比較、評価、分布、個人の各レポートタブで表示内容を選択
+    - **レポート種別**：時系列、カテゴリ比較、評価、分布、個人の各レポートタブで表示内容を選択
     - **インタラクティブ操作**：グラフ上でズーム、全画面表示、ホバー、凡例クリックによる選択など
 
     #### 使い方
@@ -1231,7 +1247,7 @@ else:
 
     ##### グラフの種類
     - **時系列**：年月推移の表示カテゴリ別折れ線グラフ
-    - **グループ比較**：年月別棒グラフ
+    - **カテゴリ比較**：年月別棒グラフ
     - **評価（評価別比率）**：高い／中間／低い比率棒グラフ
     - **評価（レーダーチャート）**：構成要素別レーダーチャート
     - **分布**：平均／最大／最小／四分位の統計表示と点数別ヒストグラム

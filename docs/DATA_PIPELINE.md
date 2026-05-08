@@ -333,7 +333,7 @@ intervention_priority_pos > INTERVENTION_PRIORITY_THRESHOLD (= 2)
 | 関数名 | グラフタイプ | 使用タブ |
 |--------|------------|---------|
 | `create_time_series_chart()` | 折れ線グラフ | 時系列 |
-| `create_recent_group_comparison_chart()` | グループ棒グラフ | グループ比較 |
+| `create_recent_group_comparison_chart()` | グループ棒グラフ | カテゴリ比較 |
 | `create_group_rating_distribution()` | 評価バンド積み上げ棒グラフ | 評価 |
 | `create_box_plot()` | ボックスプロット | 分布 |
 | `create_radar_chart()` | レーダーチャート | 分布 |

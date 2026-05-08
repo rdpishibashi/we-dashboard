@@ -184,7 +184,7 @@ graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
 |------|----------|--------|
 | メイン画面 | ダッシュボード（タブ + グラフ） | ウェルカムページ（使い方ガイド） |
 | サイドバー | ログイン + 期間 + 指標 + 表示カテゴリ + フィルター + データ | ログインのみ |
-| タブ表示 | `st.tabs()` 5タブ（時系列/グループ比較/評価/分布/個人） | なし |
+| タブ表示 | `st.tabs()` 5タブ（時系列/カテゴリ比較/評価/分布/個人） | なし |
 
 **データフロー:**
 ```
@@ -499,7 +499,7 @@ team_section_overrides:
     match_team: Management
     display_section: マネジメント
     visible_to: [all]  # 全ユーザーに表示
-    visible_in_tabs: [時系列, グループ比較, 評価, 分布]
+    visible_in_tabs: [時系列, カテゴリ比較, 評価, 分布]
     exclude_sections: [未設定]  # 注: 現在は無効化（下記参照）
 ```
 
@@ -549,10 +549,24 @@ config/privileges.yaml            ← 生成された設定ファイル
 | `unified_section` | 課セレクトボックス |
 | `unified_team` | チームセレクトボックス |
 | `unified_project` | プロジェクトセレクトボックス |
-| `unified_individual` | 個人セレクトボックス |
+| `unified_individual` | 個人セレクトボックス（サイドバー） |
 | `unified_grouping` | 表示カテゴリ（グルーピング）セレクトボックス |
 | `reset_period_filter` | 期間リセットフラグ |
 | `reset_local_filters` | ローカルフィルターリセットフラグ |
+| `individual_selector` | 個人タブのローカルセレクトボックス値 |
+
+### 4.3 アクション対象候補ナビゲーション関連
+
+アクション対象候補テーブルの行選択から個人タブへ遷移する機能で使用するセッションステートキー。
+
+| キー | 説明 |
+|------|------|
+| `_last_{key_prefix}_selection` | テーブルごとの前回選択氏名（`ts`・`gc_no_group`・`gc_grouped` 等）。テーブル間の干渉防止に使用 |
+| `_nav_individual` | 個人タブへのナビゲーション対象氏名。`render_action_candidates` がセットし、個人タブが消費（del）する |
+| `_clear_action_selection` | 個人タブが `_nav_individual` を消費した後にセットするフラグ。次の rerun でシグナルテーブルの選択をリセットする |
+| `_signal_tables_version` | シグナルテーブルウィジェットのバージョンカウンター。インクリメントするとキーが変わりウィジェットが再生成され選択状態がリセットされる |
+
+**制約**: `st.tabs()` のタブ切り替えは CSS による show/hide であり rerun を発生させないため、タブを切り替えた瞬間に選択をリセットすることは Streamlit の仕組み上不可能。選択のリセットは次のユーザー操作（いずれかのウィジェット操作）で発生する。
 
 **カスケードリセット:**
 親フィルター変更時、子フィルターが自動リセットされます。
@@ -668,7 +682,7 @@ else:
 ## 7. 依存関係
 
 ```
-streamlit>=1.28.0
+streamlit>=1.35.0
 pandas>=2.0.0
 plotly>=5.18.0
 openpyxl>=3.1.0
@@ -746,6 +760,8 @@ google-auth>=2.0.0   # Google認証
 | 2026-04-05 | `PrivilegeManager.get_privilege_base_class(privilege)` メソッドを追加: ユーザー固有権限から基本クラス名を返す |
 | 2026-04-12 | 転属・退職メンバー表示トグル実装（`app.py` / `modules/member_loader.py`）: `@st.cache_data` の `_` プレフィックス引数問題修正、チェックボックス描画を `app.py` に移動、leave メンバーの org 情報を `members.yaml` から復元。詳細: `docs/LEAVE_MEMBER_TOGGLE.md` |
 | 2026-04-12 | `tools/split_by_division.py` を修正: パスワードを `.streamlit/secrets.toml` から読み込む、退職メンバー（`leave == "leave"`）を `members.yaml` の `division` に基づいて部門別ファイルに含める（Admin GAS が `current_division` をクリアするため、`current_division` フィールドでは判定不可） |
+| 2026-05-08 | シグナル列追加・改名: `trend_base`（中期傾向）を `trend_recent` と `trend_refined` の間に追加。`trend_refined` の表示名を「中期傾向」→「総合傾向」に変更。`SIGNAL_TABLE_COLUMNS` / `INDIVIDUAL_SIGNAL_COLUMNS` / `SIGNAL_LABELS` / `calculate_group_statistics` のトレンド列マージ処理をすべて更新 |
+| 2026-05-08 | アクション対象候補テーブルからの個人タブナビゲーション機能を実装。`render_signal_table` に `on_select="rerun"` / `selection_mode="single-row"` / `key` を追加し選択氏名を返すように変更。`render_action_candidates` に `key_prefix` を追加（複数タブでの ID 衝突防止）。ナビゲーション状態管理に `_nav_individual`・`_last_{key_prefix}_selection`・`_clear_action_selection`・`_signal_tables_version` の 4 セッションステートキーを導入。Streamlit 最低バージョンを 1.35.0 に引き上げ |
 
 ---
 

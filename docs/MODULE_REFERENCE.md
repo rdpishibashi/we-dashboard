@@ -43,7 +43,7 @@
             ├─ 統合サイドバーフィルター（render_unified_sidebar_filters）
             └─ 5タブ表示
                  ├─ 時系列
-                 ├─ グループ比較
+                 ├─ カテゴリ比較
                  ├─ 評価
                  ├─ 分布
                  └─ 個人
@@ -54,7 +54,7 @@
 | タブ名 | キー | 主な機能 |
 |--------|------|----------|
 | 時系列 | `timeseries` | 月次推移折れ線グラフ、計測値テーブル、統計、シグナル・コメント |
-| グループ比較 | `group_comparison` | グループ間比較棒グラフ、レーダーチャート、統計、シグナル・コメント |
+| カテゴリ比較 | `group_comparison` | グループ間比較棒グラフ、レーダーチャート、統計、シグナル・コメント |
 | 評価 | `evaluation` | 評価バンド積み上げグラフ、計測値セクション（グルーピング別） |
 | 分布 | `distribution` | ボックスプロット、統計テーブル |
 | 個人 | `individual` | 個人推移グラフ、プロフィールセクション、シグナル詳細、コメント（認証ユーザーのみ） |
@@ -339,7 +339,7 @@ ORG_FILTER_COLUMNS = ['division', 'department', 'section']
 
 #### `SIGNAL_LABELS`
 
-シグナル列名と日本語表示名のマッピング（17 項目）。
+シグナル列名と日本語表示名のマッピング（18 項目）。
 
 | キー | 表示名 |
 |------|--------|
@@ -348,7 +348,8 @@ ORG_FILTER_COLUMNS = ['division', 'department', 'section']
 | `intervention_priority` | 介入必要度 |
 | `level` | レベル |
 | `trend_recent` | 短期傾向 |
-| `trend_refined` | 中期傾向 |
+| `trend_base` | 中期傾向 |
+| `trend_refined` | 総合傾向 |
 | `big_change` | 短期変動 |
 | `stability_6` | 中期安定性 |
 | `flag_constant_6m` | 調査抵抗疑義 |
@@ -419,12 +420,12 @@ ORG_FILTER_COLUMNS = ['division', 'department', 'section']
 
 #### `TAB_NAMES`
 
-全タブ名リスト: `['時系列', 'グループ比較', '評価', '分布', '個人']`
+全タブ名リスト: `['時系列', 'カテゴリ比較', '評価', '分布', '個人']`
 
 #### `TAB_NAMES_AUTHENTICATED` / `TAB_NAMES_ANONYMOUS`
 
-- 認証済み: `['時系列', 'グループ比較', '評価', '分布', '個人']`（全タブ）
-- 未認証: `['時系列', 'グループ比較', '評価', '分布']`（「個人」タブ非表示）
+- 認証済み: `['時系列', 'カテゴリ比較', '評価', '分布', '個人']`（全タブ）
+- 未認証: `['時系列', 'カテゴリ比較', '評価', '分布']`（「個人」タブ非表示）
 
 #### `TAB_CONFIG`
 
@@ -778,23 +779,27 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 
 ---
 
-#### `render_signal_table(signals, display_cols)`
+#### `render_signal_table(signals, display_cols, key=None)`
 
-シグナルテーブルをフォーマット・スタイリングして `st.dataframe` で表示する。
+シグナルテーブルをフォーマット・スタイリングして `st.dataframe` で表示する。行選択に対応し、選択された氏名を返す。
 
 | 引数 | 型 | 説明 |
 |------|----|------|
 | `signals` | `DataFrame` | `_priority_is_neg` 列を含むシグナル DataFrame |
 | `display_cols` | `list[str]` | 表示する列名リスト（英語列名） |
+| `key` | `str \| None` | Streamlit ウィジェットの一意キー（複数タブで呼ぶ場合は必須） |
 
 **動作**:
-- `signals` が空の場合は `st.info("アクション対象候補はいません")` を表示して終了する。
-- `display_cols` に存在しない列がある場合は `st.error` でエラーを表示する。
+- `signals` が空の場合は `st.info("アクション対象候補はいません")` を表示して `None` を返す。
+- `display_cols` に存在しない列がある場合は `st.error` でエラーを表示して `None` を返す。
 - 列を `SIGNAL_LABELS` で日本語にリネームし、`format_signal_display_columns` と `style_signal_columns` を適用する。
+- `on_select="rerun"` / `selection_mode="single-row"` で行選択を有効化する（Streamlit ≥ 1.35 必須）。
+- `_signal_tables_version` カウンターを key サフィックスに付加し、フラグ（`_clear_action_selection`）が立っている場合はカウンターをインクリメントして選択状態をリセットする。
+- 行インデックスが現在の DataFrame 範囲外の場合（フィルター変更後など）は選択なし扱いにする。
 - column_config は内部で生成する（`介入必要度` 列を TextColumn として定義）。
-- テーブル下部に「介入必要度について」「中期傾向について」の popover を表示する。
+- テーブル下部に「介入必要度について」「総合傾向について」の popover を表示する。
 
-**戻り値**: `None`
+**戻り値**: `str | None`（選択された行の氏名。選択なし・範囲外の場合は `None`）
 
 ---
 
@@ -842,7 +847,7 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 
 | 引数 | 型 | 説明 |
 |------|----|------|
-| `signals` | `DataFrame` | `_priority_is_neg`, `intervention_priority`, `trend_refined`, `section` 列を含む DataFrame |
+| `signals` | `DataFrame` | `_priority_is_neg`, `intervention_priority`, `trend_refined`, `trend_base`, `section` 列を含む DataFrame |
 
 **ソート順序**:
 1. 優先度タイプ（ネガティブ優先: `_priority_is_neg` 降順）
@@ -918,9 +923,9 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 
 ---
 
-#### `render_action_candidates(signal_df, main_df, end_dt, privilege_mgr, current_privilege)`
+#### `render_action_candidates(signal_df, main_df, end_dt, privilege_mgr, current_privilege, key_prefix="default")`
 
-「アクション対象候補」セクションを表示する。
+「アクション対象候補」セクションを表示する。行選択による個人タブへのナビゲーションを処理する。
 
 | 引数 | 型 | 説明 |
 |------|----|------|
@@ -929,12 +934,19 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 | `end_dt` | `Timestamp` | シグナルデータの終端日時 |
 | `privilege_mgr` | `PrivilegeManager` | PrivilegeManager インスタンス |
 | `current_privilege` | `str` | 現在のユーザーの権限クラス |
+| `key_prefix` | `str` | ウィジェット一意キーのプレフィックス（タブごとに異なる値を指定） |
 
 **動作**:
 1. `privilege_mgr.get_section_scope` でアクション候補のセクションスコープを取得する。
 2. スコープでシグナルデータをフィルタリングする。
 3. スコープがアクセス許可（`None` または空でない）の場合に `"アクション対象候補"` サブヘッダーを表示する。
-4. `get_signal_data` と `render_signal_table` でテーブルを表示する。
+4. `get_signal_data` と `render_signal_table` でテーブルを表示する（`key=f"{key_prefix}_signal_table"`）。
+5. テーブルで行が選択された場合、`_last_{key_prefix}_selection` キーで前回選択と比較し、変化があれば `_nav_individual` セッションステートキーに氏名をセットする。変化がない場合はスキップ（複数テーブルの干渉防止）。
+6. 選択中の氏名を `st.info` メッセージで表示する。
+
+**ナビゲーションの仕組み**:
+- `_nav_individual` をセットするだけで、実際の画面遷移はユーザーが個人タブをクリックすることで完了する。
+- 個人タブは `_nav_individual` を消費し、`individual_selector`（ローカルセレクトボックスキー）に転記してから削除する。この時点で `_clear_action_selection` フラグをセットし、次の rerun でシグナルテーブルの選択状態をリセットする。
 
 **戻り値**: `None`
 
@@ -1464,7 +1476,7 @@ DataFrame の個人名列をマスク文字列 `'***'` で匿名化する。
 - `標準偏差`: 全期間の標準偏差
 
 **`group_col='name'` の場合の追加処理**:
-- `signal_df` と `end_dt` が指定されている場合、最新波の `trend_recent`（短期傾向）と `trend_refined`（中期傾向）列をマージする。
+- `signal_df` と `end_dt` が指定されている場合、最新波の `trend_recent`（短期傾向）・`trend_base`（中期傾向）・`trend_refined`（総合傾向）列をマージする。
 - 氏名列 → トレンド列 → 統計列の順に列を並べ替える。
 
 **E_delta_1 / E_slope_3m（`group_col != 'name'` の場合）**:

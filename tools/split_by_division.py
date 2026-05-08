@@ -73,6 +73,11 @@ def _load_leave_division_map() -> dict[str, str]:
     return result
 
 
+def _normalize_str_col(series: pd.Series) -> pd.Series:
+    """Strip leading/trailing whitespace and normalize empty strings to NaN."""
+    return series.astype(str).str.strip().replace({"nan": pd.NA, "": pd.NA})
+
+
 def split_by_division(source: Path = SOURCE_FILE) -> None:
     password = _load_password()
 
@@ -81,11 +86,16 @@ def split_by_division(source: Path = SOURCE_FILE) -> None:
         sheet: pd.read_excel(source, sheet_name=sheet) for sheet in SHEETS
     }
 
+    # Normalize key string columns to eliminate whitespace mismatches that
+    # silently exclude rows from the division filter (e.g. "設計部門 " != "設計部門").
+    for sheet in SHEETS:
+        for col in ["current_division", "mail_address"]:
+            if col in data[sheet].columns:
+                data[sheet][col] = _normalize_str_col(data[sheet][col])
+
     # Derive division list from active members in rating2 (drop nulls/empty)
     active_divisions = (
         data["rating2"]["current_division"]
-        .dropna()
-        .replace("", pd.NA)
         .dropna()
         .unique()
         .tolist()
@@ -117,6 +127,10 @@ def split_by_division(source: Path = SOURCE_FILE) -> None:
                 # Leave members whose division (per members.yaml) is this division
                 leave_mask = df["mail_address"].isin(leave_addrs) if "mail_address" in df.columns else pd.Series(False, index=df.index)
                 filtered = df[active_mask | leave_mask].copy()
+                # Sort chronologically so the latest row is always last
+                sort_cols = [c for c in ["year", "month"] if c in filtered.columns]
+                if sort_cols:
+                    filtered = filtered.sort_values(sort_cols, kind="stable").reset_index(drop=True)
                 filtered.to_excel(writer, sheet_name=sheet, index=False)
 
         buf.seek(0)

@@ -88,7 +88,7 @@ Login → Sidebar (Period, Metric, Grouping, Filters) → Per-Tab Privilege Scop
 
 ### Tabs (st.tabs)
 - **時系列** - Time series charts
-- **グループ比較** - Group comparison
+- **カテゴリ比較** - Group comparison
 - **評価** - Evaluation/ratings
 - **分布** - Distribution
 - **個人** - Individual view

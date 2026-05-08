@@ -106,7 +106,7 @@ class PrivilegeManager:
 
         Args:
             privilege: User's privilege identifier
-            tab: Tab name (時系列, グループ比較, 評価, 個人, 分布)
+            tab: Tab name (時系列, カテゴリ比較, 評価, 個人, 分布)
 
         Returns:
             None if all data allowed, list of allowed organization values,
@@ -298,7 +298,7 @@ class PrivilegeManager:
 
         Args:
             privilege: User's privilege identifier
-            tab: Tab name (時系列, グループ比較, 評価, 個人, 分布)
+            tab: Tab name (時系列, カテゴリ比較, 評価, 個人, 分布)
 
         Returns:
             True if anonymization is required
@@ -327,11 +327,11 @@ class PrivilegeManager:
 
         allowed = tabs_config.get('allowed', [])
         if allowed == 'all':
-            return ['時系列', 'グループ比較', '評価', '分布', '個人']
+            return ['時系列', 'カテゴリ比較', '評価', '分布', '個人']
 
         denied = tabs_config.get('denied', [])
         if denied:
-            all_tabs = ['時系列', 'グループ比較', '評価', '分布', '個人']
+            all_tabs = ['時系列', 'カテゴリ比較', '評価', '分布', '個人']
             return [t for t in all_tabs if t not in denied]
 
         return allowed if allowed else []
@@ -443,7 +443,7 @@ class PrivilegeManager:
 
         Args:
             privilege: User's privilege identifier
-            tab: Tab name (時系列, グループ比較, 評価, 個人, 分布)
+            tab: Tab name (時系列, カテゴリ比較, 評価, 個人, 分布)
 
         Returns:
             Dict mapping section names to alias display names, or empty dict if no aliases
@@ -487,7 +487,7 @@ class PrivilegeManager:
 
         Args:
             privilege: User's privilege identifier
-            tab: Tab name (時系列, グループ比較, 評価, 個人, 分布)
+            tab: Tab name (時系列, カテゴリ比較, 評価, 個人, 分布)
             grouping: Grouping type (なし, department, section, team, project, grade, name)
             dimension_filtered: If True, use grouping_scope_filtered (≠すべて) when available
 

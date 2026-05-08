@@ -268,7 +268,7 @@ def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, e
         latest_signal = signal_df[signal_df['year_month_dt'] == end_dt].copy()
         if not latest_signal.empty and 'name' in latest_signal.columns:
             # Get trend columns for each person
-            trend_cols = ['trend_recent', 'trend_refined']
+            trend_cols = ['trend_recent', 'trend_base', 'trend_refined']
             available_cols = [col for col in trend_cols if col in latest_signal.columns]
             if available_cols:
                 # Sort to prefer rows with non-null trend values when deduplicating
@@ -331,7 +331,7 @@ def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, e
 
     # Final column ordering:
     # group → (signal trends if name) → 先月差分 → 直近傾き → 平均 → 傾向の傾き → 標準偏差 → 人数
-    signal_trend_labels = ['短期傾向', '中期傾向']
+    signal_trend_labels = ['短期傾向', '中期傾向', '総合傾向']
     delta_slope_labels = ['先月からの差分', '直近３ヶ月の傾き']
     col_order = [column_name]
     col_order += [c for c in signal_trend_labels if c in stats_df.columns]

@@ -442,7 +442,7 @@ team_section_overrides:
     visible_to: [all]            # このオーバーライドが適用される権限クラス
     visible_in_tabs:             # 適用されるタブ
       - 時系列
-      - グループ比較
+      - カテゴリ比較
       - 評価
       - 分布
     exclude_sections: [未設定]   # 注意: 現在は無効化されている
