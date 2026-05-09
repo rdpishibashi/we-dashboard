@@ -166,7 +166,7 @@ def render_action_candidates(
                 st.session_state["_nav_individual"] = selected_name
 
         if selected_name:
-            st.info(f"**{selected_name}** を選択しました。「個人」タブで詳細を確認できます。")
+            st.info(f"「個人」タブを選択することで **{selected_name}** さんの詳細を確認できます。")
 
 
 def render_concern_section(
