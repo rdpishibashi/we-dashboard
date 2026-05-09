@@ -15,12 +15,13 @@ from modules.signal_processing import get_signal_data, render_signal_table
 from modules.config import SIGNAL_TABLE_COLUMNS
 from modules.privilege_manager import filter_dataframe_by_scope
 from modules.utils import GROUP_ORDER_MAP
-try:
-    from modules.response_manager_windows import (
+import sys
+if sys.platform in ("darwin", "win32"):
+    from modules.response_manager_local import (
         load_responses, post_response, get_responses_for_comment, make_comment_key
     )
-except ImportError:
-    from modules.response_manager import (
+else:
+    from modules.response_manager_cloud import (
         load_responses, post_response, get_responses_for_comment, make_comment_key
     )
 from modules.auth import get_current_user, get_current_display_name

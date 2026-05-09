@@ -987,12 +987,13 @@ if uploaded_file is not None:
                             if share_period == "直近1ヶ月":
                                 comment_data = comment_data[comment_data['year_month_dt'] == end_dt]
                             if not comment_data.empty:
-                                try:
-                                    from modules.response_manager_windows import (
+                                import sys
+                                if sys.platform in ("darwin", "win32"):
+                                    from modules.response_manager_local import (
                                         load_responses, get_responses_for_comment, make_comment_key
                                     )
-                                except ImportError:
-                                    from modules.response_manager import (
+                                else:
+                                    from modules.response_manager_cloud import (
                                         load_responses, get_responses_for_comment, make_comment_key
                                     )
                                 from modules.components import _render_responses, _render_response_input
