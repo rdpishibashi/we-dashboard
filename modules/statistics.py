@@ -239,8 +239,32 @@ def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, e
         # Convert back to string for display
         stats_df[column_name] = stats_df[column_name].astype(str)
 
-    # Add E_delta_1 / E_slope_3m columns (engagement-specific, always in raw scale → ÷5.4)
-    if signal_df is not None and 'E_delta_1' in signal_df.columns and 'E_slope_3m' in signal_df.columns:
+    # 先月からの差分: calculated from monthly group averages in df so it is
+    # consistent with the chart values shown to the user.
+    # Using E_delta_1 (per-person delta averaged) diverges from the chart when
+    # new members join or leave mid-period, because new members have E_delta_1=0
+    # while still shifting the group average.
+    available_months = sorted(df['year_month_dt'].dropna().unique())
+    ref_end = end_dt if (end_dt is not None and end_dt in available_months) \
+        else (available_months[-1] if available_months else None)
+
+    if ref_end is not None:
+        end_idx = available_months.index(ref_end)
+        if end_idx > 0:
+            prev_dt = available_months[end_idx - 1]
+            curr_data = df[df['year_month_dt'] == ref_end]
+            prev_data = df[df['year_month_dt'] == prev_dt]
+            if group_col and group_col != 'なし' and group_col in df.columns:
+                curr_avg = curr_data.groupby(group_col)[metric_col].mean()
+                prev_avg = prev_data.groupby(group_col)[metric_col].mean()
+                stats_df['先月からの差分'] = stats_df[column_name].map(curr_avg - prev_avg)
+            else:
+                stats_df['先月からの差分'] = (
+                    curr_data[metric_col].mean() - prev_data[metric_col].mean()
+                )
+
+    # 直近３ヶ月の傾き: keep using E_slope_3m from signal_df (analyzer-computed slope)
+    if signal_df is not None and 'E_slope_3m' in signal_df.columns:
         ref_dt = end_dt
         if ref_dt is None and 'year_month_dt' in signal_df.columns:
             ref_dt = signal_df['year_month_dt'].max()
@@ -250,17 +274,14 @@ def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, e
 
             if not latest_signal.empty:
                 if group_col and group_col != 'なし' and group_col in latest_signal.columns:
-                    delta_by_group = (
-                        latest_signal.groupby(group_col)['E_delta_1'].mean() / ENGAGEMENT_DIVISOR
-                    )
                     slope_by_group = (
                         latest_signal.groupby(group_col)['E_slope_3m'].mean() / ENGAGEMENT_DIVISOR
                     )
-                    stats_df['先月からの差分'] = stats_df[column_name].map(delta_by_group)
                     stats_df['直近３ヶ月の傾き'] = stats_df[column_name].map(slope_by_group)
                 else:
-                    stats_df['先月からの差分'] = latest_signal['E_delta_1'].mean() / ENGAGEMENT_DIVISOR
-                    stats_df['直近３ヶ月の傾き'] = latest_signal['E_slope_3m'].mean() / ENGAGEMENT_DIVISOR
+                    stats_df['直近３ヶ月の傾き'] = (
+                        latest_signal['E_slope_3m'].mean() / ENGAGEMENT_DIVISOR
+                    )
 
     # Merge trend columns when grouping by name
     if group_col == 'name' and signal_df is not None and end_dt is not None:
