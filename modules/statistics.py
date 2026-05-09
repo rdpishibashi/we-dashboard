@@ -69,9 +69,9 @@ def format_measured_data(
         if grouping_label != 'なし':
             grouping_label = grouping_label.replace('別', '')
 
-        # Format metric with 1 decimal place
+        # Format metric with 2 decimal places (matches 主要な指標 precision)
         measured_data[metric_col] = measured_data[metric_col].apply(
-            lambda x: f"{x:.1f}" if pd.notna(x) else "-"
+            lambda x: f"{x:.2f}" if pd.notna(x) else "-"
         )
 
         # Rename columns to Japanese
@@ -92,9 +92,9 @@ def format_measured_data(
         ).reset_index()
         measured_data = agg.sort_values('year_month')
 
-        # Format metric with 1 decimal place
+        # Format metric with 2 decimal places (matches 主要な指標 precision)
         measured_data[metric_col] = measured_data[metric_col].apply(
-            lambda x: f"{x:.1f}" if pd.notna(x) else "-"
+            lambda x: f"{x:.2f}" if pd.notna(x) else "-"
         )
 
         # Rename columns to Japanese
