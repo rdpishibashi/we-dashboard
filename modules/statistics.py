@@ -121,7 +121,7 @@ def format_statistics_for_display(stats_df):
     if '平均' in display_stats.columns:
         display_stats['平均'] = display_stats['平均'].apply(lambda x: f"{x:.2f}")
     if '傾向の傾き' in display_stats.columns:
-        display_stats['傾向の傾き'] = display_stats['傾向の傾き'].apply(lambda x: f"{x:.3f}")
+        display_stats['傾向の傾き'] = display_stats['傾向の傾き'].apply(lambda x: f"{x:+.3f}")
     if '標準偏差' in display_stats.columns:
         display_stats['標準偏差'] = display_stats['標準偏差'].apply(lambda x: f"{x:.2f}")
     return display_stats
