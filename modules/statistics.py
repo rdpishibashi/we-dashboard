@@ -69,9 +69,9 @@ def format_measured_data(
         if grouping_label != 'なし':
             grouping_label = grouping_label.replace('別', '')
 
-        # Format metric with 1 decimal place
+        # Format metric with 2 decimal places (matches 主要な指標 precision)
         measured_data[metric_col] = measured_data[metric_col].apply(
-            lambda x: f"{x:.1f}" if pd.notna(x) else "-"
+            lambda x: f"{x:.2f}" if pd.notna(x) else "-"
         )
 
         # Rename columns to Japanese
@@ -92,9 +92,9 @@ def format_measured_data(
         ).reset_index()
         measured_data = agg.sort_values('year_month')
 
-        # Format metric with 1 decimal place
+        # Format metric with 2 decimal places (matches 主要な指標 precision)
         measured_data[metric_col] = measured_data[metric_col].apply(
-            lambda x: f"{x:.1f}" if pd.notna(x) else "-"
+            lambda x: f"{x:.2f}" if pd.notna(x) else "-"
         )
 
         # Rename columns to Japanese
@@ -121,7 +121,7 @@ def format_statistics_for_display(stats_df):
     if '平均' in display_stats.columns:
         display_stats['平均'] = display_stats['平均'].apply(lambda x: f"{x:.2f}")
     if '傾向の傾き' in display_stats.columns:
-        display_stats['傾向の傾き'] = display_stats['傾向の傾き'].apply(lambda x: f"{x:.3f}")
+        display_stats['傾向の傾き'] = display_stats['傾向の傾き'].apply(lambda x: f"{x:+.3f}")
     if '標準偏差' in display_stats.columns:
         display_stats['標準偏差'] = display_stats['標準偏差'].apply(lambda x: f"{x:.2f}")
     return display_stats
@@ -180,12 +180,22 @@ def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, e
             else:
                 slope = 0.0
 
+            # 人数: count members present in the latest month (end_dt) so that
+            # transferred/retired members in earlier months are not counted.
+            # Returns 0 when the group has no members in the latest month.
+            if end_dt is not None and 'year_month_dt' in group_data.columns and 'name' in group_data.columns:
+                n_people = group_data[group_data['year_month_dt'] == end_dt]['name'].nunique()
+            elif 'name' in group_data.columns:
+                n_people = group_data['name'].nunique()
+            else:
+                n_people = len(group_data)
+
             stats_list.append({
                 column_name: str(group_name),
                 '平均': avg_value,
                 '傾向の傾き': slope,
                 '標準偏差': std_value,
-                '人数': group_data['name'].nunique() if 'name' in group_data.columns else len(group_data),
+                '人数': n_people,
             })
     else:
         # Calculate statistics for entire dataset
@@ -210,12 +220,19 @@ def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, e
             else:
                 slope = 0.0
 
+            if end_dt is not None and 'year_month_dt' in clean_data.columns and 'name' in clean_data.columns:
+                n_people = clean_data[clean_data['year_month_dt'] == end_dt]['name'].nunique()
+            elif 'name' in clean_data.columns:
+                n_people = clean_data['name'].nunique()
+            else:
+                n_people = len(clean_data)
+
             stats_list.append({
                 column_name: '全体',
                 '平均': avg_value,
                 '傾向の傾き': slope,
                 '標準偏差': std_value,
-                '人数': clean_data['name'].nunique() if 'name' in clean_data.columns else len(clean_data),
+                '人数': n_people,
             })
 
     if not stats_list:
@@ -239,8 +256,32 @@ def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, e
         # Convert back to string for display
         stats_df[column_name] = stats_df[column_name].astype(str)
 
-    # Add E_delta_1 / E_slope_3m columns (engagement-specific, always in raw scale → ÷5.4)
-    if signal_df is not None and 'E_delta_1' in signal_df.columns and 'E_slope_3m' in signal_df.columns:
+    # 先月からの差分: calculated from monthly group averages in df so it is
+    # consistent with the chart values shown to the user.
+    # Using E_delta_1 (per-person delta averaged) diverges from the chart when
+    # new members join or leave mid-period, because new members have E_delta_1=0
+    # while still shifting the group average.
+    available_months = sorted(df['year_month_dt'].dropna().unique())
+    ref_end = end_dt if (end_dt is not None and end_dt in available_months) \
+        else (available_months[-1] if available_months else None)
+
+    if ref_end is not None:
+        end_idx = available_months.index(ref_end)
+        if end_idx > 0:
+            prev_dt = available_months[end_idx - 1]
+            curr_data = df[df['year_month_dt'] == ref_end]
+            prev_data = df[df['year_month_dt'] == prev_dt]
+            if group_col and group_col != 'なし' and group_col in df.columns:
+                curr_avg = curr_data.groupby(group_col)[metric_col].mean()
+                prev_avg = prev_data.groupby(group_col)[metric_col].mean()
+                stats_df['先月からの差分'] = stats_df[column_name].map(curr_avg - prev_avg)
+            else:
+                stats_df['先月からの差分'] = (
+                    curr_data[metric_col].mean() - prev_data[metric_col].mean()
+                )
+
+    # 直近３ヶ月の傾き: keep using E_slope_3m from signal_df (analyzer-computed slope)
+    if signal_df is not None and 'E_slope_3m' in signal_df.columns:
         ref_dt = end_dt
         if ref_dt is None and 'year_month_dt' in signal_df.columns:
             ref_dt = signal_df['year_month_dt'].max()
@@ -250,17 +291,14 @@ def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, e
 
             if not latest_signal.empty:
                 if group_col and group_col != 'なし' and group_col in latest_signal.columns:
-                    delta_by_group = (
-                        latest_signal.groupby(group_col)['E_delta_1'].mean() / ENGAGEMENT_DIVISOR
-                    )
                     slope_by_group = (
                         latest_signal.groupby(group_col)['E_slope_3m'].mean() / ENGAGEMENT_DIVISOR
                     )
-                    stats_df['先月からの差分'] = stats_df[column_name].map(delta_by_group)
                     stats_df['直近３ヶ月の傾き'] = stats_df[column_name].map(slope_by_group)
                 else:
-                    stats_df['先月からの差分'] = latest_signal['E_delta_1'].mean() / ENGAGEMENT_DIVISOR
-                    stats_df['直近３ヶ月の傾き'] = latest_signal['E_slope_3m'].mean() / ENGAGEMENT_DIVISOR
+                    stats_df['直近３ヶ月の傾き'] = (
+                        latest_signal['E_slope_3m'].mean() / ENGAGEMENT_DIVISOR
+                    )
 
     # Merge trend columns when grouping by name
     if group_col == 'name' and signal_df is not None and end_dt is not None:
