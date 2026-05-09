@@ -182,10 +182,9 @@ def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, e
 
             # 人数: count members present in the latest month (end_dt) so that
             # transferred/retired members in earlier months are not counted.
+            # Returns 0 when the group has no members in the latest month.
             if end_dt is not None and 'year_month_dt' in group_data.columns and 'name' in group_data.columns:
-                latest_members = group_data[group_data['year_month_dt'] == end_dt]
-                n_people = latest_members['name'].nunique() if not latest_members.empty \
-                    else group_data['name'].nunique()
+                n_people = group_data[group_data['year_month_dt'] == end_dt]['name'].nunique()
             elif 'name' in group_data.columns:
                 n_people = group_data['name'].nunique()
             else:
@@ -222,9 +221,7 @@ def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, e
                 slope = 0.0
 
             if end_dt is not None and 'year_month_dt' in clean_data.columns and 'name' in clean_data.columns:
-                latest_members = clean_data[clean_data['year_month_dt'] == end_dt]
-                n_people = latest_members['name'].nunique() if not latest_members.empty \
-                    else clean_data['name'].nunique()
+                n_people = clean_data[clean_data['year_month_dt'] == end_dt]['name'].nunique()
             elif 'name' in clean_data.columns:
                 n_people = clean_data['name'].nunique()
             else:
