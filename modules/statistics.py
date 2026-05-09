@@ -180,12 +180,23 @@ def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, e
             else:
                 slope = 0.0
 
+            # 人数: count members present in the latest month (end_dt) so that
+            # transferred/retired members in earlier months are not counted.
+            if end_dt is not None and 'year_month_dt' in group_data.columns and 'name' in group_data.columns:
+                latest_members = group_data[group_data['year_month_dt'] == end_dt]
+                n_people = latest_members['name'].nunique() if not latest_members.empty \
+                    else group_data['name'].nunique()
+            elif 'name' in group_data.columns:
+                n_people = group_data['name'].nunique()
+            else:
+                n_people = len(group_data)
+
             stats_list.append({
                 column_name: str(group_name),
                 '平均': avg_value,
                 '傾向の傾き': slope,
                 '標準偏差': std_value,
-                '人数': group_data['name'].nunique() if 'name' in group_data.columns else len(group_data),
+                '人数': n_people,
             })
     else:
         # Calculate statistics for entire dataset
@@ -210,12 +221,21 @@ def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, e
             else:
                 slope = 0.0
 
+            if end_dt is not None and 'year_month_dt' in clean_data.columns and 'name' in clean_data.columns:
+                latest_members = clean_data[clean_data['year_month_dt'] == end_dt]
+                n_people = latest_members['name'].nunique() if not latest_members.empty \
+                    else clean_data['name'].nunique()
+            elif 'name' in clean_data.columns:
+                n_people = clean_data['name'].nunique()
+            else:
+                n_people = len(clean_data)
+
             stats_list.append({
                 column_name: '全体',
                 '平均': avg_value,
                 '傾向の傾き': slope,
                 '標準偏差': std_value,
-                '人数': clean_data['name'].nunique() if 'name' in clean_data.columns else len(clean_data),
+                '人数': n_people,
             })
 
     if not stats_list:
