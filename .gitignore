@@ -187,6 +187,11 @@ cython_debug/
 
 # Mac environment
 .DS_Store
+**/.DS_Store
+
+# Temporary Data file
+Engagement\ Master.xlsx
+Member.xlsx
 
 # Streamlit secrets (contains passwords and sensitive data)
 .streamlit/secrets.toml

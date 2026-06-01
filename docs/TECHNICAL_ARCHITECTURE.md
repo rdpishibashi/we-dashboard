@@ -40,8 +40,9 @@ WE-Dashboard/
 │   ├── filter_helpers.py         # サイドバーフィルターカスケードロジック
 │   ├── member_loader.py          # メンバーリスト読み込み（未記入者機能用）
 │   ├── privilege_manager.py      # 権限ベースフィルタリング
-│   ├── response_file_manager.py  # レスポンスファイル保存/読み込み（パスワード保護Excel）
-│   ├── response_manager.py       # 返信管理（Google Sheets連携）
+│   ├── response_file_manager.py  # レスポンスファイル保存/読み込み（パスワード保護Excel・低レベルユーティリティ）
+│   ├── response_manager_local.py # 返信管理・ローカル実行用（Mac/Windows → response.xlsx）
+│   ├── response_manager_cloud.py # 返信管理・クラウド用（Streamlit Cloud → Google Sheets）
 │   ├── signal_processing.py      # シグナルデータ処理
 │   ├── statistics.py             # 統計計算
 │   ├── utils.py                  # ユーティリティ関数
@@ -253,7 +254,7 @@ graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
 | 関数 | 説明 |
 |------|------|
 | `get_excel_password()` | 入力Excelパスワード取得（`windows_config.py` 優先、次いで `st.secrets`） |
-| `decrypt_excel_if_needed(file_obj)` | パスワード保護Excelの復号（常にパスワード必須） |
+| `decrypt_excel_if_needed(file_obj)` | Excelの復号（暗号化されていない場合はそのまま返す。暗号化されている場合はパスワードで復号） |
 | `load_data(uploaded_file)` | データ読込・前処理（キャッシュ対応） |
 
 **パスワード取得の優先順位:**
@@ -393,23 +394,43 @@ Member.xlsx → tools/generate_member_yaml.py → config/members.yaml → member
 
 **ファイル確認方法:** パスワードを知っていれば Excel / LibreOffice で直接開くことができる。専用のエクスポートツールは不要。
 
-### 3.10 modules/response_manager.py（返信管理モジュール）
+### 3.10 返信管理モジュール（環境自動判別）
 
-`共有したいこと`セクションのコメントに対する返信機能を提供します。
-Google Sheets APIを使用して返信データを読み書きします。
+`共有したいこと`セクションのコメントへの返信機能を提供します。実行環境（OS）に応じてバックエンドを自動選択します。
 
-**主要関数:**
+**自動判別ロジック（`components.py` / `app.py`）:**
+
+```python
+import sys
+if sys.platform in ("darwin", "win32"):
+    from modules.response_manager_local import ...   # Mac/Windows → Excel
+else:
+    from modules.response_manager_cloud import ...   # Linux(Streamlit Cloud) → Google Sheets
+```
+
+| 実行環境 | `sys.platform` | バックエンド | 保存先 |
+|---|---|---|---|
+| ローカル Mac | `darwin` | `response_manager_local.py` | `response.xlsx`（プロジェクトルート） |
+| ローカル Windows | `win32` | `response_manager_local.py` | `response.xlsx`（プロジェクトルート） |
+| Streamlit Cloud | `linux` | `response_manager_cloud.py` | Google Sheets |
+
+**両モジュール共通の公開 API:**
 
 | 関数 | 説明 |
 |------|------|
-| `load_responses()` | Google Sheetから返信一覧読込（session_stateキャッシュ） |
-| `post_response()` | 返信投稿（Sheet追記→キャッシュ無効化） |
+| `load_responses()` | 返信一覧読込（session_stateキャッシュ） |
+| `post_response()` | 返信投稿（書込→キャッシュ無効化） |
 | `get_responses_for_comment()` | 特定コメントの返信取得 |
 | `make_comment_key()` | MD5ハッシュによるウィジェットキー生成 |
 
-**必要な設定:**
-- `gcp_service_account`: Google Cloud サービスアカウント情報（Streamlit secrets）
-- `RESPONSE_SHEET_ID`: Google SpreadsheetのID（Streamlit secrets）
+**response_manager_local.py（ローカル用）:**
+- 保存先: `<プロジェクトルート>/response.xlsx`（`Path(__file__).parent.parent / "response.xlsx"`）
+- 暗号化: `EXCEL_PASSWORD` が secrets にある場合は `msoffcrypto` でパスワード保護
+- 初回起動時にファイルが存在しなければ自動作成
+
+**response_manager_cloud.py（クラウド用）:**
+- バックエンド: Google Sheets API（`gspread`）
+- 必要な設定: `gcp_service_account`（サービスアカウント情報）、`RESPONSE_SHEET_ID`（スプレッドシートID）
 
 ### 3.11 modules/utils.py（ユーティリティモジュール）
 
@@ -745,7 +766,7 @@ google-auth>=2.0.0   # Google認証
 | 2026-04-05 | サイドバーフィルター順序変更: 職位（grade）を プロジェクト の後・個人 の前に移動（部門→部署→課→チーム→プロジェクト→職位→個人）|
 | 2026-04-05 | ローカルスタンドアロン用パスワード管理を追加: `modules/windows_config.py`（git-ignored）に `EXCEL_PASSWORD` / `RESPONSE_PASSWORD` をハードコード。`get_excel_password()` が `windows_config.py` 優先で取得し、存在しない場合は `st.secrets` にフォールバック |
 | 2026-04-05 | `modules/response_file_manager.py` を追加: `msoffcrypto` を使用したパスワード保護レスポンス Excel の保存・読み込み |
-| 2026-04-05 | `decrypt_excel_if_needed()` を簡略化: 入力ファイルは常にパスワード保護を前提とし、非パスワードファイルへのフォールバックパスを削除 |
+| 2026-04-05 | `decrypt_excel_if_needed()` を簡略化: 暗号化有無を `is_encrypted()` で判定し、非暗号化ファイルはそのまま返す。暗号化ファイルの場合は設定済みパスワードで復号（パスワード未設定時は ValueError） |
 | 2026-04-05 | `modules/windows_config.py` のパスワード管理を強化: 平文ハードコードから AES（Fernet）暗号化方式に変更。`tools/encrypt_passwords.py` を追加（開発者がパスワードを更新する際に使用）。配布 `.exe` ではバイトコード＋暗号化の二重保護となる |
 | 2026-04-05 | `calculate_group_statistics()` に `E_delta_1`（先月差分）・`E_slope_3m`（3ヶ月傾き）列を追加。`signal_df` の最新波データから取得し `ENGAGEMENT_DIVISOR`（5.4）で正規化。グループ別集計時のみ（`group_col != 'name'`）に表示 |
 | 2026-04-05 | `calculate_group_statistics()` に `人数`（ユニーク氏名数）列を追加。`group_col == 'name'`（個人別）の場合は追加しない |
@@ -762,6 +783,7 @@ google-auth>=2.0.0   # Google認証
 | 2026-04-12 | `tools/split_by_division.py` を修正: パスワードを `.streamlit/secrets.toml` から読み込む、退職メンバー（`leave == "leave"`）を `members.yaml` の `division` に基づいて部門別ファイルに含める（Admin GAS が `current_division` をクリアするため、`current_division` フィールドでは判定不可） |
 | 2026-05-08 | シグナル列追加・改名: `trend_base`（中期傾向）を `trend_recent` と `trend_refined` の間に追加。`trend_refined` の表示名を「中期傾向」→「総合傾向」に変更。`SIGNAL_TABLE_COLUMNS` / `INDIVIDUAL_SIGNAL_COLUMNS` / `SIGNAL_LABELS` / `calculate_group_statistics` のトレンド列マージ処理をすべて更新 |
 | 2026-05-08 | アクション対象候補テーブルからの個人タブナビゲーション機能を実装。`render_signal_table` に `on_select="rerun"` / `selection_mode="single-row"` / `key` を追加し選択氏名を返すように変更。`render_action_candidates` に `key_prefix` を追加（複数タブでの ID 衝突防止）。ナビゲーション状態管理に `_nav_individual`・`_last_{key_prefix}_selection`・`_clear_action_selection`・`_signal_tables_version` の 4 セッションステートキーを導入。Streamlit 最低バージョンを 1.35.0 に引き上げ |
+| 2026-05-09 | 返信管理のバックエンドを環境自動判別方式に変更。`response_manager.py` を `response_manager_cloud.py` に改名し、`response_manager_local.py`（Mac/Windows・Excel保存）を新規追加。`sys.platform` で `darwin`/`win32` の場合はローカルExcel（`response.xlsx`）、`linux`（Streamlit Cloud）の場合は Google Sheets を使用。追加設定・secrets.toml の変更不要で自動切替。`WE-Dashboard-Windows` も同構成に統一（`response_manager_windows.py` 廃止） |
 
 ---
 
@@ -804,7 +826,7 @@ graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
 
 | 問題 | 原因 | 解決策 |
 |------|------|--------|
-| コメントが表示されない | mail_addressでフィルタリング | 組織列でフィルタリング |
+| コメントが表示されない（権限スコープ適用時） | タブレベルでmail_addressにより権限スコープを適用 | `filter_dataframe_by_scope()`で組織列を使ってスコープ適用 |
 | スコープフィルタリング失敗 | sectionカラムのみチェック | `filter_dataframe_by_scope()`使用 |
 | マネジメントが課別以外で表示される | 全グルーピングでオーバーライド適用 | `grouping == 'section'`時のみ適用 |
 | 列名の不一致 | comment_dfは`current_section`、main_dfは`section` | マッピング後にフィルタリング |
