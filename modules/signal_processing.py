@@ -51,6 +51,38 @@ def _fmt_priority_individual(x, suffix: str) -> str:
 # Core signal calculations
 # =============================================================================
 
+def _dash_if_empty(value):
+    """空・NaN・None 相当は '-'、それ以外は文字列化（判定保留は合成側で 'n/a'）。"""
+    if pd.isna(value):
+        return "-"
+    s = str(value).strip()
+    return "-" if s in ("", "None", "nan") else s
+
+
+def _mid_variability(direction, volatility):
+    """中期変動性 = volatility_6_p90 × direction_6_p90 の合成（R4 マッピング）。"""
+    d = "" if pd.isna(direction) else str(direction).strip()
+    v = "" if pd.isna(volatility) else str(volatility).strip()
+    if d in ("", "判定保留") or v in ("", "判定保留"):
+        return "n/a"
+    if v == "波動あり":
+        return "波動あり" + d        # 波動あり下降 / 波動あり上昇 / 波動あり横ばい
+    return "安定" if d == "横ばい" else "波動なし" + d  # 波動なし下降 / 波動なし上昇 / 安定
+
+
+def add_mid_variability(signal_df):
+    """direction_6_p90 × volatility_6_p90 から中期変動性カラム(mid_variability)を生成。"""
+    signal_df = signal_df.copy()
+    if 'direction_6_p90' in signal_df.columns and 'volatility_6_p90' in signal_df.columns:
+        signal_df['mid_variability'] = [
+            _mid_variability(d, v)
+            for d, v in zip(signal_df['direction_6_p90'], signal_df['volatility_6_p90'])
+        ]
+    elif 'mid_variability' not in signal_df.columns:
+        signal_df['mid_variability'] = 'n/a'   # 新カラム未提供（EngagementMasterSS 再エクスポート前）の暫定
+    return signal_df
+
+
 def apply_signal_rating_calculations(signal_df):
     """Apply rating divisor calculations to signal data."""
     signal_df = signal_df.copy()
@@ -59,6 +91,7 @@ def apply_signal_rating_calculations(signal_df):
     for col in ['vigor_rating', 'dedication_rating', 'absorption_rating']:
         if col in signal_df.columns:
             signal_df[col] = signal_df[col] / COMPONENT_DIVISOR
+    signal_df = add_mid_variability(signal_df)
     return signal_df
 
 
@@ -120,6 +153,7 @@ def get_signal_data(signal_df, filtered_df, end_dt):
     signals = latest_wave[(raw_neg > threshold) | (raw_pos > threshold)].copy()
 
     signals = derive_intervention_priority(signals)
+    signals = add_mid_variability(signals)
     signals = sort_signals_by_trend_and_priority(signals)
     return signals
 
@@ -191,6 +225,10 @@ def format_signal_display_columns(df):
         df['intervention_priority'] = df['intervention_priority'].apply(_fmt_priority_table)
     if 'flag_constant_6m' in df.columns:
         df['flag_constant_6m'] = df['flag_constant_6m'].apply(_fmt_flag_constant)
+    # 短期変動(big_change) は空/None を "-" 表示に。中期変動性(mid_variability) も空は "-"。
+    for col in ['big_change', 'mid_variability']:
+        if col in df.columns:
+            df[col] = df[col].apply(_dash_if_empty)
     return df
 
 
@@ -221,11 +259,16 @@ def format_individual_signal_data(signal_data):
             lambda x: LEVEL_LABELS.get(str(x), str(x)) if pd.notna(x) else "-"
         )
 
-    for col in ['trend_recent', 'trend_base', 'trend_refined', 'big_change', 'stability_6']:
+    for col in ['trend_recent', 'trend_base', 'trend_refined']:
         if col in display_signal.columns:
             display_signal[col] = display_signal[col].apply(
                 lambda x: str(x) if pd.notna(x) else "-"
             )
+
+    # 短期変動(big_change) / 中期変動性(mid_variability): 空・None も "-" に
+    for col in ['big_change', 'mid_variability']:
+        if col in display_signal.columns:
+            display_signal[col] = display_signal[col].apply(_dash_if_empty)
 
     if 'flag_constant_6m' in display_signal.columns:
         display_signal['flag_constant_6m'] = display_signal['flag_constant_6m'].apply(_fmt_flag_constant)
