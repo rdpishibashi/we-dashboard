@@ -1,6 +1,6 @@
 # WE-Dashboard モジュール API リファレンス
 
-> 最終更新: 2026-04-05
+> 最終更新: 2026-05-09
 
 本ドキュメントは WE-Dashboard アプリケーションを構成する全モジュールの関数レベルリファレンスです。
 各関数のシグネチャ・引数・戻り値・動作仕様を網羅的に記載します。
@@ -21,9 +21,10 @@
 10. [modules/statistics.py — 統計](#10-modulesstatisticspy--統計)
 11. [modules/utils.py — ユーティリティ](#11-modulesutilspy--ユーティリティ)
 12. [modules/encryption.py — 暗号化](#12-modulesencryptionpy--暗号化)
-13. [modules/response_manager.py — 返信管理](#13-modulesresponse_managerpy--返信管理)
-14. [modules/member_loader.py — メンバーリスト読み込み](#14-modulesmember_loaderpy--メンバーリスト読み込み)
-15. [modules/response_file_manager.py — レスポンスファイル管理](#15-modulesresponse_file_managerpy--レスポンスファイル管理)
+13. [modules/response_manager_local.py — 返信管理（ローカル）](#13-modulesresponse_manager_localpy--返信管理ローカル)
+14. [modules/response_manager_cloud.py — 返信管理（クラウド）](#14-modulesresponse_manager_cloudpy--返信管理クラウド)
+15. [modules/member_loader.py — メンバーリスト読み込み](#15-modulesmember_loaderpy--メンバーリスト読み込み)
+16. [modules/response_file_manager.py — レスポンスファイル管理](#16-modulesresponse_file_managerpy--レスポンスファイル管理)
 
 ---
 
@@ -1724,16 +1725,17 @@ Streamlit secrets から暗号化キーを取得する。
 
 ---
 
-## 13. modules/response_manager.py — 返信管理
+## 13. modules/response_manager_local.py — 返信管理（ローカル）
 
-**行数**: 171 行
-**役割**: 「共有したいこと」コメントへの返信を Google Sheets で管理する。セッション状態によるキャッシュで API 呼び出し回数を最小化する。
+**役割**: ローカル実行（Mac/Windows）時の返信管理。返信を `response.xlsx`（プロジェクトルート直下）に保存する。`response_manager_cloud.py` と同一の公開 API を持つ。
 
-**必要シークレット**:
-- `gcp_service_account`: Google サービスアカウント認証情報
-- `RESPONSE_SHEET_ID`: Google スプレッドシート ID
+**使用条件**: `sys.platform in ("darwin", "win32")` のとき `components.py` / `app.py` から自動選択される。
 
-**Google Sheet 列定義**:
+**保存先**: `Path(__file__).parent.parent / "response.xlsx"`（プロジェクトルート）
+
+**暗号化**: `EXCEL_PASSWORD` が `st.secrets` に設定されている場合、`msoffcrypto` でパスワード保護した xlsx として保存する。未設定時は平文 xlsx。
+
+**列定義** (`RESPONSE_COLUMNS`):
 
 | 列名 | 説明 |
 |------|------|
@@ -1744,6 +1746,62 @@ Streamlit secrets から暗号化キーを取得する。
 | `responder_name` | 返信者の表示名 |
 | `response_text` | 返信内容 |
 | `responded_at` | 返信日時（ISO フォーマット） |
+
+### 関数リファレンス
+
+#### `load_responses()`
+
+`response.xlsx` から返信一覧を読み込む。セッション状態にキャッシュされている場合はキャッシュを返す。ファイルが存在しない場合は空 DataFrame を返す。
+
+**引数**: なし
+**戻り値**: `DataFrame`
+
+---
+
+#### `post_response(year_month, member_email, comment, responder_account, responder_name, response_text)`
+
+コメントへの返信を `response.xlsx` に追記する。既存データを読み込み、新行を結合して上書き保存する。
+
+| 引数 | 型 | 説明 |
+|------|----|------|
+| `year_month` | `str` | コメントの年月 |
+| `member_email` | `str` | コメント投稿者のメールアドレス |
+| `comment` | `str` | 元コメントのテキスト |
+| `responder_account` | `str` | 返信者のログインアカウント名 |
+| `responder_name` | `str` | 返信者の表示名 |
+| `response_text` | `str` | 返信内容 |
+
+**戻り値**: `bool` — 成功時 `True`、例外発生時 `False`（`st.error` でエラー表示）
+
+---
+
+#### `get_responses_for_comment(responses_df, year_month, member_email, comment)`
+
+`responses_df` から特定コメントに一致する返信を取得する。`year_month`・`member_email`・`comment` の 3 列で完全一致、`responded_at` 昇順でソート。
+
+**戻り値**: `DataFrame`
+
+---
+
+#### `make_comment_key(year_month, member_email, comment)`
+
+`"{year_month}|{member_email}|{comment}"` を MD5 ハッシュ化し先頭 10 文字を返す。Streamlit ウィジェットキーの重複防止用。
+
+**戻り値**: `str`（10 文字の 16 進数文字列）
+
+---
+
+## 14. modules/response_manager_cloud.py — 返信管理（クラウド）
+
+**役割**: Streamlit Cloud（Linux）実行時の返信管理。返信を Google Sheets に保存する。`response_manager_local.py` と同一の公開 API を持つ。
+
+**使用条件**: `sys.platform == "linux"` のとき `components.py` / `app.py` から自動選択される。
+
+**必要シークレット**:
+- `gcp_service_account`: Google サービスアカウント認証情報
+- `RESPONSE_SHEET_ID`: Google スプレッドシート ID
+
+**列定義**: `response_manager_local.py` と同一（`RESPONSE_COLUMNS`）
 
 ### 定数
 
@@ -1759,65 +1817,35 @@ Streamlit secrets から暗号化キーを取得する。
 Google Sheet から返信一覧を読み込む。セッション状態にキャッシュされている場合はキャッシュを返す。
 
 **引数**: なし
-**戻り値**: `DataFrame` — 全返信データ。シートが空の場合や読み込みエラーの場合は `RESPONSE_COLUMNS` を列とする空 DataFrame。
-
-**副作用**: 読み込み成功時はセッション状態の `"_response_cache"` に結果をキャッシュする。
+**戻り値**: `DataFrame` — シートが空またはエラー時は空 DataFrame。
 
 ---
 
 #### `post_response(year_month, member_email, comment, responder_account, responder_name, response_text)`
 
-コメントへの返信を Google Sheet に追記する。
+コメントへの返信を Google Sheet に追記する（`worksheet.append_row`）。成功時にセッションキャッシュを削除する。
 
-| 引数 | 型 | 説明 |
-|------|----|------|
-| `year_month` | `str` | コメントの年月（例: `"2026-03"`） |
-| `member_email` | `str` | コメント投稿者のメールアドレス |
-| `comment` | `str` | 元コメントのテキスト |
-| `responder_account` | `str` | 返信者のログインアカウント名 |
-| `responder_name` | `str` | 返信者の表示名 |
-| `response_text` | `str` | 返信内容 |
-
-**動作**: `worksheet.append_row` で行を追記し、成功時にセッション状態のキャッシュ（`"_response_cache"`）を削除して次回アクセス時に再読み込みを強制する。
-
-**戻り値**: `bool` — 追記成功時は `True`、例外発生時は `False`（`st.error` でエラーを表示）
+**戻り値**: `bool`
 
 ---
 
 #### `get_responses_for_comment(responses_df, year_month, member_email, comment)`
 
-特定コメントに対する返信を取得する。
+`response_manager_local.py` と同一の実装。3 列完全一致・`responded_at` 昇順ソート。
 
-| 引数 | 型 | 説明 |
-|------|----|------|
-| `responses_df` | `DataFrame` | `load_responses` の出力 DataFrame |
-| `year_month` | `str` | コメントの年月 |
-| `member_email` | `str` | コメント投稿者のメールアドレス |
-| `comment` | `str` | 元コメントのテキスト |
-
-**動作**: `year_month`、`member_email`、`comment` の 3 列で完全一致するレコードを抽出し、`responded_at` の昇順でソートする。
-
-**戻り値**: `DataFrame`（`responses_df` が空の場合はそのまま返す）
+**戻り値**: `DataFrame`
 
 ---
 
 #### `make_comment_key(year_month, member_email, comment)`
 
-コメントを一意に識別するための MD5 ハッシュキーを生成する。Streamlit ウィジェットキーの重複を防ぐために使用する。
+`response_manager_local.py` と同一の実装。MD5 ハッシュ先頭 10 文字。
 
-| 引数 | 型 | 説明 |
-|------|----|------|
-| `year_month` | `str` | コメントの年月 |
-| `member_email` | `str` | コメント投稿者のメールアドレス |
-| `comment` | `str` | コメントのテキスト |
-
-**動作**: `"{year_month}|{member_email}|{comment}"` を UTF-8 エンコードして MD5 ハッシュ化し、先頭 10 文字を返す。
-
-**戻り値**: `str`（10 文字の 16 進数文字列）
+**戻り値**: `str`
 
 ---
 
-## 14. modules/member_loader.py — メンバーリスト読み込み
+## 15. modules/member_loader.py — メンバーリスト読み込み  <!-- (旧14) -->
 
 **行数**: 43 行
 **役割**: `config/members.yaml` からアクティブメンバーリストを読み込み、未記入者セクションに提供する。設定ファイルが存在しない場合は空 DataFrame を返してセクションをサイレントにスキップする。
@@ -1848,7 +1876,7 @@ Google Sheet から返信一覧を読み込む。セッション状態にキャ�
 
 ---
 
-## 15. modules/response_file_manager.py — レスポンスファイル管理
+## 16. modules/response_file_manager.py — レスポンスファイル管理
 
 **行数**: 80 行
 **役割**: パスワード保護された応答 Excel ファイルの保存・読み込みを提供する。ローカルスタンドアロン動作（`windows_config.py` 存在時）と Streamlit Cloud（`st.secrets` 使用時）の両方に対応する。
@@ -1933,10 +1961,11 @@ app.py
   │    ├─ modules/signal_processing.py
   │    ├─ modules/privilege_manager.py
   │    ├─ modules/auth.py
-  │    └─ modules/response_manager.py
+  │    └─ modules/response_manager_local.py  [darwin/win32]
+  │       modules/response_manager_cloud.py  [linux]
   ├─ modules/member_loader.py   （メンバーリスト読み込み）
   ├─ modules/encryption.py      （暗号化）
-  └─ modules/response_manager.py（返信管理）
+  └─ modules/response_manager_local.py / response_manager_cloud.py（返信管理・sys.platform で自動選択）
 ```
 
 ---

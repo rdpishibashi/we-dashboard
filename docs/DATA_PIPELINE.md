@@ -153,7 +153,7 @@ Layer 2: サイドバースコープ
                 │
                 ▼
 Layer 3: カスケードフィルター
-         部門 → 職位 → 部署 → 課 → チーム → プロジェクト → 個人
+         部門 → 部署 → 課 → チーム → プロジェクト → 職位 → 個人
          (filter_helpers.py)
                 │
                 ▼
@@ -175,11 +175,11 @@ Layer 5: グルーピングスコープ
 
 ```
 部門
- └─ 職位
-      └─ 部署
-           └─ 課
-                └─ チーム
-                     └─ プロジェクト
+ └─ 部署
+      └─ 課
+           └─ チーム
+                └─ プロジェクト
+                     └─ 職位
                           └─ 個人
 ```
 
@@ -208,14 +208,33 @@ filtered_signal_df = scoped_signal_df[
 
 ### コメントデータのフィルタリング
 
-comment_df は自己完結型であり、独自の組織列を保持している。メインデータ (pivot_df / signal_df) との結合は不要。
+comment_df のフィルタリングは 2 段階で行われる。
+
+**① アプリレベル（app.py）— サイドバー組織フィルターの適用**
+
+サイドバーで選択した部門・部署・課等の条件を反映するため、sidebar フィルター適用済みの `filtered_df` の `mail_address` を使って絞り込む。
 
 ```python
-graph_comments['section'] = graph_comments['current_section'].fillna('未設定')
-graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
+valid_mail_addresses = filtered_df['mail_address'].dropna().unique()
+filtered_comment_df = filtered_comment_df[
+    filtered_comment_df['mail_address'].isin(valid_mail_addresses)
+]
 ```
 
-comment_df に対して直接 `filter_dataframe_by_scope()` を適用することで、表示スコープと一致するコメントのみを取得する。
+**② タブレベル（components.py / prepare_comment_data）— 権限スコープの適用**
+
+comment_df は独自の組織列（`current_section` 等）を持つ自己完結型データ。権限スコープの適用には `filter_dataframe_by_scope()` を使い、`mail_address` による結合は行わない。
+
+```python
+# current_* 列を標準名にマッピング
+# section NaN = 課未所属（部署長）→ '部門長' で補完（'未設定' ではない）
+graph_comments['section'] = graph_comments['current_section'].fillna('部門長')
+graph_comments['department'] = graph_comments['current_department'].fillna('未設定')
+graph_comments['division'] = graph_comments['current_division'].fillna('未設定')
+
+# filter_dataframe_by_scope は division/department/section 全列をチェック
+graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
+```
 
 ---
 
