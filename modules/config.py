@@ -60,7 +60,8 @@ SIGNAL_LABELS = {
     'trend_base': '中期傾向',
     'trend_refined': '総合傾向',
     'big_change': '短期変動',
-    'mid_variability': '中期変動性',
+    'mid_variability': '変動パターン',
+    'stability_6': '中期安定性',
     'engagement_rating': 'エンゲージメント',
     'vigor_rating': '活力',
     'dedication_rating': '熱意',
@@ -82,11 +83,11 @@ FLAG_CONSTANT_LABELS = {
 
 # Level value mapping (English → Japanese)
 LEVEL_LABELS = {
-    'Critical': '低調',
-    'Low': 'やや低調',
+    'Critical': '要注意',
+    'Low': '低調',
     'Moderate': '標準',
     'High': '良好',
-    'Thriving': '非常に良好',
+    'Thriving': '充実',
 }
 
 # Rating axis maximum
@@ -97,10 +98,10 @@ POSITIVE_TRENDS = ['上昇加速', '上昇継続', '回復期待', '回復', '�
 NEGATIVE_TRENDS = ['低下懸念', '悪化', '低下危機', '低下加速', '低下継続', '低下警戒', '下降']
 
 # Signal table display columns
-SIGNAL_TABLE_COLUMNS = ['name', 'section', 'intervention_priority', 'trend_recent', 'trend_base', 'trend_refined', 'big_change', 'mid_variability', 'flag_constant_6m']
+SIGNAL_TABLE_COLUMNS = ['name', 'section', 'intervention_priority', 'trend_recent', 'trend_base', 'trend_refined', 'big_change', 'mid_variability', 'stability_6', 'flag_constant_6m']
 INDIVIDUAL_SIGNAL_COLUMNS = [
     'intervention_priority', 'level', 'trend_recent',
-    'trend_base', 'trend_refined', 'big_change', 'mid_variability', 'flag_constant_6m',
+    'trend_base', 'trend_refined', 'big_change', 'mid_variability', 'stability_6', 'flag_constant_6m',
     'strength_short', 'weakness_short', 'strength_mid', 'weakness_mid'
 ]
 

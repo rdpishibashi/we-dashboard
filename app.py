@@ -265,9 +265,11 @@ if uploaded_file is not None:
         max_dt = available_months[-1].to_pydatetime()
 
         # Initialize or reset period filter
-        if "filter_period" not in st.session_state:
-            st.session_state["filter_period"] = default_period
-        elif st.session_state.get("reset_period_filter", False):
+        # Both cases (key missing and reset flag set) use the same default — combine
+        # them so the flag is always consumed on first authenticated render, preventing
+        # it from surviving to the next rerun and resetting the slider after the user's
+        # first interaction.
+        if "filter_period" not in st.session_state or st.session_state.get("reset_period_filter", False):
             st.session_state["filter_period"] = default_period
             st.session_state["reset_period_filter"] = False
         else:
@@ -923,6 +925,36 @@ if uploaded_file is not None:
                 individual_mail_lookup = df[df['name'] == selected_individual]
                 individual_mail = individual_mail_lookup['mail_address'].iloc[0] if not individual_mail_lookup.empty and 'mail_address' in individual_mail_lookup.columns else None
 
+                # Profile section (above 計測値)
+                with st.expander("プロフィール", expanded=False):
+                    profile_row = tab_signal_df[
+                        (tab_signal_df['name'] == selected_individual) &
+                        (tab_signal_df['year_month_dt'] == end_dt)
+                    ]
+                    if profile_row.empty:
+                        # Fall back to latest available record for this individual
+                        profile_row = tab_signal_df[
+                            tab_signal_df['name'] == selected_individual
+                        ].sort_values('year_month_dt', ascending=False)
+
+                    if not profile_row.empty:
+                        pr = profile_row.iloc[0]
+                        profile_fields = [
+                            ('部門',       pr.get('division',   '')),
+                            ('部署',       pr.get('department', '')),
+                            ('課',         pr.get('section',    '')),
+                            ('チーム',     pr.get('team',       '')),
+                            ('プロジェクト', pr.get('project',   '')),
+                            ('職位',       pr.get('grade',      '')),
+                        ]
+                        profile_df = pd.DataFrame(
+                            [(k, str(v) if pd.notna(v) and v != '' else '-') for k, v in profile_fields],
+                            columns=['項目', '値']
+                        )
+                        st.dataframe(profile_df, **DATAFRAME_KWARGS)
+                    else:
+                        st.info("プロフィール情報がありません")
+
                 # Key Indicators section - Wave data table (collapsible)
                 with st.expander("計測値", expanded=False):
                     wave_data = ind_data.sort_values('year_month_dt')[
@@ -946,13 +978,68 @@ if uploaded_file is not None:
 
                     st.dataframe(wave_data, **DATAFRAME_KWARGS)
 
+                # Signal section (between 計測値 and コメント)
+                st.subheader("シグナル")
+
+                try:
+                    individual_signal = tab_signal_df[
+                        (tab_signal_df['name'] == selected_individual) &
+                        (tab_signal_df['year_month_dt'] == end_dt)
+                    ]
+
+                    if individual_signal.empty:
+                        st.info(f"{end_dt.strftime('%Y-%m')}のシグナルデータがありません")
+                    else:
+                        if len(individual_signal) > 1:
+                            st.warning(f"注意: {selected_individual}の{end_dt.strftime('%Y-%m')}データが{len(individual_signal)}件あります。最初のレコードを表示しています。")
+
+                        individual_signal = apply_signal_rating_calculations(individual_signal)
+
+                        display_signal_t, priority_is_neg = format_individual_signal_data(individual_signal)
+
+                        # Apply red/green color to 介入必要度 row (skip when value is ０)
+                        priority_color = 'color: red' if priority_is_neg else 'color: green'
+                        priority_label = SIGNAL_LABELS.get('intervention_priority', '介入必要度')
+
+                        def style_individual_signal(df):
+                            styles = pd.DataFrame('', index=df.index, columns=df.columns)
+                            if priority_label in df.index:
+                                val = str(df.loc[priority_label, '値']).strip()
+                                if val != '０':
+                                    styles.loc[priority_label] = priority_color
+                            return styles
+
+                        styled_signal = display_signal_t.style.apply(style_individual_signal, axis=None)
+                        # height=510 shows all 13 rows without scrolling (13×35px + 38px header)
+                        st.dataframe(
+                            styled_signal,
+                            column_config={
+                                "Index": st.column_config.TextColumn(
+                                    "Index",
+                                    width="large"
+                                )
+                            },
+                            hide_index=False,
+                            height=510,
+                            width=DATAFRAME_KWARGS.get("width")
+                        )
+
+                except Exception as e:
+                    st.error(f"シグナルデータの取得に失敗しました: {e}")
+
+                # Comment section
                 if individual_mail:
                     individual_comments = filtered_comment_df[
                         (filtered_comment_df['mail_address'] == individual_mail)
                     ].copy()
 
-                    # Concern section
-                    if privilege_mgr.has_feature_access(current_privilege, "気になった出来事や気づき"):
+                    has_concern = privilege_mgr.has_feature_access(current_privilege, "気になった出来事や気づき")
+                    has_share = privilege_mgr.has_feature_access(current_privilege, "幹部職に伝えたいこと")
+
+                    if has_concern or has_share:
+                        st.subheader("コメント")
+
+                    if has_concern:
                         with st.expander("気になった出来事や気づき", expanded=False):
                             concern_period = st.radio(
                                 "表示期間",
@@ -973,8 +1060,7 @@ if uploaded_file is not None:
                             else:
                                 st.info("データがありません")
 
-                    # Comment section
-                    if privilege_mgr.has_feature_access(current_privilege, "幹部職に伝えたいこと"):
+                    if has_share:
                         with st.expander("幹部職に伝えたいこと", expanded=False):
                             share_period = st.radio(
                                 "表示期間",
@@ -1021,83 +1107,6 @@ if uploaded_file is not None:
                                     st.divider()
                             else:
                                 st.info("データがありません")
-
-                    # Profile section (immediately after 幹部職に伝えたいこと)
-                    with st.expander("プロフィール", expanded=False):
-                        profile_row = tab_signal_df[
-                            (tab_signal_df['name'] == selected_individual) &
-                            (tab_signal_df['year_month_dt'] == end_dt)
-                        ]
-                        if profile_row.empty:
-                            # Fall back to latest available record for this individual
-                            profile_row = tab_signal_df[
-                                tab_signal_df['name'] == selected_individual
-                            ].sort_values('year_month_dt', ascending=False)
-
-                        if not profile_row.empty:
-                            pr = profile_row.iloc[0]
-                            profile_fields = [
-                                ('部門',       pr.get('division',   '')),
-                                ('部署',       pr.get('department', '')),
-                                ('課',         pr.get('section',    '')),
-                                ('チーム',     pr.get('team',       '')),
-                                ('プロジェクト', pr.get('project',   '')),
-                                ('職位',       pr.get('grade',      '')),
-                            ]
-                            profile_df = pd.DataFrame(
-                                [(k, str(v) if pd.notna(v) and v != '' else '-') for k, v in profile_fields],
-                                columns=['項目', '値']
-                            )
-                            st.dataframe(profile_df, **DATAFRAME_KWARGS)
-                        else:
-                            st.info("プロフィール情報がありません")
-
-                # Signal section
-                st.subheader("シグナル")
-
-                try:
-                    individual_signal = tab_signal_df[
-                        (tab_signal_df['name'] == selected_individual) &
-                        (tab_signal_df['year_month_dt'] == end_dt)
-                    ]
-
-                    if individual_signal.empty:
-                        st.info(f"{end_dt.strftime('%Y-%m')}のシグナルデータがありません")
-                    else:
-                        if len(individual_signal) > 1:
-                            st.warning(f"注意: {selected_individual}の{end_dt.strftime('%Y-%m')}データが{len(individual_signal)}件あります。最初のレコードを表示しています。")
-
-                        individual_signal = apply_signal_rating_calculations(individual_signal)
-
-                        display_signal_t, priority_is_neg = format_individual_signal_data(individual_signal)
-
-                        # Apply red/green color to 介入必要度 row (skip when value is ０)
-                        priority_color = 'color: red' if priority_is_neg else 'color: green'
-                        priority_label = SIGNAL_LABELS.get('intervention_priority', '介入必要度')
-
-                        def style_individual_signal(df):
-                            styles = pd.DataFrame('', index=df.index, columns=df.columns)
-                            if priority_label in df.index:
-                                val = str(df.loc[priority_label, '値']).strip()
-                                if val != '０':
-                                    styles.loc[priority_label] = priority_color
-                            return styles
-
-                        styled_signal = display_signal_t.style.apply(style_individual_signal, axis=None)
-                        st.dataframe(
-                            styled_signal,
-                            column_config={
-                                "Index": st.column_config.TextColumn(
-                                    "Index",
-                                    width="large"
-                                )
-                            },
-                            hide_index=False,
-                            width=DATAFRAME_KWARGS.get("width")
-                        )
-
-                except Exception as e:
-                    st.error(f"シグナルデータの取得に失敗しました: {e}")
 
         # =============================================================
         # 分布 Tab

@@ -225,8 +225,8 @@ def format_signal_display_columns(df):
         df['intervention_priority'] = df['intervention_priority'].apply(_fmt_priority_table)
     if 'flag_constant_6m' in df.columns:
         df['flag_constant_6m'] = df['flag_constant_6m'].apply(_fmt_flag_constant)
-    # 短期変動(big_change) は空/None を "-" 表示に。中期変動性(mid_variability) も空は "-"。
-    for col in ['big_change', 'mid_variability']:
+    # 短期変動(big_change)・変動パターン(mid_variability)・中期安定性(stability_6) の空値を "-" に
+    for col in ['big_change', 'mid_variability', 'stability_6']:
         if col in df.columns:
             df[col] = df[col].apply(_dash_if_empty)
     return df
@@ -265,8 +265,8 @@ def format_individual_signal_data(signal_data):
                 lambda x: str(x) if pd.notna(x) else "-"
             )
 
-    # 短期変動(big_change) / 中期変動性(mid_variability): 空・None も "-" に
-    for col in ['big_change', 'mid_variability']:
+    # 短期変動(big_change)・変動パターン(mid_variability)・中期安定性(stability_6): 空・None も "-" に
+    for col in ['big_change', 'mid_variability', 'stability_6']:
         if col in display_signal.columns:
             display_signal[col] = display_signal[col].apply(_dash_if_empty)
 
@@ -335,10 +335,17 @@ def render_signal_table(signals, display_cols, key=None):
 
     effective_key = f"{key}_v{version}" if key else key
 
+    big_change_label = SIGNAL_LABELS['big_change']
+    stability_label = SIGNAL_LABELS['stability_6']
+    flag_label = SIGNAL_LABELS['flag_constant_6m']
+
     event = st.dataframe(
         styled_df,
         column_config={
-            priority_label: st.column_config.TextColumn(priority_label, width="small")
+            priority_label: st.column_config.TextColumn(priority_label, width="small"),
+            big_change_label: st.column_config.TextColumn(big_change_label, width=90),
+            stability_label: st.column_config.TextColumn(stability_label, width="small"),
+            flag_label: st.column_config.TextColumn(flag_label, width=150),
         },
         on_select="rerun",
         selection_mode="single-row",
@@ -353,7 +360,7 @@ def render_signal_table(signals, display_cols, key=None):
         if row_idx < len(signals_indexed) and 'name' in signals_indexed.columns:
             selected_name = signals_indexed.at[row_idx, 'name']
 
-    col1, col2, _ = st.columns([27, 27, 26])
+    col1, col2, col3 = st.columns([27, 27, 26])
     with col1:
         with st.popover("介入必要度について"):
             st.markdown(
@@ -381,6 +388,28 @@ def render_signal_table(signals, display_cols, key=None):
                 "| 下降継続 | 下降傾向が継続している |\n"
                 "| 下降加速 | 下降傾向の中、急激に落ち込んでいる |\n"
                 "| 安定維持 | 安定した状態を維持している |"
+            )
+    with col3:
+        with st.popover("変動パターン・中期安定性について"):
+            st.markdown(
+                "**変動パターン**: 過去6ヶ月の自分自身の変動履歴を基準として、"
+                "スコアの方向性（上昇・下降・横ばい）と波動性（行ったり来たりの繰り返し）を組み合わせたパターン。\n\n"
+                "| **変動パターン** | **説明** |\n"
+                "| --- | --- |\n"
+                "| 安定 | 方向性も波動もなく横ばい |\n"
+                "| 波動なし上昇 | 一方向にスムーズに上昇 |\n"
+                "| 波動なし下降 | 一方向にスムーズに下降 |\n"
+                "| 波動あり上昇 | 行き来しながら上昇傾向 |\n"
+                "| 波動あり下降 | 行き来しながら下降傾向 |\n"
+                "| 波動あり横ばい | 行き来しながら水準は変わらず |\n\n"
+                "**中期安定性**: 過去6ヶ月のスコア変動幅が組織標準値と比べて大きいか小さいかを示す。"
+                "「不安定」は変動幅が大きく、スコアに大きな浮き沈みがあったことを意味する。\n\n"
+                "| **中期安定性** | **説明** |\n"
+                "| --- | --- |\n"
+                "| 安定 | 変動幅が小さく安定 |\n"
+                "| やや安定 | 変動幅は普通 |\n"
+                "| 不安定 | 変動幅が大きく浮き沈みあり |\n"
+                "| 不変 | 変化がほぼなし（調査抵抗の疑い） |"
             )
 
     return selected_name

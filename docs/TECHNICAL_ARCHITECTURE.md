@@ -784,6 +784,11 @@ google-auth>=2.0.0   # Google認証
 | 2026-05-08 | シグナル列追加・改名: `trend_base`（中期傾向）を `trend_recent` と `trend_refined` の間に追加。`trend_refined` の表示名を「中期傾向」→「総合傾向」に変更。`SIGNAL_TABLE_COLUMNS` / `INDIVIDUAL_SIGNAL_COLUMNS` / `SIGNAL_LABELS` / `calculate_group_statistics` のトレンド列マージ処理をすべて更新 |
 | 2026-05-08 | アクション対象候補テーブルからの個人タブナビゲーション機能を実装。`render_signal_table` に `on_select="rerun"` / `selection_mode="single-row"` / `key` を追加し選択氏名を返すように変更。`render_action_candidates` に `key_prefix` を追加（複数タブでの ID 衝突防止）。ナビゲーション状態管理に `_nav_individual`・`_last_{key_prefix}_selection`・`_clear_action_selection`・`_signal_tables_version` の 4 セッションステートキーを導入。Streamlit 最低バージョンを 1.35.0 に引き上げ |
 | 2026-05-09 | 返信管理のバックエンドを環境自動判別方式に変更。`response_manager.py` を `response_manager_cloud.py` に改名し、`response_manager_local.py`（Mac/Windows・Excel保存）を新規追加。`sys.platform` で `darwin`/`win32` の場合はローカルExcel（`response.xlsx`）、`linux`（Streamlit Cloud）の場合は Google Sheets を使用。追加設定・secrets.toml の変更不要で自動切替。`WE-Dashboard-Windows` も同構成に統一（`response_manager_windows.py` 廃止） |
+| 2026-06-02 | 期間スライダー初回リセットバグ修正: ログイン時に `reset_period_filter=True` が設定された後、初回認証済みリランで `filter_period` がセッション状態にない場合に `if` ブランチが実行されフラグが消費されないことで、最初のスライダー操作後にリセットが発生する問題を修正。`if not in state` と `elif reset_period_filter` を単一条件に統合しフラグを常時消費するよう変更 |
+| 2026-06-02 | シグナル表示列更新: `mid_variability` の表示名を「中期変動性」→「変動パターン」に変更（`SIGNAL_LABELS`）。`stability_6`（中期安定性）を `SIGNAL_TABLE_COLUMNS` / `INDIVIDUAL_SIGNAL_COLUMNS` / `SIGNAL_LABELS` に追加し、アクション対象候補・シグナルテーブルおよび個人タブのシグナル表示に復活 |
+| 2026-06-02 | `LEVEL_LABELS` 更新: Critical→「要注意」、Low→「低調」、Moderate→「標準」、High→「良好」、Thriving→「充実」。以前の婉曲表現（低調/やや低調/非常に良好）から直接的な表現に変更 |
+| 2026-06-02 | アクション対象候補テーブル列幅設定: `render_signal_table` の column_config に `短期変動`（width=90）・`中期安定性`（width="small"）・`調査抵抗疑義`（width=150）を追加。ポップオーバーを 3 列構成に変更し「変動パターン・中期安定性について」を追加 |
+| 2026-06-02 | 個人タブレイアウト再構成: 表示順序を「プロフィール（expander）→ 計測値（expander）→ シグナル → コメント（タイトル）→ 気になった出来事や気づき → 幹部職に伝えたいこと」に変更。プロフィールを `if individual_mail:` ブロック外に移動。シグナル表示に `height=510` を設定し全 13 行をスクロールなしで表示。コメントセクション前に `st.subheader("コメント")` を追加（他タブと統一） |
 
 ---
 
