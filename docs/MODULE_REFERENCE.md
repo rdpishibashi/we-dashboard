@@ -1,6 +1,6 @@
 # WE-Dashboard モジュール API リファレンス
 
-> 最終更新: 2026-05-09
+> 最終更新: 2026-06-02
 
 本ドキュメントは WE-Dashboard アプリケーションを構成する全モジュールの関数レベルリファレンスです。
 各関数のシグネチャ・引数・戻り値・動作仕様を網羅的に記載します。
@@ -30,7 +30,7 @@
 
 ## 1. app.py — メインアプリケーション
 
-**行数**: 約 1,013 行
+**行数**: 約 1,269 行
 **役割**: Streamlit アプリのエントリポイント。UI 全体の構成、タブ表示、セッション状態管理を担当する。
 
 ### アプリケーションフロー
@@ -58,7 +58,7 @@
 | カテゴリ比較 | `group_comparison` | グループ間比較棒グラフ、レーダーチャート、統計、シグナル・コメント |
 | 評価 | `evaluation` | 評価バンド積み上げグラフ、計測値セクション（グルーピング別） |
 | 分布 | `distribution` | ボックスプロット、統計テーブル |
-| 個人 | `individual` | 個人推移グラフ、プロフィールセクション、シグナル詳細、コメント（認証ユーザーのみ） |
+| 個人 | `individual` | 個人推移グラフ、プロフィール（expander）、計測値（expander）、シグナル（全行固定表示）、コメント（気になった出来事・幹部職に伝えたいこと）（認証ユーザーのみ） |
 
 ### セッション状態キー一覧
 
@@ -340,7 +340,7 @@ ORG_FILTER_COLUMNS = ['division', 'department', 'section']
 
 #### `SIGNAL_LABELS`
 
-シグナル列名と日本語表示名のマッピング（18 項目）。
+シグナル列名と日本語表示名のマッピング（19 項目）。
 
 | キー | 表示名 |
 |------|--------|
@@ -352,6 +352,7 @@ ORG_FILTER_COLUMNS = ['division', 'department', 'section']
 | `trend_base` | 中期傾向 |
 | `trend_refined` | 総合傾向 |
 | `big_change` | 短期変動 |
+| `mid_variability` | 変動パターン |
 | `stability_6` | 中期安定性 |
 | `flag_constant_6m` | 調査抵抗疑義 |
 | `engagement_rating` | エンゲージメント |
@@ -380,11 +381,11 @@ ORG_FILTER_COLUMNS = ['division', 'department', 'section']
 
 | キー | 表示名 |
 |------|--------|
-| `Critical` | 低調 |
-| `Low` | やや低調 |
+| `Critical` | 要注意 |
+| `Low` | 低調 |
 | `Moderate` | 標準 |
 | `High` | 良好 |
-| `Thriving` | 非常に良好 |
+| `Thriving` | 充実 |
 
 ### トレンド分類定数
 
@@ -774,7 +775,7 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 |------|----|------|
 | `df` | `DataFrame` | 生値を含むシグナル DataFrame |
 
-**動作**: `intervention_priority` 列の数値を全角数字（例: `２`）に変換する。`flag_constant_6m` 列が存在する場合は `FLAG_CONSTANT_LABELS` で日本語表示名に変換する（未マッチまたは空の場合は `"-"`）。`NaN` の場合は `"-"` を設定する。
+**動作**: `intervention_priority` 列の数値を全角数字（例: `２`）に変換する。`flag_constant_6m` 列が存在する場合は `FLAG_CONSTANT_LABELS` で日本語表示名に変換する（未マッチまたは空の場合は `"-"`）。`big_change`・`mid_variability`・`stability_6` 列の空値・`NaN` を `"-"` に変換する。
 
 **戻り値**: `DataFrame`
 
@@ -797,8 +798,8 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 - `on_select="rerun"` / `selection_mode="single-row"` で行選択を有効化する（Streamlit ≥ 1.35 必須）。
 - `_signal_tables_version` カウンターを key サフィックスに付加し、フラグ（`_clear_action_selection`）が立っている場合はカウンターをインクリメントして選択状態をリセットする。
 - 行インデックスが現在の DataFrame 範囲外の場合（フィルター変更後など）は選択なし扱いにする。
-- column_config は内部で生成する（`介入必要度` 列を TextColumn として定義）。
-- テーブル下部に「介入必要度について」「総合傾向について」の popover を表示する。
+- column_config は内部で生成する（`介入必要度` → `width="small"`、`短期変動` → `width=90`、`中期安定性` → `width="small"`、`調査抵抗疑義` → `width=150`）。
+- テーブル下部に「介入必要度について」「総合傾向について」「変動パターン・中期安定性について」の popover を 3 列で表示する。
 
 **戻り値**: `str | None`（選択された行の氏名。選択なし・範囲外の場合は `None`）
 
@@ -832,9 +833,10 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 2. 強み・弱みテキストを `replace_abbreviations` で展開する。
 3. `intervention_priority` を全角数字 + `"(negative)"` または `"(positive)"` サフィックスでフォーマットする（値が 0 の場合はサフィックスなし）。
 4. `level` を `LEVEL_LABELS` で日本語に変換する。
-5. `flag_constant_6m` を `FLAG_CONSTANT_LABELS` で日本語表示名に変換する（未マッチまたは空の場合は `"-"`）。
-6. その他列を文字列フォーマットし、`NaN` を `"-"` に変換する。
-7. DataFrame を転置し、インデックスを `SIGNAL_LABELS` で日本語にリネームする。
+5. `big_change`・`mid_variability`・`stability_6` の空値・`NaN` を `"-"` に変換する。
+6. `flag_constant_6m` を `FLAG_CONSTANT_LABELS` で日本語表示名に変換する（未マッチまたは空の場合は `"-"`）。
+7. その他列を文字列フォーマットし、`NaN` を `"-"` に変換する。
+8. DataFrame を転置し、インデックスを `SIGNAL_LABELS` で日本語にリネームする。
 
 **戻り値**: `Tuple[DataFrame, bool]`
 - `DataFrame`: 転置済み表示用 DataFrame（列名: `"値"`）

@@ -116,7 +116,9 @@ config/privileges.yaml              ← 生成済み設定（直接編集不可�
 | vigor/dedication/absorption_rating (0-18) | 構成要素生スコア |
 | intervention_priority_neg/pos | 介入優先度（neg は Admin GAS で flag ボーナス込み） |
 | trend_recent, trend_base, trend_refined | トレンドシグナル |
-| big_change, stability_6 | 短期変動・中期安定性 |
+| big_change | 短期変動 |
+| direction_6_p90, volatility_6_p90 | 変動パターン計算元（合成 → `mid_variability`） |
+| stability_6 | 中期安定性 |
 | flag_constant_6m | 調査抵抗疑義フラグ |
 | strength_short/mid, weakness_short/mid | 強み・弱み |
 
@@ -207,18 +209,29 @@ else:
 | カテゴリ比較 | group_comparison | グループ比較棒グラフ、レーダー、統計、シグナル・コメント |
 | 評価 | evaluation | 評価バンド積み上げグラフ、計測値セクション |
 | 分布 | distribution | ボックスプロット、統計テーブル |
-| 個人 | individual | 個人推移グラフ、プロフィール、シグナル詳細、コメント |
+| 個人 | individual | 個人推移グラフ、プロフィール（expander）、計測値（expander）、シグナル（全行固定表示）、コメント |
 
 認証済み: 5 タブ / 未認証: 個人タブなし（4 タブ）
 
-### タブ内セクション
+### タブ内セクション（時系列・カテゴリ比較・評価・分布）
 
 - 計測値（expander）— 計測データテーブル
 - 主な指標（expander）— 統計サマリー
 - アクション対象候補 — シグナルテーブル（行選択→個人タブナビゲーション対応）
+- **コメント**（subheader）
 - 気になった出来事や気づき — 懸念事項（admin のみ）
 - 共有したいこと — コメントと返信
 - 未記入者（expander）— 未記入者リスト（管理職のみ）
+
+### 個人タブ セクション順序
+
+1. 推移グラフ
+2. **プロフィール**（expander）— 部門・部署・課・チーム・プロジェクト・職位
+3. **計測値**（expander）— 月次評価値テーブル
+4. **シグナル**（subheader）— 個人シグナル詳細（`height=510` で全 13 行スクロールなし固定表示）
+5. **コメント**（subheader、権限がある場合のみ表示）
+6. 気になった出来事や気づき（expander）
+7. 幹部職に伝えたいこと（expander）
 
 ## 実装ルール
 
