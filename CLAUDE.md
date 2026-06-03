@@ -373,6 +373,7 @@ leave ステータスは `config/members.yaml` から取得（Admin GAS が `cur
 | 部署全体が非表示 | `exclude_sections` で未設定を除外 | `exclude_sections` は無効化済み |
 | section_manager が部門長コメントを見れない | 課スコープでは `section='部門長'` が除外される | `計測値`スコープで部門長行を別取得して結合 |
 | グラフ幅が効かない | `use_container_width` は削除済み | `PLOTLY_CHART_KWARGS` / `DATAFRAME_KWARGS` を使う |
+| グラフに「未設定」が出るのにフィルター選択肢に無い | `get_cascaded_options` が課/チーム/プロジェクトで `remove_unset=True` | `filter_helpers.py:131` の除外リストに `'section','team','project'` を含めない（`['grade','section','team','project']`）。data_loader が NaN を `'未設定'` に fillna 済みなので選択肢に残せばグラフと整合 |
 
 ## セッション状態キー（主要なもの）
 
