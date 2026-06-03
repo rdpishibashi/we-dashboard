@@ -192,7 +192,7 @@ else:
 1. ログイン（expander）
 2. 期間（スライダー）
 3. 表示指標（selectbox）
-4. 表示カテゴリ（grouping selectbox）
+4. 表示カテゴリ（grouping selectbox）※ ログイン直後の既定は「課別」(section)。`section` 非許可の権限は先頭(`なし`)にフォールバック。初期値はウィジェット生成前に `unified_grouping` を session_state に設定（`key=`+`index=` 併用回避）
 5. 転属・退職メンバーを含む（checkbox）※ leave_addresses がある場合のみ
 ── separator ──
 6. フィルター設定（expander、デフォルト折り畳み）:
