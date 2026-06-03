@@ -321,13 +321,17 @@ if uploaded_file is not None:
         from modules.config import GROUPING_LABEL_MAP
         _cleaned_grouping_opts = list(dict.fromkeys(base_grouping_options or ['なし'])) or ['なし']
         _grouping_key = 'unified_grouping'
-        _grouping_default_idx = 0
-        if _grouping_key in st.session_state and st.session_state[_grouping_key] in _cleaned_grouping_opts:
-            _grouping_default_idx = _cleaned_grouping_opts.index(st.session_state[_grouping_key])
+        # 表示カテゴリの初期値をウィジェット生成前に設定する（key= と index= の併用警告を回避）。
+        # ログイン直後は reset_filters() が unified_grouping を削除するため、ここでキーが無い。
+        # その場合は「課別」(section) を既定にする。section が許可されていない権限、または
+        # 保存値が現在の選択肢に無い場合は先頭にフォールバック。
+        if _grouping_key not in st.session_state or st.session_state[_grouping_key] not in _cleaned_grouping_opts:
+            st.session_state[_grouping_key] = (
+                'section' if 'section' in _cleaned_grouping_opts else _cleaned_grouping_opts[0]
+            )
         unified_grouping = st.sidebar.selectbox(
             "表示カテゴリ",
             _cleaned_grouping_opts,
-            index=_grouping_default_idx,
             format_func=lambda x: GROUPING_LABEL_MAP.get(x, x),
             key=_grouping_key
         )
