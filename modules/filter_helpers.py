@@ -128,7 +128,10 @@ def get_cascaded_options(
     col = column_map[filter_type]
 
     # Get raw options from current df state (already filtered by parents and scope)
-    remove_unset = filter_type not in ['grade']  # Keep "未設定" for grade
+    # Keep "未設定" for grade and for the dimension filters (課/チーム/プロジェクト) so
+    # the dropdowns match the chart categories — グラフ側 (data_loader が NaN を '未設定' に
+    # fillna) は「未設定」をカテゴリとして表示するため、選択肢にも残す。
+    remove_unset = filter_type not in ['grade', 'section', 'team', 'project']
     options = get_options(df[col], remove_unset=remove_unset, order_key=filter_type)
 
     # Remove empty strings (data quality)
