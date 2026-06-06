@@ -110,7 +110,7 @@ GROUP_ORDER_FILE = Path(__file__).parent.parent / 'group_order_config.json'
 
 # Intervention priority threshold: rows with _neg or _pos > this value are shown;
 # displayed value = raw value - this threshold (so minimum displayed is 1)
-INTERVENTION_PRIORITY_THRESHOLD = 2
+INTERVENTION_PRIORITY_THRESHOLD = 1
 
 # Rating calculation constants
 ENGAGEMENT_DIVISOR = 5.4
