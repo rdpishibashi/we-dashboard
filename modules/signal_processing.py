@@ -105,10 +105,12 @@ def derive_intervention_priority(df):
       computed by Admin GAS before writing to rating2 sheet.
       The Dashboard does NOT add any flag bonus — flag_constant_6m is display-only here.
     - intervention_priority_pos has no flag adjustment.
-    - When neg qualifies (> threshold), it takes precedence over pos.
-    - When neither qualifies, _priority_is_neg defaults to True and the displayed
-      value will be ≤ 0 (clamped to ０ in display formatters).
-    - Displayed value = (neg or pos) − threshold.
+    - Side decision is by magnitude: the larger of neg/pos wins. On a tie
+      (neg == pos, including 0 == 0) neg takes precedence. This keeps the
+      red/green side consistent with the engagement graph — a person whose
+      positive score clearly exceeds the negative one is shown on the green
+      (positive) side instead of being forced to red.
+    - Displayed value = (winning side) − threshold.
 
     Returns the input DataFrame with two new columns:
       intervention_priority  – numeric score ready for display formatting
@@ -119,10 +121,7 @@ def derive_intervention_priority(df):
     pos = df['intervention_priority_pos'].fillna(0)
     threshold = INTERVENTION_PRIORITY_THRESHOLD
 
-    neg_qualifies = neg > threshold
-    pos_qualifies = pos > threshold
-
-    df['_priority_is_neg']     = neg_qualifies | (~pos_qualifies)
+    df['_priority_is_neg']     = neg >= pos
     df['intervention_priority'] = neg.where(df['_priority_is_neg'], pos) - threshold
     return df
 

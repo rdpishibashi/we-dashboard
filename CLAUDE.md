@@ -344,7 +344,8 @@ tab_signal_df = tab_signal_df[tab_signal_df['name'].isin(tab_df['name'].unique()
 
 - `intervention_priority_neg` には Admin GAS が `flag_constant_6m` ボーナスを含めて計算済み
 - Dashboard では flag ボーナスを**加算しない**（二重計上になる）
-- 表示値 = `(neg または pos) - threshold`、`flag_constant_6m` はラベル表示専用
+- 側（neg/pos）の判定は**大小比較**: `_priority_is_neg = neg >= pos`（大きい方が勝ち、同点は neg 優先）。エンゲージメントグラフと赤/緑の側を一致させるため
+- 表示値 = `(勝った側) - threshold`、`flag_constant_6m` はラベル表示専用。足切り（`neg > threshold or pos > threshold`）は `get_signal_data` で実施
 
 ### 転属・退職メンバーの leave ステータス
 

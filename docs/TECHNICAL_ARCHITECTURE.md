@@ -302,9 +302,9 @@ graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
 **介入優先度（intervention_priority）の計算:**
 
 1. **`intervention_priority_neg` には flag ボーナス込み**: Admin GAS が rating2 シートに書き込む時点で `flag_constant_6m` ボーナスを含めた値が生データとなる。Dashboard 側では flag ボーナスを加算しない。
-2. **足切り判定**: `neg_qualifies = neg > threshold`、`pos_qualifies = pos > threshold`。neg が閾値を超えた場合は pos よりも優先される。
-3. **どちらも不適格な場合は neg をデフォルト**: 表示値は ≤ 0 となり、フォーマット側で ０ にクランプされる。
-4. **表示値 = (neg または pos) − threshold**: `flag_constant_6m` はラベル表示専用で計算には影響しない。
+2. **側（neg/pos）の判定は大小比較**: `_priority_is_neg = neg >= pos`。大きい方が勝ち、同点（neg == pos、0 == 0 を含む）は neg を優先。これによりエンゲージメントグラフと色（赤=neg / 緑=pos）の側が一致する（pos が neg を明確に上回る人を赤に倒さない）。
+3. **足切りはアクション対象候補の抽出側で実施**: シグナルテーブルに載るのは `neg > threshold` または `pos > threshold` の行（`get_signal_data`）。勝った側の値は必ず閾値超えなので表示値は正値になる。個人レポートでは閾値以下も呼ばれるため、表示値が ≤ 0 のときフォーマット側で ０ にクランプされる。
+4. **表示値 = (勝った側) − threshold**: `flag_constant_6m` はラベル表示専用で計算には影響しない。
 
 **シグナルソート順:**
 1. 優先度タイプ（neg first）→ 優先度値 → トレンドグループ → 課
@@ -789,6 +789,7 @@ google-auth>=2.0.0   # Google認証
 | 2026-06-02 | `LEVEL_LABELS` 更新: Critical→「要注意」、Low→「低調」、Moderate→「標準」、High→「良好」、Thriving→「充実」。以前の婉曲表現（低調/やや低調/非常に良好）から直接的な表現に変更 |
 | 2026-06-02 | アクション対象候補テーブル列幅設定: `render_signal_table` の column_config に `短期変動`（width=90）・`中期安定性`（width="small"）・`調査抵抗疑義`（width=150）を追加。ポップオーバーを 3 列構成に変更し「変動パターン・中期安定性について」を追加 |
 | 2026-06-02 | 個人タブレイアウト再構成: 表示順序を「プロフィール（expander）→ 計測値（expander）→ シグナル → コメント（タイトル）→ 気になった出来事や気づき → 幹部職に伝えたいこと」に変更。プロフィールを `if individual_mail:` ブロック外に移動。シグナル表示に `height=510` を設定し全 13 行をスクロールなしで表示。コメントセクション前に `st.subheader("コメント")` を追加（他タブと統一） |
+| 2026-06-06 | `derive_intervention_priority()` の側（neg/pos）判定を「neg 優先（`neg_qualifies | (~pos_qualifies)`）」から「大小比較（`neg >= pos`、同点は neg 優先）」に変更。pos が neg を明確に上回る人（例: neg=3, pos=6）がネガティブ側（赤）に倒れず、エンゲージメントグラフと色の側が一致するように修正。足切りは `get_signal_data` 側で実施するため勝った側の値はテーブル上で常に正値 |
 
 ---
 
@@ -858,20 +859,21 @@ tab_signal_df = tab_signal_df[tab_signal_df['name'].isin(names_in_filtered)]
 |----------|-----------|------|
 | 生データ（rating2 シート） | **neg = 基本スコア + flag_constant_6m ボーナス** | Admin GAS が算出して書き込む |
 | 足切りフィルター（`get_signal_data`） | **neg / pos をそのまま比較** | Dashboard では加工しない |
-| 表示値（`derive_intervention_priority`） | **(neg または pos) − threshold** | flag 処理は Admin 側で完結 |
+| 表示値（`derive_intervention_priority`） | **(勝った側) − threshold** | flag 処理は Admin 側で完結 |
 
 #### derive_intervention_priority() のルール
 
 ```python
 neg = df['intervention_priority_neg'].fillna(0)  # Admin が flag ボーナス込みで計算済み
 pos = df['intervention_priority_pos'].fillna(0)  # flag 処理なし
-neg_qualifies = neg > threshold
-pos_qualifies = pos > threshold
-_priority_is_neg = neg_qualifies | (~pos_qualifies)  # neg 優先（どちらも不適格なら neg をデフォルト）
+_priority_is_neg = neg >= pos                    # 大小比較：大きい方が勝ち、同点は neg 優先
 intervention_priority = neg.where(_priority_is_neg, pos) - threshold
 ```
 
 `_priority_is_neg` は表示の赤/緑の色分けだけでなく、ソート順にも影響する。
+側の判定は **neg/pos の大小比較**（同点は neg 優先）。これによりエンゲージメントグラフと
+赤/緑の側が一致する。足切り（`neg > threshold or pos > threshold`）は `get_signal_data`
+側で行うため、勝った側の値はシグナルテーブル上では必ず正値になる。
 
 #### よくある落とし穴
 
