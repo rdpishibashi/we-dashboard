@@ -334,6 +334,7 @@ def render_signal_table(signals, display_cols, key=None):
 
     effective_key = f"{key}_v{version}" if key else key
 
+    name_label = SIGNAL_LABELS['name']
     big_change_label = SIGNAL_LABELS['big_change']
     stability_label = SIGNAL_LABELS['stability_6']
     flag_label = SIGNAL_LABELS['flag_constant_6m']
@@ -341,6 +342,9 @@ def render_signal_table(signals, display_cols, key=None):
     event = st.dataframe(
         styled_df,
         column_config={
+            # 氏名: 最長の日本語氏名（全角約6文字）＋ 1 文字分の余裕（全角≒16px）。自動幅だと
+            # 末尾が切れやすいため明示指定。
+            name_label: st.column_config.TextColumn(name_label, width=120),
             priority_label: st.column_config.TextColumn(priority_label, width="small"),
             big_change_label: st.column_config.TextColumn(big_change_label, width=90),
             stability_label: st.column_config.TextColumn(stability_label, width="small"),
@@ -408,7 +412,10 @@ def render_signal_table(signals, display_cols, key=None):
                 "| 安定 | 変動幅が小さく安定 |\n"
                 "| やや不安定 | 変動幅は普通 |\n"
                 "| 不安定 | 変動幅が大きく浮き沈みあり |\n"
-                "| 不変 | 変化がほぼなし（調査抵抗の疑い） |"
+                "| 不変 | 変化がほぼなし（調査抵抗の疑い） |\n\n"
+                "※ いずれも「その人自身の過去6ヶ月窓」の分位点を基準に判定するため、"
+                "基準となる過去の窓が十分に貯まるまで（有効回答が揃って**約11ヶ月分**）は"
+                "「判定保留」と表示されます。"
             )
 
     return selected_name
