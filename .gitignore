@@ -204,3 +204,5 @@ Member.xlsx
 auth_users.json
 modules/windows_config.py
 account.md
+# Claude Code local settings
+.claude/settings.local.json
