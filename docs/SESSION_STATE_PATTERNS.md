@@ -74,9 +74,11 @@ filter_period / reset_period_filter / reset_local_filters
 **ナビゲーション系**（非ウィジェット、中間値として使用）
 ```
 _nav_individual            # action candidates → 個人タブへの氏名受け渡し
-_last_{key_prefix}_selection  # テーブルごとの前回選択（ts / gc_no_group / gc_grouped）
+_last_{key_prefix}_{side_key}_selection  # テーブルごとの前回選択
+                           # key_prefix = ts / gc_no_group / gc_grouped、side_key = neg / pos
 _clear_action_selection    # 個人タブ表示後、シグナルテーブルの選択リセット要求フラグ
 _signal_tables_version     # シグナルテーブルウィジェットキーのバージョンカウンター
+_jump_individual           # 「個人表示」ボタン → 個人タブへの JS 切替要求フラグ
 ```
 
 **ローカルウィジェット系**（app.py が所有）
@@ -96,11 +98,13 @@ Streamlit はクロスウィジェット書き込みを制限するため、中�
 ```
 [時系列タブ or カテゴリ比較タブ]
   render_action_candidates()
+    ネガティブ・メンバー / ポジティブ・メンバーの 2 テーブルをループで描画
     ↓ 行を選択
     render_signal_table() → selected_name を返す
-    ↓ 前回選択と比較（_last_{key_prefix}_selection）
+    ↓ 前回選択と比較（_last_{key_prefix}_{side_key}_selection）
     変化あり → _nav_individual = selected_name をセット
-               st.info("個人タブで確認できます")
+               st.info("個人タブで確認できます") ＋「個人表示」ボタン
+               （選択直後のみ、メッセージ位置へ scrollIntoView する iframe を注入）
 
 [個人タブ]（同一 rerun 内、タブ描画順が後のため安全に読める）
   "_nav_individual" がセッションに存在するか確認
@@ -109,6 +113,27 @@ Streamlit はクロスウィジェット書き込みを制限するため、中�
             ss["individual_selector"] = nav_name  # ウィジェット生成前に書く
             ss["_clear_action_selection"] = True  # 次 rerun でテーブル選択リセット要求
   st.selectbox(key="individual_selector")       # セッションステートの値を使って描画
+```
+
+### 3.1b 「個人表示」ボタンによる JS タブ切替（on_click コールバック必須）
+
+「個人表示」ボタンのクリックで個人タブへ自動切替する機能。`st.tabs` にはプログラムからの
+切替 API がないため、親ドキュメントのタブボタンを JS でクリックする。
+
+**戻り値方式（`if st.button(...)`）は使えない**: ボタンクリックの再実行では
+`_clear_action_selection` フラグの処理によりテーブル選択がリセットされ、
+`selected_name` が None になってボタン自体が描画されなくなる（クリックが失われる）。
+
+```python
+# components.py — コールバックは描画より先（rerun の冒頭）に実行される
+def _request_individual_jump():
+    st.session_state["_jump_individual"] = True
+
+st.button("個人表示", key=..., on_click=_request_individual_jump)
+
+# app.py — st.tabs 直後でフラグを消費し JS を注入
+if st.session_state.pop("_jump_individual", False):
+    st_components_html("<script>…個人タブをクリック→ページ上部へスクロール…</script>", height=0)
 ```
 
 ### 3.2 複数テーブルの干渉防止
@@ -122,8 +147,8 @@ Streamlit はクロスウィジェット書き込みを制限するため、中�
 # ❌ 共有キーは干渉する
 current = st.session_state.get("_action_candidate_selection")  # ts が書いた直後に gc が None で上書き
 
-# ✅ テーブルごとのキー
-last_key = f"_last_{key_prefix}_selection"   # "ts" / "gc_no_group" / "gc_grouped"
+# ✅ テーブルごとのキー（key_prefix × side_key の組み合わせで一意）
+last_key = f"_last_{key_prefix}_{side_key}_selection"   # 例: "_last_ts_neg_selection"
 current = st.session_state.get(last_key)     # 他テーブルと干渉しない
 ```
 
@@ -222,9 +247,9 @@ SIGNAL_TABLES_VERSION_KEY = "_signal_tables_version"
 INDIVIDUAL_SELECTOR_KEY = "individual_selector"
 
 
-def last_selection_key(key_prefix: str) -> str:
+def last_selection_key(key_prefix: str, side_key: str) -> str:
     """Per-table selection tracking key for render_action_candidates."""
-    return f"_last_{key_prefix}_selection"
+    return f"_last_{key_prefix}_{side_key}_selection"
 ```
 
 ### 5.2 変更が必要なファイルと箇所
@@ -232,7 +257,7 @@ def last_selection_key(key_prefix: str) -> str:
 | ファイル | 現在の文字列リテラル | 置換後 |
 |---------|-------------------|--------|
 | `modules/components.py` | `"_nav_individual"` | `NAV_INDIVIDUAL_KEY` |
-| `modules/components.py` | `f"_last_{key_prefix}_selection"` | `last_selection_key(key_prefix)` |
+| `modules/components.py` | `f"_last_{key_prefix}_{side_key}_selection"` | `last_selection_key(key_prefix, side_key)` |
 | `modules/signal_processing.py` | `"_clear_action_selection"` | `CLEAR_ACTION_SELECTION_KEY` |
 | `modules/signal_processing.py` | `"_signal_tables_version"` | `SIGNAL_TABLES_VERSION_KEY` |
 | `app.py` | `"_nav_individual"` | `NAV_INDIVIDUAL_KEY` |
@@ -264,4 +289,4 @@ def last_selection_key(key_prefix: str) -> str:
 
 ---
 
-*作成: 2026-05-09*
+*作成: 2026-05-09 / 最終更新: 2026-07-04*
