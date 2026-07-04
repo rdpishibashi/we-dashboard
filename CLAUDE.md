@@ -426,6 +426,17 @@ python tools/split_by_division.py
 
 パスワードは `.streamlit/secrets.toml` から読み込む。leave メンバーの部門情報は `members.yaml` から取得。
 
+### 月次更新（Export → 検証 → 分割の一括実行）
+
+毎月の更新作業（① Google Sheets「Engagement Master」を xlsx エクスポート → ② rating2/comment に前月データがあるか検証 → ③ `split_by_division()` 実行）を1コマンドで行う：
+
+```bash
+python tools/monthly_update.py
+```
+
+- Step 1 は Drive API（`.streamlit/secrets.toml` の `gcp_service_account` + `ENGAGEMENT_MASTER_SHEET_ID`）でエクスポートする。「Engagement Master」スプレッドシートを `gcp_service_account` の `client_email` に閲覧者共有しておく必要がある
+- Step 2 は Admin の `updateMaster()` と同じ「実行時点の前月」を期待値として検証し、データがなければ Step 3 を実行せず中断する（古いデータで部門別ファイルを上書きする事故を防止）
+
 ### 新機能追加時のチェックリスト
 
 1. 権限要件の確認（`docs/PRIVILEGE_SYSTEM.md`）
