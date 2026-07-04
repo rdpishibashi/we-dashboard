@@ -11,6 +11,7 @@ import streamlit as st
 import pandas as pd
 from typing import Optional, List, Dict, Any
 
+from streamlit.components.v1 import html as st_components_html
 from modules.signal_processing import get_signal_data, render_signal_table, render_signal_popovers
 from modules.config import SIGNAL_TABLE_COLUMNS
 from modules.privilege_manager import filter_dataframe_by_scope
@@ -175,6 +176,7 @@ def render_action_candidates(
             # Use a per-table key to detect selection changes. A shared key would be
             # overwritten by tables with no selection (e.g. gc_no_group after ts),
             # making every rerun look like a new selection.
+            selection_changed = False
             last_key = f"_last_{key_prefix}_{side_key}_selection"
             if selected_name != st.session_state.get(last_key):
                 st.session_state[last_key] = selected_name
@@ -182,6 +184,7 @@ def render_action_candidates(
                     # Write to a non-widget intermediate key; the 個人 tab transfers
                     # it to individual_selector just before the widget is created.
                     st.session_state["_nav_individual"] = selected_name
+                    selection_changed = True
 
             if selected_name:
                 msg_col, btn_col = st.columns([4, 1], vertical_alignment="center")
@@ -196,6 +199,22 @@ def render_action_candidates(
                         "個人表示",
                         key=f"{key_prefix}_{side_key}_goto_individual",
                         on_click=_request_individual_jump,
+                    )
+
+                # 選択直後の再実行でのみ、メッセージ＋ボタン位置までスクロールする。
+                # テーブルが長いとメッセージに気づきにくいための対応。
+                # この高さ0の iframe はメッセージ行の直下に配置されるため、
+                # iframe 自身（frameElement）を scrollIntoView すればよい。
+                if selection_changed:
+                    st_components_html(
+                        """
+                        <script>
+                        setTimeout(() => {
+                            window.frameElement.scrollIntoView({behavior: "smooth", block: "center"});
+                        }, 100);
+                        </script>
+                        """,
+                        height=0,
                     )
 
         render_signal_popovers()
