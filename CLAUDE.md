@@ -213,11 +213,15 @@ else:
 
 認証済み: 5 タブ / 未認証: 個人タブなし（4 タブ）
 
+タブは CSS 注入（app.py の st.tabs 直前）で箱型デザイン（角丸ボーダー・ラベル 16.7px・選択タブ太字）にしている。
+
 ### タブ内セクション（時系列・カテゴリ比較・評価・分布）
 
 - 計測値（expander）— 計測データテーブル
 - 主な指標（expander）— 統計サマリー
-- アクション対象候補 — シグナルテーブル（行選択→個人タブナビゲーション対応）
+- アクション対象候補 — 「ネガティブ・メンバー」「ポジティブ・メンバー」の 2 テーブル（h4 タイトル）。
+  行選択で案内メッセージ＋「個人表示」ボタンを表示（行選択→個人タブナビゲーション対応）。
+  説明ポップオーバー 3 つはポジティブ・メンバーの下に配置（`render_signal_popovers`）
 - **コメント**（subheader）
 - 気になった出来事や気づき — 懸念事項（admin のみ）
 - 共有したいこと — コメントと返信
@@ -344,8 +348,10 @@ tab_signal_df = tab_signal_df[tab_signal_df['name'].isin(tab_df['name'].unique()
 
 - `intervention_priority_neg` には Admin GAS が `flag_constant_6m` ボーナスを含めて計算済み
 - Dashboard では flag ボーナスを**加算しない**（二重計上になる）
-- 側（neg/pos）の判定は**大小比較**: `_priority_is_neg = neg >= pos`（大きい方が勝ち、同点は neg 優先）。エンゲージメントグラフと赤/緑の側を一致させるため
-- 表示値 = `(勝った側) - threshold`、`flag_constant_6m` はラベル表示専用。足切り（`neg > threshold or pos > threshold`）は `get_signal_data` で実施
+- **介入必要度 = pos − neg（符号付き差分）**: 負 = ネガティブ側（赤）、正 = ポジティブ側（緑）、0 は neg 優先（`_priority_is_neg = 差分 <= 0`）
+- 掲載基準（足切り）は `|pos − neg| >= INTERVENTION_PRIORITY_THRESHOLD (=2)`（`get_signal_data` で実施）。ネガティブ・メンバー = 差分 ≦ −2、ポジティブ・メンバー = 差分 ≧ +2 の 2 テーブルに分割表示
+- 表示値 = `|pos − neg| − 1`（全角数字・絶対値。個人タブは 0 未満を ０ に切り上げ）。`flag_constant_6m` はラベル表示専用
+- 各テーブル内のソートは絶対値降順 → トレンドグループ → 課順
 
 ### 転属・退職メンバーの leave ステータス
 
@@ -359,7 +365,9 @@ leave ステータスは `config/members.yaml` から取得（Admin GAS が `cur
 
 ### クロスタブナビゲーション（アクション対象候補→個人タブ）
 
-中間キー `_nav_individual` を使う one-shot パターン。受信側（個人タブ）がウィジェット生成前に中間キーを `del` して消費する。セッションステートキー: `_nav_individual`・`_last_{key_prefix}_selection`・`_clear_action_selection`・`_signal_tables_version`。詳細は `docs/SESSION_STATE_PATTERNS.md` 参照。
+中間キー `_nav_individual` を使う one-shot パターン。受信側（個人タブ）がウィジェット生成前に中間キーを `del` して消費する。セッションステートキー: `_nav_individual`・`_last_{key_prefix}_{side_key}_selection`（side_key = neg/pos）・`_clear_action_selection`・`_signal_tables_version`・`_jump_individual`。
+
+「個人表示」ボタンは `on_click` コールバックで `_jump_individual` フラグを立て、app.py が st.tabs 直後で消費して JS（親ドキュメントのタブボタンをクリック→ページ上部へスクロール）を注入する。**戻り値方式は不可**（ボタンクリックの再実行では `_clear_action_selection` により選択がリセットされ、ボタン自体が描画されないため）。詳細は `docs/SESSION_STATE_PATTERNS.md` 参照。
 
 ## よくある落とし穴
 
@@ -390,6 +398,7 @@ leave ステータスは `config/members.yaml` から取得（Admin GAS が `cur
 | `reset_period_filter`, `reset_local_filters` | ログイン/ログアウト時リセットフラグ |
 | `_nav_individual` | アクション対象候補→個人タブナビゲーション（中間キー） |
 | `_signal_tables_version` | シグナルテーブルウィジェットバージョン |
+| `_jump_individual` | 「個人表示」ボタン→個人タブ JS 切替要求フラグ |
 
 ## デプロイ
 

@@ -108,9 +108,10 @@ INDIVIDUAL_SIGNAL_COLUMNS = [
 # Group order configuration file
 GROUP_ORDER_FILE = Path(__file__).parent.parent / 'group_order_config.json'
 
-# Intervention priority threshold: rows with _neg or _pos > this value are shown;
-# displayed value = raw value - this threshold (so minimum displayed is 1)
-INTERVENTION_PRIORITY_THRESHOLD = 1
+# Intervention priority threshold: 介入必要度 = pos - neg のとき、
+# ネガティブ・メンバー: 介入必要度 <= -threshold / ポジティブ・メンバー: 介入必要度 >= +threshold
+# のみテーブルに掲載する（表示は絶対値）
+INTERVENTION_PRIORITY_THRESHOLD = 2
 
 # Rating calculation constants
 ENGAGEMENT_DIVISOR = 5.4
