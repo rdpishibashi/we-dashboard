@@ -11,7 +11,8 @@ import streamlit as st
 import pandas as pd
 from typing import Optional, List, Dict, Any
 
-from modules.signal_processing import get_signal_data, render_signal_table
+from streamlit.components.v1 import html as st_components_html
+from modules.signal_processing import get_signal_data, render_signal_table, render_signal_popovers
 from modules.config import SIGNAL_TABLE_COLUMNS
 from modules.privilege_manager import filter_dataframe_by_scope
 from modules.utils import GROUP_ORDER_MAP
@@ -122,6 +123,11 @@ def _sort_by_section_order(df: pd.DataFrame, section_order: List[str]) -> pd.Dat
     return df
 
 
+def _request_individual_jump():
+    """「個人表示」ボタンの on_click。app.py がこのフラグを消費して個人タブへ切り替える。"""
+    st.session_state["_jump_individual"] = True
+
+
 def render_action_candidates(
     signal_df: pd.DataFrame,
     main_df: pd.DataFrame,
@@ -148,26 +154,70 @@ def render_action_candidates(
     if action_scope is None or len(action_scope) > 0:
         st.subheader("アクション対象候補")
 
-        selected_name = None
         try:
             signals = get_signal_data(action_signal_df, main_df, end_dt)
-            selected_name = render_signal_table(signals, SIGNAL_TABLE_COLUMNS, key=f"{key_prefix}_signal_table")
         except Exception as e:
             st.error(f"シグナルデータの取得に失敗しました: {e}")
+            return
 
-        # Use a per-table key to detect selection changes. A shared key would be
-        # overwritten by tables with no selection (e.g. gc_no_group after ts),
-        # making every rerun look like a new selection.
-        last_key = f"_last_{key_prefix}_selection"
-        if selected_name != st.session_state.get(last_key):
-            st.session_state[last_key] = selected_name
+        # 介入必要度 = pos − neg の符号でネガティブ / ポジティブに分ける
+        for side_label, side_signals, side_key in [
+            ("ネガティブ・メンバー", signals[signals['intervention_priority'] < 0] if not signals.empty else signals, "neg"),
+            ("ポジティブ・メンバー", signals[signals['intervention_priority'] > 0] if not signals.empty else signals, "pos"),
+        ]:
+            # subheader(h3) より少し小さいボールドのタイトル
+            st.markdown(f"#### {side_label}")
+
+            selected_name = render_signal_table(
+                side_signals, SIGNAL_TABLE_COLUMNS,
+                key=f"{key_prefix}_signal_table_{side_key}",
+            )
+
+            # Use a per-table key to detect selection changes. A shared key would be
+            # overwritten by tables with no selection (e.g. gc_no_group after ts),
+            # making every rerun look like a new selection.
+            selection_changed = False
+            last_key = f"_last_{key_prefix}_{side_key}_selection"
+            if selected_name != st.session_state.get(last_key):
+                st.session_state[last_key] = selected_name
+                if selected_name:
+                    # Write to a non-widget intermediate key; the 個人 tab transfers
+                    # it to individual_selector just before the widget is created.
+                    st.session_state["_nav_individual"] = selected_name
+                    selection_changed = True
+
             if selected_name:
-                # Write to a non-widget intermediate key; the 個人 tab transfers
-                # it to individual_selector just before the widget is created.
-                st.session_state["_nav_individual"] = selected_name
+                msg_col, btn_col = st.columns([4, 1], vertical_alignment="center")
+                with msg_col:
+                    st.info(f"「個人」タブを選択することで **{selected_name}** さんの詳細を確認できます。")
+                with btn_col:
+                    # ボタンクリックの再実行では _clear_action_selection により
+                    # テーブル選択がリセットされ、このボタン自体が描画されなくなる。
+                    # そのため戻り値ではなく on_click コールバック（描画より先に実行
+                    # される）でフラグを立て、app.py 側が JS でタブを切り替える。
+                    st.button(
+                        "個人表示",
+                        key=f"{key_prefix}_{side_key}_goto_individual",
+                        on_click=_request_individual_jump,
+                    )
 
-        if selected_name:
-            st.info(f"「個人」タブを選択することで **{selected_name}** さんの詳細を確認できます。")
+                # 選択直後の再実行でのみ、メッセージ＋ボタン位置までスクロールする。
+                # テーブルが長いとメッセージに気づきにくいための対応。
+                # この高さ0の iframe はメッセージ行の直下に配置されるため、
+                # iframe 自身（frameElement）を scrollIntoView すればよい。
+                if selection_changed:
+                    st_components_html(
+                        """
+                        <script>
+                        setTimeout(() => {
+                            window.frameElement.scrollIntoView({behavior: "smooth", block: "center"});
+                        }, 100);
+                        </script>
+                        """,
+                        height=0,
+                    )
+
+        render_signal_popovers()
 
 
 def render_concern_section(

@@ -38,6 +38,7 @@ See CLAUDE.md and docs/TECHNICAL_ARCHITECTURE.md for detailed documentation.
 """
 
 import streamlit as st
+from streamlit.components.v1 import html as st_components_html
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
@@ -231,7 +232,7 @@ if uploaded_file is not None:
 - **タブ**：表示するグラフ種類の選択
 - **計測値**：表示しているデータの値
 - **主要な指標**：表示しているデータの主要統計値
-- **アクション対象候補**：アクションの必要性が高いメンバーと主要な分析値
+- **アクション対象候補**：アクションの必要性が高いメンバーと主要な分析値（ネガティブ・メンバー／ポジティブ・メンバーの2テーブル。行選択で「個人表示」ボタンから個人タブへ移動可能）
 - **幹部職に伝えたいこと**：「幹部職に伝えたいこと」の記入内容一覧
 
 ##### グラフの種類
@@ -440,8 +441,68 @@ if uploaded_file is not None:
         # =================================================================
         # TAB RENDERING (st.tabs)
         # =================================================================
+        # タブを箱型（┏━┓）デザインにし、ラベルを +2pt 拡大して視認性を上げる。
+        # ライト/ダークテーマ両対応のため色は無彩色の rgba を使う。
+        st.markdown("""
+            <style>
+            .stTabs [data-baseweb="tab-list"] {
+                gap: 6px;
+                align-items: flex-end;
+            }
+            .stTabs button[data-baseweb="tab"] {
+                border: 1px solid rgba(128, 128, 128, 0.5);
+                border-bottom: none;
+                border-radius: 10px 10px 0 0;
+                padding: 4px 20px;
+                background: rgba(128, 128, 128, 0.12);
+            }
+            .stTabs button[data-baseweb="tab"][aria-selected="true"] {
+                background: transparent;
+            }
+            /* タブ文字: 既定 14px + 2pt(≒2.7px) */
+            .stTabs button[data-baseweb="tab"] [data-testid="stMarkdownContainer"] p {
+                font-size: 16.7px;
+            }
+            .stTabs button[data-baseweb="tab"][aria-selected="true"] [data-testid="stMarkdownContainer"] p {
+                font-weight: 700;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
         tabs = st.tabs(tab_labels)
         tab_map = dict(zip(tab_labels, tabs))
+
+        # 「個人表示」ボタン（アクション対象候補テーブル下）からのタブ切替要求を処理。
+        # st.tabs はプログラムからの切替 API を持たないため、親ドキュメントの
+        # タブボタンを JS でクリックする。フラグはコールバックで設定される
+        # （ボタン再実行時にはテーブル選択がリセットされボタン自体が消えるため、
+        # 戻り値ではなく on_click + セッションフラグで受け渡す）。
+        if st.session_state.pop("_jump_individual", False):
+            st_components_html(
+                """
+                <script>
+                const doc = window.parent.document;
+                const tabs = doc.querySelectorAll('button[data-baseweb="tab"]');
+                for (const t of tabs) {
+                    if (t.innerText.trim() === "個人") { t.click(); break; }
+                }
+                // タブメニューから遷移したときと同様にページ上部から表示する。
+                // スクロールコンテナは Streamlit のバージョンにより異なるため複数候補を順に試す。
+                setTimeout(() => {
+                    const containers = [
+                        doc.querySelector('section[data-testid="stMain"]'),
+                        doc.querySelector('section.main'),
+                        doc.querySelector('[data-testid="stAppViewContainer"]'),
+                    ];
+                    for (const c of containers) {
+                        if (c) { c.scrollTo({top: 0, behavior: "instant"}); }
+                    }
+                    window.parent.scrollTo({top: 0, behavior: "instant"});
+                }, 100);
+                </script>
+                """,
+                height=0,
+            )
 
         # =============================================================
         # 時系列 Tab
@@ -1256,7 +1317,7 @@ else:
     - **タブ**：表示するグラフ種類の選択
     - **計測値**：表示しているデータの値
     - **主要な指標**：表示しているデータの主要統計値
-    - **アクション対象候補**：アクションの必要性が高いメンバーと主要な分析値
+    - **アクション対象候補**：アクションの必要性が高いメンバーと主要な分析値（ネガティブ・メンバー／ポジティブ・メンバーの2テーブル。行選択で「個人表示」ボタンから個人タブへ移動可能）
     - **幹部職に伝えたいこと**：「幹部職に伝えたいこと」の記入内容一覧
 
     ##### グラフの種類
