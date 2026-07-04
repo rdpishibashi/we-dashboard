@@ -481,10 +481,24 @@ if uploaded_file is not None:
             st_components_html(
                 """
                 <script>
-                const tabs = window.parent.document.querySelectorAll('button[data-baseweb="tab"]');
+                const doc = window.parent.document;
+                const tabs = doc.querySelectorAll('button[data-baseweb="tab"]');
                 for (const t of tabs) {
                     if (t.innerText.trim() === "個人") { t.click(); break; }
                 }
+                // タブメニューから遷移したときと同様にページ上部から表示する。
+                // スクロールコンテナは Streamlit のバージョンにより異なるため複数候補を順に試す。
+                setTimeout(() => {
+                    const containers = [
+                        doc.querySelector('section[data-testid="stMain"]'),
+                        doc.querySelector('section.main'),
+                        doc.querySelector('[data-testid="stAppViewContainer"]'),
+                    ];
+                    for (const c of containers) {
+                        if (c) { c.scrollTo({top: 0, behavior: "instant"}); }
+                    }
+                    window.parent.scrollTo({top: 0, behavior: "instant"});
+                }, 100);
                 </script>
                 """,
                 height=0,
