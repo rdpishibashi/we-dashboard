@@ -38,6 +38,7 @@ See CLAUDE.md and docs/TECHNICAL_ARCHITECTURE.md for detailed documentation.
 """
 
 import streamlit as st
+from streamlit.components.v1 import html as st_components_html
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
@@ -440,8 +441,54 @@ if uploaded_file is not None:
         # =================================================================
         # TAB RENDERING (st.tabs)
         # =================================================================
+        # タブを箱型（┏━┓）デザインにし、ラベルを +2pt 拡大して視認性を上げる。
+        # ライト/ダークテーマ両対応のため色は無彩色の rgba を使う。
+        st.markdown("""
+            <style>
+            .stTabs [data-baseweb="tab-list"] {
+                gap: 6px;
+                align-items: flex-end;
+            }
+            .stTabs button[data-baseweb="tab"] {
+                border: 1px solid rgba(128, 128, 128, 0.5);
+                border-bottom: none;
+                border-radius: 10px 10px 0 0;
+                padding: 4px 20px;
+                background: rgba(128, 128, 128, 0.12);
+            }
+            .stTabs button[data-baseweb="tab"][aria-selected="true"] {
+                background: transparent;
+            }
+            /* タブ文字: 既定 14px + 2pt(≒2.7px) */
+            .stTabs button[data-baseweb="tab"] [data-testid="stMarkdownContainer"] p {
+                font-size: 16.7px;
+            }
+            .stTabs button[data-baseweb="tab"][aria-selected="true"] [data-testid="stMarkdownContainer"] p {
+                font-weight: 700;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
         tabs = st.tabs(tab_labels)
         tab_map = dict(zip(tab_labels, tabs))
+
+        # 「個人表示」ボタン（アクション対象候補テーブル下）からのタブ切替要求を処理。
+        # st.tabs はプログラムからの切替 API を持たないため、親ドキュメントの
+        # タブボタンを JS でクリックする。フラグはコールバックで設定される
+        # （ボタン再実行時にはテーブル選択がリセットされボタン自体が消えるため、
+        # 戻り値ではなく on_click + セッションフラグで受け渡す）。
+        if st.session_state.pop("_jump_individual", False):
+            st_components_html(
+                """
+                <script>
+                const tabs = window.parent.document.querySelectorAll('button[data-baseweb="tab"]');
+                for (const t of tabs) {
+                    if (t.innerText.trim() === "個人") { t.click(); break; }
+                }
+                </script>
+                """,
+                height=0,
+            )
 
         # =============================================================
         # 時系列 Tab

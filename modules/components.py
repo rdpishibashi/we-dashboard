@@ -122,6 +122,11 @@ def _sort_by_section_order(df: pd.DataFrame, section_order: List[str]) -> pd.Dat
     return df
 
 
+def _request_individual_jump():
+    """「個人表示」ボタンの on_click。app.py がこのフラグを消費して個人タブへ切り替える。"""
+    st.session_state["_jump_individual"] = True
+
+
 def render_action_candidates(
     signal_df: pd.DataFrame,
     main_df: pd.DataFrame,
@@ -179,7 +184,19 @@ def render_action_candidates(
                     st.session_state["_nav_individual"] = selected_name
 
             if selected_name:
-                st.info(f"「個人」タブを選択することで **{selected_name}** さんの詳細を確認できます。")
+                msg_col, btn_col = st.columns([4, 1], vertical_alignment="center")
+                with msg_col:
+                    st.info(f"「個人」タブを選択することで **{selected_name}** さんの詳細を確認できます。")
+                with btn_col:
+                    # ボタンクリックの再実行では _clear_action_selection により
+                    # テーブル選択がリセットされ、このボタン自体が描画されなくなる。
+                    # そのため戻り値ではなく on_click コールバック（描画より先に実行
+                    # される）でフラグを立て、app.py 側が JS でタブを切り替える。
+                    st.button(
+                        "個人表示",
+                        key=f"{key_prefix}_{side_key}_goto_individual",
+                        on_click=_request_individual_jump,
+                    )
 
         render_signal_popovers()
 
