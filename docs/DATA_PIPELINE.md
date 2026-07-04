@@ -242,45 +242,34 @@ graph_comments = filter_dataframe_by_scope(graph_comments, share_scope)
 
 ### intervention_priority の導出
 
-rating2 シートには `intervention_priority_neg` と `intervention_priority_pos` の 2 列が存在する。加えて `flag_constant_6m` の値に基づく追加ポイントを `_neg` に加算した上で、以下の規則で 1 列の `intervention_priority` に統合する。
+rating2 シートには `intervention_priority_neg` と `intervention_priority_pos` の 2 列が存在する。
+`intervention_priority_neg` には **Admin GAS が `flag_constant_6m` ボーナスを含めた値**が書き込まれており、Dashboard 側では flag 加算を行わない（`flag_constant_6m` はラベル表示専用）。
 
-**flag_constant_6m 加算ポイント:**
-
-| 値 | 加算ポイント |
-|----|------------|
-| `LOW_FIXED` | +3 |
-| `MID_EVASION` | +2 |
-| `HIGH_AVOIDANCE` | +2 |
-| `FIX_SHIFTED` | +4 |
-| その他（空文字・None） | 0 |
+`derive_intervention_priority()` は 2 列を符号付き差分に統合する。
 
 ```
-(intervention_priority_neg + flag_constant_6m ポイント) > INTERVENTION_PRIORITY_THRESHOLD (= 2)
-    → タイプ: negative
-    → 表示値 = 加算後 neg 値 - threshold
+intervention_priority = intervention_priority_pos - intervention_priority_neg
+_priority_is_neg      = intervention_priority <= 0   # 0 は neg 優先
 
-intervention_priority_pos > INTERVENTION_PRIORITY_THRESHOLD (= 2)
-    → タイプ: positive
-    → 表示値 = intervention_priority_pos - threshold
+掲載基準（get_signal_data の足切り）:
+  |intervention_priority| >= INTERVENTION_PRIORITY_THRESHOLD (= 2)
 
-どちらも threshold 以下
-    → シグナルテーブルに表示しない
+  intervention_priority <= -2 → 「ネガティブ・メンバー」テーブル
+  intervention_priority >= +2 → 「ポジティブ・メンバー」テーブル
+  -1 〜 +1                    → どちらのテーブルにも表示しない
 ```
-
-`_neg` は `_pos` より優先される（両方が閾値超でも negative として扱う）。
 
 ---
 
 ### シグナルテーブルのソート順
 
-シグナルテーブルは以下の優先順位でソートされる。
+ネガティブ・メンバー / ポジティブ・メンバーの各テーブル内で、以下の優先順位でソートされる。
 
 | 優先度 | ソートキー | 順序 |
 |--------|-----------|------|
-| 1 | 優先度タイプ | negative → positive |
-| 2 | 介入必要度 | 降順（値が大きいほど上位） |
-| 3 | トレンドグループ | ネガティブ → 中立 → ポジティブ |
-| 4 | 課 | `group_order_config.json` の設定順 |
+| 1 | 介入必要度の絶対値 | 降順（緊急度が高いほど上位） |
+| 2 | トレンドグループ | ネガティブ → 中立 → ポジティブ |
+| 3 | 課 | `group_order_config.json` の設定順 |
 
 ---
 
@@ -288,7 +277,7 @@ intervention_priority_pos > INTERVENTION_PRIORITY_THRESHOLD (= 2)
 
 | フィールド | 変換内容 |
 |-----------|---------|
-| 介入必要度 | 全角数字で表示。negative は赤色、positive は緑色 |
+| 介入必要度 | 表示値 = `\|pos − neg\| − 1` を全角数字で表示（掲載基準が \|差\| ≧ 2 のため最小表示は１）。negative は赤色、positive は緑色。個人タブでは 0 未満を ０ に切り上げ、`(negative)` / `(positive)` サフィックス付き |
 | `level` | 英語ラベル → 日本語変換（下表参照） |
 | `flag_constant_6m` | 内部値 → 日本語変換（下表参照） |
 | `strength` / `weakness` | 略称 → 日本語変換（下表参照） |

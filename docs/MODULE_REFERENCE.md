@@ -1,6 +1,6 @@
 # WE-Dashboard モジュール API リファレンス
 
-> 最終更新: 2026-06-02
+> 最終更新: 2026-07-04
 
 本ドキュメントは WE-Dashboard アプリケーションを構成する全モジュールの関数レベルリファレンスです。
 各関数のシグネチャ・引数・戻り値・動作仕様を網羅的に記載します。
@@ -409,7 +409,7 @@ ORG_FILTER_COLUMNS = ['division', 'department', 'section']
 
 | 定数 | 値 | 説明 |
 |------|----|------|
-| `INTERVENTION_PRIORITY_THRESHOLD` | `2` | 介入必要度の表示閾値（raw 値がこの値を超える場合に表示） |
+| `INTERVENTION_PRIORITY_THRESHOLD` | `2` | アクション対象候補の掲載閾値（`\|pos − neg\| >= 2` の場合に掲載。ネガティブ ≦ −2 / ポジティブ ≧ +2 の 2 テーブルに分割） |
 | `ENGAGEMENT_DIVISOR` | `5.4` | エンゲージメント評価値の正規化除数（生スコア 0–54 → 0–10） |
 | `COMPONENT_DIVISOR` | `1.8` | コンポーネント評価値の正規化除数（生スコア 0–18 → 0–10） |
 | `RATING_AXIS_MAX` | `10.3` | グラフ Y 軸最大値 |
@@ -727,8 +727,8 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 |------|------|
 | `_to_fullwidth(s)` | ASCII 数字 → 全角数字変換 |
 | `_fmt_flag_constant(x)` | `flag_constant_6m` 値 → 日本語表示ラベル（`FLAG_CONSTANT_LABELS` 参照） |
-| `_fmt_priority_table(x)` | 介入必要度 → 全角整数（アクション候補テーブル用） |
-| `_fmt_priority_individual(x, suffix)` | 介入必要度 → 全角整数 + neg/pos サフィックス（個人レポート用）、値 0 のときはサフィックスなし |
+| `_fmt_priority_table(x)` | 介入必要度 → 表示値 `\|x\| − 1` の全角整数（アクション候補テーブル用） |
+| `_fmt_priority_individual(x, suffix)` | 介入必要度 → 表示値 `max(\|x\| − 1, 0)` の全角整数 + neg/pos サフィックス（個人レポート用）、表示値 0 のときはサフィックスなし |
 
 `_fmt_flag_constant` は `format_signal_display_columns` と `format_individual_signal_data` の両方で使用される唯一の変換ロジック。flag ラベルを変更する場合は `config.py` の `FLAG_CONSTANT_LABELS` のみ修正すればよい。
 
@@ -736,7 +736,7 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 
 #### `derive_intervention_priority(df)`
 
-`intervention_priority_neg` と `intervention_priority_pos` から `intervention_priority`（表示値）と `_priority_is_neg`（フラグ）を導出する。
+`intervention_priority_neg` と `intervention_priority_pos` から `intervention_priority`（符号付き差分）と `_priority_is_neg`（フラグ）を導出する。
 
 | 引数 | 型 | 説明 |
 |------|----|------|
@@ -744,11 +744,11 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 
 **ロジック**:
 1. **neg には flag ボーナス込み**: `intervention_priority_neg` は Admin GAS が `flag_constant_6m` ボーナスを含めた値を rating2 シートに書き込む。Dashboard 側では flag 加算を行わない。
-2. **足切り判定**: `neg_qualifies = neg > threshold`、`pos_qualifies = pos > threshold`。neg が適格な場合は neg を優先。
-3. **どちらも不適格な場合は neg をデフォルト**: 表示値は ≤ 0 となる（表示フォーマット側で ０ にクランプ）。
-4. **表示値**: `(neg または pos) − INTERVENTION_PRIORITY_THRESHOLD`。
+2. **符号付き差分**: `intervention_priority = pos − neg`。負 = ネガティブ側、正 = ポジティブ側。
+3. **側の判定**: `_priority_is_neg = intervention_priority <= 0`（0 は neg 優先）。
+4. **表示値への変換は行わない**: 表示値 `\|pos − neg\| − 1` への変換は `_fmt_priority_table` / `_fmt_priority_individual` が担当する。
 
-**戻り値**: `DataFrame` — `intervention_priority`（表示値）と `_priority_is_neg`（`bool`）列を追加した DataFrame。
+**戻り値**: `DataFrame` — `intervention_priority`（符号付き差分）と `_priority_is_neg`（`bool`）列を追加した DataFrame。
 
 ---
 
@@ -775,7 +775,7 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 |------|----|------|
 | `df` | `DataFrame` | 生値を含むシグナル DataFrame |
 
-**動作**: `intervention_priority` 列の数値を全角数字（例: `２`）に変換する。`flag_constant_6m` 列が存在する場合は `FLAG_CONSTANT_LABELS` で日本語表示名に変換する（未マッチまたは空の場合は `"-"`）。`big_change`・`mid_variability`・`stability_6` 列の空値・`NaN` を `"-"` に変換する。
+**動作**: `intervention_priority` 列の数値を表示値 `|値| − 1` の全角数字（例: `２`）に変換する。`flag_constant_6m` 列が存在する場合は `FLAG_CONSTANT_LABELS` で日本語表示名に変換する（未マッチまたは空の場合は `"-"`）。`big_change`・`mid_variability`・`stability_6` 列の空値・`NaN` を `"-"` に変換する。
 
 **戻り値**: `DataFrame`
 
@@ -783,25 +783,31 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 
 #### `render_signal_table(signals, display_cols, key=None)`
 
-シグナルテーブルをフォーマット・スタイリングして `st.dataframe` で表示する。行選択に対応し、選択された氏名を返す。
+シグナルテーブル 1 つをフォーマット・スタイリングして `st.dataframe` で表示する。行選択に対応し、選択された氏名を返す。ネガティブ・メンバー / ポジティブ・メンバーの各テーブルに対して 1 回ずつ呼ばれる。
 
 | 引数 | 型 | 説明 |
 |------|----|------|
-| `signals` | `DataFrame` | `_priority_is_neg` 列を含むシグナル DataFrame |
+| `signals` | `DataFrame` | `_priority_is_neg` 列を含むシグナル DataFrame（片側分） |
 | `display_cols` | `list[str]` | 表示する列名リスト（英語列名） |
-| `key` | `str \| None` | Streamlit ウィジェットの一意キー（複数タブで呼ぶ場合は必須） |
+| `key` | `str \| None` | Streamlit ウィジェットの一意キー（複数タブ・複数テーブルで呼ぶ場合は必須） |
 
 **動作**:
-- `signals` が空の場合は `st.info("アクション対象候補はいません")` を表示して `None` を返す。
+- `signals` が空の場合は `st.info("該当者はいません")` を表示して `None` を返す。
 - `display_cols` に存在しない列がある場合は `st.error` でエラーを表示して `None` を返す。
 - 列を `SIGNAL_LABELS` で日本語にリネームし、`format_signal_display_columns` と `style_signal_columns` を適用する。
 - `on_select="rerun"` / `selection_mode="single-row"` で行選択を有効化する（Streamlit ≥ 1.35 必須）。
 - `_signal_tables_version` カウンターを key サフィックスに付加し、フラグ（`_clear_action_selection`）が立っている場合はカウンターをインクリメントして選択状態をリセットする。
 - 行インデックスが現在の DataFrame 範囲外の場合（フィルター変更後など）は選択なし扱いにする。
 - column_config は内部で生成する（`介入必要度` → `width="small"`、`短期変動` → `width=90`、`中期安定性` → `width="small"`、`調査抵抗疑義` → `width=150`）。
-- テーブル下部に「介入必要度について」「総合傾向について」「変動パターン・中期安定性について」の popover を 3 列で表示する。
+- `height = 行数 × 35 + 38 + 17` を明示指定し、縦スクロールなしで全行を表示する。
 
 **戻り値**: `str | None`（選択された行の氏名。選択なし・範囲外の場合は `None`）
+
+---
+
+#### `render_signal_popovers()`
+
+「介入必要度について」「総合傾向について」「変動パターン・中期安定性について」の 3 つの説明 popover を 3 列で表示する。`render_action_candidates` がポジティブ・メンバーテーブルの下で 1 回だけ呼ぶ（旧実装では `render_signal_table` 内にあったものを分離）。
 
 ---
 
@@ -831,7 +837,7 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 **動作**:
 1. `derive_intervention_priority` を適用する。
 2. 強み・弱みテキストを `replace_abbreviations` で展開する。
-3. `intervention_priority` を全角数字 + `"(negative)"` または `"(positive)"` サフィックスでフォーマットする（値が 0 の場合はサフィックスなし）。
+3. `intervention_priority` を表示値 `max(|pos − neg| − 1, 0)` の全角数字 + `"(negative)"` または `"(positive)"` サフィックスでフォーマットする（表示値が 0 の場合はサフィックスなし）。
 4. `level` を `LEVEL_LABELS` で日本語に変換する。
 5. `big_change`・`mid_variability`・`stability_6` の空値・`NaN` を `"-"` に変換する。
 6. `flag_constant_6m` を `FLAG_CONSTANT_LABELS` で日本語表示名に変換する（未マッチまたは空の場合は `"-"`）。
@@ -846,19 +852,18 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 
 #### `sort_signals_by_trend_and_priority(signals)`
 
-シグナルデータをトレンドグループ・介入優先度・課の順でソートする。
+シグナルデータを介入必要度の絶対値・トレンドグループ・課の順でソートする。
 
 | 引数 | 型 | 説明 |
 |------|----|------|
-| `signals` | `DataFrame` | `_priority_is_neg`, `intervention_priority`, `trend_refined`, `trend_base`, `section` 列を含む DataFrame |
+| `signals` | `DataFrame` | `intervention_priority`, `trend_refined`, `trend_base`, `section` 列を含む DataFrame |
 
 **ソート順序**:
-1. 優先度タイプ（ネガティブ優先: `_priority_is_neg` 降順）
-2. 介入必要度（降順）
-3. トレンドグループ（ネガティブ=0、中立=1、ポジティブ=2 の昇順）
-4. 課（`group_order_config.json` に基づく課順序の昇順）
+1. 介入必要度の絶対値 `|pos − neg|`（降順・緊急度が高いほど上位）
+2. トレンドグループ（ネガティブ=0、中立=1、ポジティブ=2 の昇順）
+3. 課（`group_order_config.json` に基づく課順序の昇順）
 
-**戻り値**: `DataFrame`（ソート済み、一時列 `_trend_group`, `_section_order` は削除済み）
+**戻り値**: `DataFrame`（ソート済み、一時列 `_trend_group`, `_priority_abs`, `_section_order` は削除済み）
 
 ---
 
@@ -875,8 +880,8 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 **動作**:
 1. `signal_df` を `end_dt` でフィルタリングして最新波のみを抽出する。
 2. `filtered_df` の `name` 列と突き合わせて、フィルター適用済みスコープの個人のみに絞る。
-3. `intervention_priority_neg` または `intervention_priority_pos` が `INTERVENTION_PRIORITY_THRESHOLD`（2）を超える行のみを返す。`intervention_priority_neg` には Admin GAS が flag_constant_6m ボーナスを含めており、Dashboard では加工しない。
-4. `derive_intervention_priority` と `sort_signals_by_trend_and_priority` を適用する。
+3. `derive_intervention_priority` で符号付き差分 `intervention_priority = pos − neg` を導出し、`|差分| >= INTERVENTION_PRIORITY_THRESHOLD`（2）の行のみを返す。`intervention_priority_neg` には Admin GAS が flag_constant_6m ボーナスを含めており、Dashboard では加工しない。
+4. `sort_signals_by_trend_and_priority` を適用する。ネガティブ / ポジティブへの分割は呼び出し側（`render_action_candidates`）が符号で行う。
 
 **戻り値**: `DataFrame`
 
@@ -943,15 +948,23 @@ Excel ファイルを読み込んでデータを前処理し、3つの DataFrame
 1. `privilege_mgr.get_section_scope` でアクション候補のセクションスコープを取得する。
 2. スコープでシグナルデータをフィルタリングする。
 3. スコープがアクセス許可（`None` または空でない）の場合に `"アクション対象候補"` サブヘッダーを表示する。
-4. `get_signal_data` と `render_signal_table` でテーブルを表示する（`key=f"{key_prefix}_signal_table"`）。
-5. テーブルで行が選択された場合、`_last_{key_prefix}_selection` キーで前回選択と比較し、変化があれば `_nav_individual` セッションステートキーに氏名をセットする。変化がない場合はスキップ（複数テーブルの干渉防止）。
-6. 選択中の氏名を `st.info` メッセージで表示する。
+4. `get_signal_data` で候補を取得し、`intervention_priority` の符号で **「ネガティブ・メンバー」（< 0）と「ポジティブ・メンバー」（> 0）の 2 テーブル**に分割して表示する。各テーブルのタイトルは `#### `（h4）で表示し、`render_signal_table` を `key=f"{key_prefix}_signal_table_{side_key}"`（side_key = neg / pos）で呼ぶ。
+5. テーブルで行が選択された場合、`_last_{key_prefix}_{side_key}_selection` キーで前回選択と比較し、変化があれば `_nav_individual` セッションステートキーに氏名をセットする。変化がない場合はスキップ（複数テーブルの干渉防止）。
+6. 選択中の氏名を `st.info` メッセージで表示し、右横に「個人表示」ボタン（`on_click=_request_individual_jump`）を配置する。選択直後の rerun のみ、メッセージ位置へ `scrollIntoView` する高さ 0 の iframe を注入する。
+7. ポジティブ・メンバーテーブルの下に `render_signal_popovers()` で説明 popover 3 つを表示する。
 
 **ナビゲーションの仕組み**:
-- `_nav_individual` をセットするだけで、実際の画面遷移はユーザーが個人タブをクリックすることで完了する。
+- `_nav_individual` をセットするだけで、実際の画面遷移はユーザーが個人タブをクリックするか「個人表示」ボタンで完了する。
 - 個人タブは `_nav_individual` を消費し、`individual_selector`（ローカルセレクトボックスキー）に転記してから削除する。この時点で `_clear_action_selection` フラグをセットし、次の rerun でシグナルテーブルの選択状態をリセットする。
+- 「個人表示」ボタンは `on_click` コールバックで `_jump_individual` フラグを立て、app.py が `st.tabs` 直後で消費して JS（個人タブボタンのクリック→ページ上部へスクロール）を注入する。戻り値方式はボタンクリックの再実行で選択がリセットされボタンが消えるため使えない。
 
 **戻り値**: `None`
+
+---
+
+#### `_request_individual_jump()`
+
+「個人表示」ボタンの `on_click` コールバック。`_jump_individual` セッションステートフラグを `True` にする。
 
 ---
 
