@@ -30,18 +30,18 @@ def _fmt_flag_constant(x) -> str:
 
 
 def _fmt_priority_table(x) -> str:
-    """Format intervention_priority as a full-width integer for table display."""
-    return _to_fullwidth(f"{x:.0f}") if pd.notna(x) else "-"
+    """Format intervention_priority as a full-width absolute integer for table display."""
+    return _to_fullwidth(f"{abs(x):.0f}") if pd.notna(x) else "-"
 
 
 def _fmt_priority_individual(x, suffix: str) -> str:
     """Format intervention_priority with neg/pos suffix for the individual report.
 
-    Returns '０' (no suffix, no color) when the clamped value is 0.
+    Shows the absolute value; returns '０' (no suffix, no color) when the value is 0.
     """
     if pd.isna(x):
         return "-"
-    val = max(int(x), 0)
+    val = abs(int(x))
     if val == 0:
         return _to_fullwidth("0")
     return f"{_to_fullwidth(str(val))} {suffix}"
@@ -105,24 +105,20 @@ def derive_intervention_priority(df):
       computed by Admin GAS before writing to rating2 sheet.
       The Dashboard does NOT add any flag bonus — flag_constant_6m is display-only here.
     - intervention_priority_pos has no flag adjustment.
-    - Side decision is by magnitude: the larger of neg/pos wins. On a tie
-      (neg == pos, including 0 == 0) neg takes precedence. This keeps the
-      red/green side consistent with the engagement graph — a person whose
-      positive score clearly exceeds the negative one is shown on the green
-      (positive) side instead of being forced to red.
-    - Displayed value = (winning side) − threshold.
+    - 介入必要度 = pos − neg（符号付き）。負 = ネガティブ側（赤）、正 = ポジティブ側（緑）。
+      0 のときは neg 優先（従来の同点 neg 優先ルールを踏襲）。
+    - 表示は絶対値（_fmt_priority_table / _fmt_priority_individual で変換）。
 
     Returns the input DataFrame with two new columns:
-      intervention_priority  – numeric score ready for display formatting
+      intervention_priority  – signed score (pos − neg)
       _priority_is_neg       – bool, drives red/green coloring
     """
     df = df.copy()
     neg = df['intervention_priority_neg'].fillna(0)
     pos = df['intervention_priority_pos'].fillna(0)
-    threshold = INTERVENTION_PRIORITY_THRESHOLD
 
-    df['_priority_is_neg']     = neg >= pos
-    df['intervention_priority'] = neg.where(df['_priority_is_neg'], pos) - threshold
+    df['intervention_priority'] = pos - neg
+    df['_priority_is_neg']      = df['intervention_priority'] <= 0
     return df
 
 
@@ -130,8 +126,9 @@ def get_signal_data(signal_df, filtered_df, end_dt):
     """
     Filter signal data to the latest wave and derive display priority.
 
-    The threshold filter uses neg/pos directly. intervention_priority_neg already
-    includes flag_constant_6m bonus from Admin GAS — no Dashboard-side adjustment.
+    掲載基準: |pos − neg| >= INTERVENTION_PRIORITY_THRESHOLD。
+    intervention_priority_neg already includes flag_constant_6m bonus from
+    Admin GAS — no Dashboard-side adjustment.
 
     Args:
         signal_df:   Full rating2 dataframe
@@ -140,18 +137,16 @@ def get_signal_data(signal_df, filtered_df, end_dt):
 
     Returns:
         Filtered and sorted signal dataframe for individuals exceeding the threshold
+        (both negative and positive sides; split by intervention_priority sign)
     """
     latest_wave = signal_df[signal_df['year_month_dt'] == end_dt].copy()
 
     valid_names = filtered_df['name'].dropna().unique()
     latest_wave = latest_wave[latest_wave['name'].isin(valid_names)]
 
-    threshold = INTERVENTION_PRIORITY_THRESHOLD
-    raw_neg = latest_wave['intervention_priority_neg'].fillna(0)
-    raw_pos = latest_wave['intervention_priority_pos'].fillna(0)
-    signals = latest_wave[(raw_neg > threshold) | (raw_pos > threshold)].copy()
+    signals = derive_intervention_priority(latest_wave)
+    signals = signals[signals['intervention_priority'].abs() >= INTERVENTION_PRIORITY_THRESHOLD].copy()
 
-    signals = derive_intervention_priority(signals)
     signals = add_mid_variability(signals)
     signals = sort_signals_by_trend_and_priority(signals)
     return signals
@@ -159,13 +154,12 @@ def get_signal_data(signal_df, filtered_df, end_dt):
 
 def sort_signals_by_trend_and_priority(signals):
     """
-    Sort signal data by priority type → priority value → trend group → section.
+    Sort signal data by priority magnitude → trend group → section.
 
     Sort order:
-    1. Priority type  (negative first, then positive)
-    2. Priority value (descending)
-    3. Trend group    (negative trends → neutral → positive)
-    4. Section (課)   (using configured order from group_order_config.json)
+    1. Priority magnitude |pos − neg| (descending; most urgent first)
+    2. Trend group    (negative trends → neutral → positive)
+    3. Section (課)   (using configured order from group_order_config.json)
     """
     if signals.empty:
         return signals
@@ -184,6 +178,7 @@ def sort_signals_by_trend_and_priority(signals):
 
     signals = signals.copy()
     signals['_trend_group'] = signals['trend_refined'].apply(_trend_group)
+    signals['_priority_abs'] = signals['intervention_priority'].abs()
 
     section_order = GROUP_ORDER_MAP.get('section', [])
     if section_order and 'section' in signals.columns:
@@ -195,10 +190,10 @@ def sort_signals_by_trend_and_priority(signals):
         signals['_section_order'] = signals['section'] if 'section' in signals.columns else 0
 
     signals = signals.sort_values(
-        ['_priority_is_neg', 'intervention_priority', '_trend_group', '_section_order'],
-        ascending=[False, False, True, True],
+        ['_priority_abs', '_trend_group', '_section_order'],
+        ascending=[False, True, True],
     )
-    return signals.drop(columns=['_trend_group', '_section_order'])
+    return signals.drop(columns=['_trend_group', '_priority_abs', '_section_order'])
 
 
 # =============================================================================
@@ -300,12 +295,16 @@ def style_signal_columns(df, priority_is_neg):
 
 
 def render_signal_table(signals, display_cols, key=None):
-    """Render the action-candidates signal table with formatting, styling, and help popovers.
+    """Render one action-candidates signal table with formatting and styling.
+
+    The table height is fitted to the row count so that all rows are visible
+    without vertical scrolling. Help popovers are rendered separately by
+    render_signal_popovers().
 
     Returns the name of the selected person, or None if no row is selected.
     """
     if signals.empty:
-        st.info("アクション対象候補はいません")
+        st.info("該当者はいません")
         return None
 
     missing_cols = [col for col in display_cols if col not in signals.columns]
@@ -339,6 +338,10 @@ def render_signal_table(signals, display_cols, key=None):
     stability_label = SIGNAL_LABELS['stability_6']
     flag_label = SIGNAL_LABELS['flag_constant_6m']
 
+    # 行数に合わせて高さを固定し、縦スクロールなしで全行表示する
+    # （個人タブのシグナルテーブルと同じ実測値: 行35px + ヘッダー38px + 横スクロールバー余裕17px）
+    table_height = len(signals_indexed) * 35 + 38 + 17
+
     event = st.dataframe(
         styled_df,
         column_config={
@@ -353,6 +356,7 @@ def render_signal_table(signals, display_cols, key=None):
         on_select="rerun",
         selection_mode="single-row",
         key=effective_key,
+        height=table_height,
         **DATAFRAME_KWARGS,
     )
 
@@ -363,6 +367,11 @@ def render_signal_table(signals, display_cols, key=None):
         if row_idx < len(signals_indexed) and 'name' in signals_indexed.columns:
             selected_name = signals_indexed.at[row_idx, 'name']
 
+    return selected_name
+
+
+def render_signal_popovers():
+    """Render the three help popovers shown below the action-candidates tables."""
     col1, col2, col3 = st.columns([27, 27, 26])
     with col1:
         with st.popover("介入必要度について"):
@@ -417,5 +426,3 @@ def render_signal_table(signals, display_cols, key=None):
                 "基準となる過去の窓が十分に貯まるまで（有効回答が揃って**約11ヶ月分**）は"
                 "「判定保留」と表示されます。"
             )
-
-    return selected_name
