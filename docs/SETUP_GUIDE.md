@@ -60,6 +60,10 @@ EXCEL_ENCRYPTION_KEY = "暗号化キー"
 # Google Sheets 連携（アンケート回答データ取得に使用）
 RESPONSE_SHEET_ID = "GoogleスプレッドシートのID"
 
+# "Engagement Master" スプレッドシートID（tools/monthly_update.py のエクスポートに使用）
+# gcp_service_account の client_email に閲覧者共有しておくこと
+ENGAGEMENT_MASTER_SHEET_ID = "GoogleスプレッドシートのID"
+
 [gcp_service_account]
 type = "service_account"
 project_id = "your-project-id"
