@@ -55,6 +55,7 @@ WE-Dashboard/
 │   ├── generate_privileges_yaml.py  # 権限YAML生成ツール
 │   ├── generate_member_yaml.py      # メンバーYAML生成ツール
 │   ├── split_by_division.py         # 部門別データ分割ツール（leave メンバーを members.yaml で振り分け）
+│   ├── monthly_update.py            # 月次更新一括実行（Sheets export → 年月検証 → split_by_division）
 │   └── encrypt_passwords.py         # パスワード暗号化ツール（windows_config.py 更新用）
 ├── docs/
 ├── auth_users.json           # 認証情報（開発用）
@@ -714,6 +715,7 @@ cryptography>=41.0.0
 pyyaml>=6.0.0       # 権限設定YAML読み込み用
 gspread              # Google Sheets API（返信機能）
 google-auth>=2.0.0   # Google認証
+requests>=2.28.0     # Drive API 直接呼び出し（tools/monthly_update.py のエクスポート）
 ```
 
 ---
@@ -791,6 +793,7 @@ google-auth>=2.0.0   # Google認証
 | 2026-06-02 | 個人タブレイアウト再構成: 表示順序を「プロフィール（expander）→ 計測値（expander）→ シグナル → コメント（タイトル）→ 気になった出来事や気づき → 幹部職に伝えたいこと」に変更。プロフィールを `if individual_mail:` ブロック外に移動。シグナル表示に `height=510` を設定し全 13 行をスクロールなしで表示。コメントセクション前に `st.subheader("コメント")` を追加（他タブと統一） |
 | 2026-06-06 | `derive_intervention_priority()` の側（neg/pos）判定を「neg 優先（`neg_qualifies | (~pos_qualifies)`）」から「大小比較（`neg >= pos`、同点は neg 優先）」に変更。pos が neg を明確に上回る人（例: neg=3, pos=6）がネガティブ側（赤）に倒れず、エンゲージメントグラフと色の側が一致するように修正。足切りは `get_signal_data` 側で実施するため勝った側の値はテーブル上で常に正値 |
 | 2026-06-07 | アクション対象候補テーブル: `氏名` 列に明示幅 `width=120` を設定（最長の日本語氏名＋1文字分の余裕、自動幅での末尾切れ対策）。ポップオーバー「変動パターン・中期安定性について」に「分位点判定は個人の過去6ヶ月窓を基準とするため有効回答が揃って約11ヶ月分までは『判定保留』」の注記を追加 |
+| 2026-07-04 | `tools/monthly_update.py` を追加: 月次更新の手動3ステップ（① Google Sheets「Engagement Master」を xlsx エクスポート → ② rating2/comment に前月データがあるか検証 → ③ `split_by_division()` 実行）を1スクリプトに統合。エクスポートは Drive API（`google.auth.transport.requests.AuthorizedSession`）を使用し、`.streamlit/secrets.toml` の `gcp_service_account`（既存の返信機能用サービスアカウント）と新規 `ENGAGEMENT_MASTER_SHEET_ID` を利用。年月検証は Admin の `updateMaster()` と同じ「実行時点の前月」を期待値とし、データがなければ split を実行せず中断する |
 
 ---
 
