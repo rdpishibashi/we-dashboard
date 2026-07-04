@@ -30,18 +30,22 @@ def _fmt_flag_constant(x) -> str:
 
 
 def _fmt_priority_table(x) -> str:
-    """Format intervention_priority as a full-width absolute integer for table display."""
-    return _to_fullwidth(f"{abs(x):.0f}") if pd.notna(x) else "-"
+    """Format intervention_priority for table display.
+
+    表示値 = |pos − neg| − 1（全角数字）。掲載基準が |pos − neg| >= 2 のため最小表示は１。
+    """
+    return _to_fullwidth(f"{abs(x) - 1:.0f}") if pd.notna(x) else "-"
 
 
 def _fmt_priority_individual(x, suffix: str) -> str:
     """Format intervention_priority with neg/pos suffix for the individual report.
 
-    Shows the absolute value; returns '０' (no suffix, no color) when the value is 0.
+    表示値 = |pos − neg| − 1（0 未満は 0 に切り上げ）。
+    Returns '０' (no suffix, no color) when the display value is 0.
     """
     if pd.isna(x):
         return "-"
-    val = abs(int(x))
+    val = max(abs(int(x)) - 1, 0)
     if val == 0:
         return _to_fullwidth("0")
     return f"{_to_fullwidth(str(val))} {suffix}"
@@ -107,7 +111,7 @@ def derive_intervention_priority(df):
     - intervention_priority_pos has no flag adjustment.
     - 介入必要度 = pos − neg（符号付き）。負 = ネガティブ側（赤）、正 = ポジティブ側（緑）。
       0 のときは neg 優先（従来の同点 neg 優先ルールを踏襲）。
-    - 表示は絶対値（_fmt_priority_table / _fmt_priority_individual で変換）。
+    - 表示値 = |pos − neg| − 1（_fmt_priority_table / _fmt_priority_individual で変換）。
 
     Returns the input DataFrame with two new columns:
       intervention_priority  – signed score (pos − neg)
