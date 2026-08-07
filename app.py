@@ -488,7 +488,7 @@ if uploaded_file is not None:
                 """
                 <script>
                 const doc = window.parent.document;
-                const tabs = doc.querySelectorAll('button[data-baseweb="tab"]');
+                const tabs = doc.querySelectorAll('[data-testid="stTab"]');
                 for (const t of tabs) {
                     if (t.innerText.trim() === "個人") { t.click(); break; }
                 }
