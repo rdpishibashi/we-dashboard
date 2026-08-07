@@ -162,18 +162,27 @@ def migrate_session_state():
             st.session_state[key] = default
 
 
+def load_current_data(data_file):
+    """Load a local data file with a cache key that tracks file updates."""
+    if isinstance(data_file, str):
+        file_stat = os.stat(data_file)
+        fingerprint = (file_stat.st_mtime_ns, file_stat.st_size)
+        return load_data(data_file, fingerprint)
+    return load_data(data_file)
+
+
 if uploaded_file is not None:
     # Migrate session state from old to new filter system
     migrate_session_state()
     # データ読み込み
     try:
         if isinstance(uploaded_file, list):
-            results = [load_data(p) for p in uploaded_file]
+            results = [load_current_data(p) for p in uploaded_file]
             df = pd.concat([r[0] for r in results], ignore_index=True)
             signal_df = pd.concat([r[1] for r in results], ignore_index=True)
             comment_df = pd.concat([r[2] for r in results], ignore_index=True)
         else:
-            df, signal_df, comment_df = load_data(uploaded_file)
+            df, signal_df, comment_df = load_current_data(uploaded_file)
         # Success message will be shown in upload section at bottom
     except Exception as e:
         st.error(f"データ読み込みエラー: {e}")
