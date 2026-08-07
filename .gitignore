@@ -189,9 +189,11 @@ cython_debug/
 .DS_Store
 **/.DS_Store
 
-# Temporary Data file
-Engagement\ Master.xlsx
-Member.xlsx
+# Excel data files (local-only; the running app reads them from disk but
+# only EngagementData-品質保証部門.xlsx is pushed to GitHub, via
+# tools/monthly_update.py's push_quality_assurance_division())
+*.xlsx
+!EngagementData-品質保証部門.xlsx
 
 # Streamlit secrets (contains passwords and sensitive data)
 .streamlit/secrets.toml
