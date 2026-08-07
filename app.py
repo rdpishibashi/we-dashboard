@@ -443,27 +443,33 @@ if uploaded_file is not None:
         # =================================================================
         # タブを箱型（┏━┓）デザインにし、ラベルを +2pt 拡大して視認性を上げる。
         # ライト/ダークテーマ両対応のため色は無彩色の rgba を使う。
+        # data-testid="stTab" / [role="tablist"] / aria-selected は Streamlit
+        # 自身が付与する安定した属性（1.5x系のbaseui実装・1.6x系のreact-aria実装
+        # の両方で存在を確認済み）。data-baseweb はサードパーティUIライブラリの
+        # 内部実装詳細で、Streamlitのバージョンアップでライブラリごと入れ替わる
+        # と消える（1.61でbaseui/tabs-motion→react-aria-componentsに書き換えられ
+        # 消滅した実績あり）ため使わない。
         st.markdown("""
             <style>
-            .stTabs [data-baseweb="tab-list"] {
+            .stTabs [role="tablist"] {
                 gap: 6px;
                 align-items: flex-end;
             }
-            .stTabs button[data-baseweb="tab"] {
+            .stTabs [data-testid="stTab"] {
                 border: 1px solid rgba(128, 128, 128, 0.5);
                 border-bottom: none;
                 border-radius: 10px 10px 0 0;
                 padding: 4px 20px;
                 background: rgba(128, 128, 128, 0.12);
             }
-            .stTabs button[data-baseweb="tab"][aria-selected="true"] {
+            .stTabs [data-testid="stTab"][aria-selected="true"] {
                 background: transparent;
             }
             /* タブ文字: 既定 14px + 2pt(≒2.7px) */
-            .stTabs button[data-baseweb="tab"] [data-testid="stMarkdownContainer"] p {
+            .stTabs [data-testid="stTab"] [data-testid="stMarkdownContainer"] p {
                 font-size: 16.7px;
             }
-            .stTabs button[data-baseweb="tab"][aria-selected="true"] [data-testid="stMarkdownContainer"] p {
+            .stTabs [data-testid="stTab"][aria-selected="true"] [data-testid="stMarkdownContainer"] p {
                 font-weight: 700;
             }
             </style>
