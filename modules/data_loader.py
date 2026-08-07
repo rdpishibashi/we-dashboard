@@ -84,7 +84,7 @@ def decrypt_excel_if_needed(file_obj):
 
 
 @st.cache_data
-def load_data(uploaded_file):
+def load_data(uploaded_file, file_fingerprint=None):
     """
     Load and preprocess data file.
     Supports password-protected Excel files.
