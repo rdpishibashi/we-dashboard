@@ -29,12 +29,14 @@ def _fmt_flag_constant(x) -> str:
     return FLAG_CONSTANT_LABELS.get(str(x), "-")
 
 
-def _fmt_priority_table(x) -> str:
+def _fmt_priority_table(x):
     """Format intervention_priority for table display.
 
-    表示値 = |pos − neg| − 1（全角数字）。掲載基準が |pos − neg| >= 2 のため最小表示は１。
+    表示値 = |pos − neg| − 1。掲載基準が |pos − neg| >= 2 のため最小表示は1。
+    数値のまま返す（st.column_config.NumberColumn で表示整形することで、
+    テーブルの列ソートが文字列比較にならないようにする）。
     """
-    return _to_fullwidth(f"{abs(x) - 1:.0f}") if pd.notna(x) else "-"
+    return int(abs(x) - 1) if pd.notna(x) else None
 
 
 def _fmt_priority_individual(x, suffix: str) -> str:
@@ -352,7 +354,7 @@ def render_signal_table(signals, display_cols, key=None):
             # 氏名: 最長の日本語氏名（全角約6文字）＋ 1 文字分の余裕（全角≒16px）。自動幅だと
             # 末尾が切れやすいため明示指定。
             name_label: st.column_config.TextColumn(name_label, width=120),
-            priority_label: st.column_config.TextColumn(priority_label, width="small"),
+            priority_label: st.column_config.NumberColumn(priority_label, format="%d", width="small"),
             big_change_label: st.column_config.TextColumn(big_change_label, width=90),
             stability_label: st.column_config.TextColumn(stability_label, width="small"),
             flag_label: st.column_config.TextColumn(flag_label, width=150),
