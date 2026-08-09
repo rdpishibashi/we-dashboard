@@ -213,3 +213,7 @@ account.md
 /TECHNICAL.md
 /CLAUDE.md
 /docs/
+
+# Windows standalone installer artifacts (100MB+, exceeds GitHub's file size limit)
+WE-Dashboard-Setup-*.exe
+WE-Dashboard-Setup-*.zip
