@@ -571,8 +571,8 @@ if uploaded_file is not None:
                         end_dt=end_dt,
                     )
                     if not stats_df.empty:
-                        display_stats = format_statistics_for_display(stats_df)
-                        st.dataframe(display_stats, **DATAFRAME_KWARGS)
+                        display_stats, stats_column_config = format_statistics_for_display(stats_df)
+                        st.dataframe(display_stats, column_config=stats_column_config, **DATAFRAME_KWARGS)
                     else:
                         st.info("統計情報を計算できません。")
 
@@ -671,8 +671,8 @@ if uploaded_file is not None:
                             end_dt=end_dt,
                         )
                         if not stats_df.empty:
-                            display_stats = format_statistics_for_display(stats_df)
-                            st.dataframe(display_stats, **DATAFRAME_KWARGS)
+                            display_stats, stats_column_config = format_statistics_for_display(stats_df)
+                            st.dataframe(display_stats, column_config=stats_column_config, **DATAFRAME_KWARGS)
                         else:
                             st.info("統計情報を計算できません。")
 
@@ -708,8 +708,8 @@ if uploaded_file is not None:
                             end_dt=end_dt,
                         )
                         if not stats_df.empty:
-                            display_stats = format_statistics_for_display(stats_df)
-                            st.dataframe(display_stats, **DATAFRAME_KWARGS)
+                            display_stats, stats_column_config = format_statistics_for_display(stats_df)
+                            st.dataframe(display_stats, column_config=stats_column_config, **DATAFRAME_KWARGS)
                         else:
                             st.info("統計情報を計算できません。")
 
