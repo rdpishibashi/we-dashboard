@@ -2,8 +2,10 @@
 Statistical Calculation Functions for Work Engagement Dashboard
 """
 
+import re
 import pandas as pd
 import numpy as np
+import streamlit as st
 from typing import Optional
 from .config import (
     GROUPING_LABEL_MAP, SIGNAL_LABELS, METRIC_LABELS,
@@ -108,23 +110,34 @@ def format_measured_data(
 
 
 def format_statistics_for_display(stats_df):
-    """Format statistics dataframe for display with consistent decimal places."""
+    """
+    Prepare the statistics dataframe for display and return the matching
+    st.column_config so st.dataframe() keeps values numeric (correct sort
+    order on click) while still rendering with the same decimal formatting
+    that used to be baked into pre-formatted strings.
+
+    Returns:
+        (display_stats, column_config) — pass both straight into st.dataframe():
+        st.dataframe(display_stats, column_config=column_config, **DATAFRAME_KWARGS)
+    """
     display_stats = stats_df.copy()
+    column_config = {}
     if '先月からの差分' in display_stats.columns:
-        display_stats['先月からの差分'] = display_stats['先月からの差分'].apply(
-            lambda x: f"{x:+.2f}" if pd.notna(x) and isinstance(x, (int, float)) else "-"
-        )
-    if '直近３ヶ月の傾き' in display_stats.columns:
-        display_stats['直近３ヶ月の傾き'] = display_stats['直近３ヶ月の傾き'].apply(
-            lambda x: f"{x:+.3f}" if pd.notna(x) and isinstance(x, (int, float)) else "-"
-        )
+        column_config['先月からの差分'] = st.column_config.NumberColumn('先月からの差分', format="%+.2f")
     if '平均' in display_stats.columns:
-        display_stats['平均'] = display_stats['平均'].apply(lambda x: f"{x:.2f}")
-    if '傾向の傾き' in display_stats.columns:
-        display_stats['傾向の傾き'] = display_stats['傾向の傾き'].apply(lambda x: f"{x:+.3f}")
+        column_config['平均'] = st.column_config.NumberColumn('平均', format="%.2f")
+    # Dynamic trend-slope column, e.g. "6ヶ月の傾き" — half-width digits keep it
+    # distinct from the fixed full-width "直近３ヶ月の傾き" column below.
+    trend_slope_col = next(
+        (c for c in display_stats.columns if re.fullmatch(r'\d+ヶ月の傾き', c)), None
+    )
+    if trend_slope_col:
+        column_config[trend_slope_col] = st.column_config.NumberColumn(trend_slope_col, format="%+.3f")
+    if '直近３ヶ月の傾き' in display_stats.columns:
+        column_config['直近３ヶ月の傾き'] = st.column_config.NumberColumn('直近３ヶ月の傾き', format="%+.3f")
     if '標準偏差' in display_stats.columns:
-        display_stats['標準偏差'] = display_stats['標準偏差'].apply(lambda x: f"{x:.2f}")
-    return display_stats
+        column_config['標準偏差'] = st.column_config.NumberColumn('標準偏差', format="%.2f")
+    return display_stats, column_config
 
 
 def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, end_dt=None):
@@ -142,6 +155,12 @@ def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, e
         DataFrame with statistics for each group, sorted by group order
     """
     stats_list = []
+
+    # Trend slope column label reflects the actual selected period (sidebar
+    # slider), not a fixed 6 months — df is already period-filtered by the
+    # caller, so the distinct months present here ARE the selected period.
+    period_months = sorted(df['year_month_dt'].dropna().unique())
+    trend_slope_label = f'{len(period_months)}ヶ月の傾き' if period_months else '傾向の傾き'
 
     # Determine the column name based on grouping
     if group_col and group_col != 'なし':
@@ -193,7 +212,7 @@ def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, e
             stats_list.append({
                 column_name: str(group_name),
                 '平均': avg_value,
-                '傾向の傾き': slope,
+                trend_slope_label: slope,
                 '標準偏差': std_value,
                 '人数': n_people,
             })
@@ -230,7 +249,7 @@ def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, e
             stats_list.append({
                 column_name: '全体',
                 '平均': avg_value,
-                '傾向の傾き': slope,
+                trend_slope_label: slope,
                 '標準偏差': std_value,
                 '人数': n_people,
             })
@@ -261,14 +280,13 @@ def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, e
     # Using E_delta_1 (per-person delta averaged) diverges from the chart when
     # new members join or leave mid-period, because new members have E_delta_1=0
     # while still shifting the group average.
-    available_months = sorted(df['year_month_dt'].dropna().unique())
-    ref_end = end_dt if (end_dt is not None and end_dt in available_months) \
-        else (available_months[-1] if available_months else None)
+    ref_end = end_dt if (end_dt is not None and end_dt in period_months) \
+        else (period_months[-1] if period_months else None)
 
     if ref_end is not None:
-        end_idx = available_months.index(ref_end)
+        end_idx = period_months.index(ref_end)
         if end_idx > 0:
-            prev_dt = available_months[end_idx - 1]
+            prev_dt = period_months[end_idx - 1]
             curr_data = df[df['year_month_dt'] == ref_end]
             prev_data = df[df['year_month_dt'] == prev_dt]
             if group_col and group_col != 'なし' and group_col in df.columns:
@@ -368,13 +386,14 @@ def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, e
         stats_df = stats_df.drop(columns=['人数'])
 
     # Final column ordering:
-    # group → (signal trends if name) → 先月差分 → 直近傾き → 平均 → 傾向の傾き → 標準偏差 → 人数
+    # group → (signal trends if name) → 先月差分 → 平均 → Xヶ月の傾き → 直近３ヶ月の傾き → 標準偏差 → 人数
     signal_trend_labels = ['短期傾向', '中期傾向', '総合傾向']
-    delta_slope_labels = ['先月からの差分', '直近３ヶ月の傾き']
     col_order = [column_name]
     col_order += [c for c in signal_trend_labels if c in stats_df.columns]
-    col_order += [c for c in delta_slope_labels if c in stats_df.columns]
-    col_order += [c for c in ['平均', '傾向の傾き', '標準偏差', '人数'] if c in stats_df.columns]
+    col_order += [
+        c for c in ['先月からの差分', '平均', trend_slope_label, '直近３ヶ月の傾き', '標準偏差', '人数']
+        if c in stats_df.columns
+    ]
     col_order += [c for c in stats_df.columns if c not in col_order]
     stats_df = stats_df[col_order]
 
