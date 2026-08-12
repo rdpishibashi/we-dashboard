@@ -11,11 +11,13 @@
     "第一設計課",
     "第二設計課",
     "第三設計課",
+    "第四設計課",
     "機電設計部付",
     "開発部 1課",
     "開発部 2課",
     "UTI技術発展処",
-    "UK S1-Project"
+    "UK S1-Project",
+    "品質保証裾野"
   ],
   "grade": [
     "サプライヤー",
@@ -34,7 +36,8 @@
     "PVD",
     "CVD",
     "RISE",
-    "RISE、PVD"
+    "RISE、PVD",
+    "Management"
   ],
   "project": [
     "ENTRON-X",
