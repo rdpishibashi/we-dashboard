@@ -519,7 +519,8 @@ user_privileges:
         - 機電設計部
       個人:
         values:
-        - 製品技術課
+        - システム開発部
+        - 機電設計部
       default:
         values: *id008
     section_scope:
@@ -554,7 +555,8 @@ user_privileges:
         - 機電設計部
       name:
         values: &id011
-        - 製品技術課
+        - システム開発部
+        - 機電設計部
     grouping_scope_filtered:
       none:
         values: *id009
@@ -788,8 +790,8 @@ user_privileges:
         access: true
         anonymize: false
         response_enabled: false
-  soft:
-    inherits: member
+  me4:
+    inherits: section_manager
     data_scope:
       時系列:
         values: &id024
@@ -803,6 +805,13 @@ user_privileges:
         values:
         - システム開発部
         - 機電設計部
+      分布:
+        values:
+        - システム開発部
+        - 機電設計部
+      個人:
+        values:
+        - 第四設計課
       default:
         values: *id024
     section_scope:
@@ -815,11 +824,11 @@ user_privileges:
         - システム開発部
         - 機電設計部
       アクション対象候補:
-        type: none
+        values:
+        - 第四設計課
       幹部職に伝えたいこと:
         values:
-        - ソフトウェア開発課
-        anonymize: true
+        - 第四設計課
     grouping_scope:
       none:
         values: &id025
@@ -830,97 +839,30 @@ user_privileges:
         - システム開発部
         - 機電設計部
       grade:
-        values:
+        values: &id026
         - システム開発部
         - 機電設計部
-        grade_filter: non_managers
       name:
-        type: none
+        values: &id027
+        - 第四設計課
     grouping_scope_filtered:
       none:
         values: *id025
       organization:
-        type: none
+        values:
+        - 第四設計課
       grade:
-        values:
-        - ソフトウェア開発課
-        grade_filter: non_managers
-      name:
-        type: none
-    features:
-      気になった出来事や気づき: false
-      未記入者: false
-      幹部職に伝えたいこと:
-        access: false
-        anonymize: true
-        response_enabled: false
-  prod:
-    inherits: member
-    data_scope:
-      時系列:
-        values: &id026
-        - システム開発部
-        - 機電設計部
-      カテゴリ比較:
-        values:
-        - システム開発部
-        - 機電設計部
-      評価:
-        values:
-        - システム開発部
-        - 機電設計部
-      default:
         values: *id026
-    section_scope:
-      計測値:
-        values:
-        - システム開発部
-        - 機電設計部
-      主な指標:
-        values:
-        - システム開発部
-        - 機電設計部
-      アクション対象候補:
-        type: none
-      幹部職に伝えたいこと:
-        values:
-        - 製品技術課
-        anonymize: true
-    grouping_scope:
-      none:
-        values: &id027
-        - システム開発部
-        - 機電設計部
-      organization:
-        values:
-        - システム開発部
-        - 機電設計部
-      grade:
-        values:
-        - システム開発部
-        - 機電設計部
-        grade_filter: non_managers
       name:
-        type: none
-    grouping_scope_filtered:
-      none:
         values: *id027
-      organization:
-        type: none
-      grade:
-        values:
-        - 製品技術課
-        grade_filter: non_managers
-      name:
-        type: none
     features:
       気になった出来事や気づき: false
-      未記入者: false
+      未記入者: true
       幹部職に伝えたいこと:
-        access: false
-        anonymize: true
+        access: true
+        anonymize: false
         response_enabled: false
-  mechele1:
+  soft:
     inherits: member
     data_scope:
       時系列:
@@ -950,7 +892,7 @@ user_privileges:
         type: none
       幹部職に伝えたいこと:
         values:
-        - 第一設計課
+        - ソフトウェア開発課
         anonymize: true
     grouping_scope:
       none:
@@ -975,7 +917,7 @@ user_privileges:
         type: none
       grade:
         values:
-        - 第一設計課
+        - ソフトウェア開発課
         grade_filter: non_managers
       name:
         type: none
@@ -986,7 +928,7 @@ user_privileges:
         access: false
         anonymize: true
         response_enabled: false
-  mechele2:
+  prod:
     inherits: member
     data_scope:
       時系列:
@@ -1016,7 +958,7 @@ user_privileges:
         type: none
       幹部職に伝えたいこと:
         values:
-        - 第二設計課
+        - 製品技術課
         anonymize: true
     grouping_scope:
       none:
@@ -1041,7 +983,7 @@ user_privileges:
         type: none
       grade:
         values:
-        - 第二設計課
+        - 製品技術課
         grade_filter: non_managers
       name:
         type: none
@@ -1052,7 +994,7 @@ user_privileges:
         access: false
         anonymize: true
         response_enabled: false
-  mechele3:
+  mechele1:
     inherits: member
     data_scope:
       時系列:
@@ -1082,7 +1024,7 @@ user_privileges:
         type: none
       幹部職に伝えたいこと:
         values:
-        - 第三設計課
+        - 第一設計課
         anonymize: true
     grouping_scope:
       none:
@@ -1107,7 +1049,205 @@ user_privileges:
         type: none
       grade:
         values:
+        - 第一設計課
+        grade_filter: non_managers
+      name:
+        type: none
+    features:
+      気になった出来事や気づき: false
+      未記入者: false
+      幹部職に伝えたいこと:
+        access: false
+        anonymize: true
+        response_enabled: false
+  mechele2:
+    inherits: member
+    data_scope:
+      時系列:
+        values: &id034
+        - システム開発部
+        - 機電設計部
+      カテゴリ比較:
+        values:
+        - システム開発部
+        - 機電設計部
+      評価:
+        values:
+        - システム開発部
+        - 機電設計部
+      default:
+        values: *id034
+    section_scope:
+      計測値:
+        values:
+        - システム開発部
+        - 機電設計部
+      主な指標:
+        values:
+        - システム開発部
+        - 機電設計部
+      アクション対象候補:
+        type: none
+      幹部職に伝えたいこと:
+        values:
+        - 第二設計課
+        anonymize: true
+    grouping_scope:
+      none:
+        values: &id035
+        - システム開発部
+        - 機電設計部
+      organization:
+        values:
+        - システム開発部
+        - 機電設計部
+      grade:
+        values:
+        - システム開発部
+        - 機電設計部
+        grade_filter: non_managers
+      name:
+        type: none
+    grouping_scope_filtered:
+      none:
+        values: *id035
+      organization:
+        type: none
+      grade:
+        values:
+        - 第二設計課
+        grade_filter: non_managers
+      name:
+        type: none
+    features:
+      気になった出来事や気づき: false
+      未記入者: false
+      幹部職に伝えたいこと:
+        access: false
+        anonymize: true
+        response_enabled: false
+  mechele3:
+    inherits: member
+    data_scope:
+      時系列:
+        values: &id036
+        - システム開発部
+        - 機電設計部
+      カテゴリ比較:
+        values:
+        - システム開発部
+        - 機電設計部
+      評価:
+        values:
+        - システム開発部
+        - 機電設計部
+      default:
+        values: *id036
+    section_scope:
+      計測値:
+        values:
+        - システム開発部
+        - 機電設計部
+      主な指標:
+        values:
+        - システム開発部
+        - 機電設計部
+      アクション対象候補:
+        type: none
+      幹部職に伝えたいこと:
+        values:
         - 第三設計課
+        anonymize: true
+    grouping_scope:
+      none:
+        values: &id037
+        - システム開発部
+        - 機電設計部
+      organization:
+        values:
+        - システム開発部
+        - 機電設計部
+      grade:
+        values:
+        - システム開発部
+        - 機電設計部
+        grade_filter: non_managers
+      name:
+        type: none
+    grouping_scope_filtered:
+      none:
+        values: *id037
+      organization:
+        type: none
+      grade:
+        values:
+        - 第三設計課
+        grade_filter: non_managers
+      name:
+        type: none
+    features:
+      気になった出来事や気づき: false
+      未記入者: false
+      幹部職に伝えたいこと:
+        access: false
+        anonymize: true
+        response_enabled: false
+  mechele4:
+    inherits: member
+    data_scope:
+      時系列:
+        values: &id038
+        - システム開発部
+        - 機電設計部
+      カテゴリ比較:
+        values:
+        - システム開発部
+        - 機電設計部
+      評価:
+        values:
+        - システム開発部
+        - 機電設計部
+      default:
+        values: *id038
+    section_scope:
+      計測値:
+        values:
+        - システム開発部
+        - 機電設計部
+      主な指標:
+        values:
+        - システム開発部
+        - 機電設計部
+      アクション対象候補:
+        type: none
+      幹部職に伝えたいこと:
+        values:
+        - 第四設計課
+        anonymize: true
+    grouping_scope:
+      none:
+        values: &id039
+        - システム開発部
+        - 機電設計部
+      organization:
+        values:
+        - システム開発部
+        - 機電設計部
+      grade:
+        values:
+        - システム開発部
+        - 機電設計部
+        grade_filter: non_managers
+      name:
+        type: none
+    grouping_scope_filtered:
+      none:
+        values: *id039
+      organization:
+        type: none
+      grade:
+        values:
+        - 第四設計課
         grade_filter: non_managers
       name:
         type: none
@@ -1122,7 +1262,7 @@ user_privileges:
     inherits: member
     data_scope:
       時系列:
-        values: &id034
+        values: &id040
         - 品質保証部
       カテゴリ比較:
         values:
@@ -1131,7 +1271,7 @@ user_privileges:
         values:
         - 品質保証部
       default:
-        values: *id034
+        values: *id040
     section_scope:
       計測値:
         values:
@@ -1147,7 +1287,7 @@ user_privileges:
         anonymize: true
     grouping_scope:
       none:
-        values: &id035
+        values: &id041
         - 品質保証部
       organization:
         values:
@@ -1158,7 +1298,7 @@ user_privileges:
         type: none
     grouping_scope_filtered:
       none:
-        values: *id035
+        values: *id041
       organization:
         type: none
       grade:
