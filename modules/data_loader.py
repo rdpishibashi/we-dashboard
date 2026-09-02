@@ -147,7 +147,10 @@ def load_data(uploaded_file, file_fingerprint=None):
     signal_df['section'] = get_signal_column('current_section')       # 課 (Section)
     signal_df['team'] = get_signal_column('current_team')
     signal_df['project'] = get_signal_column('current_project')
-    signal_df['grade'] = get_signal_column('grade')
+    # grade は rating2 の 'grade' 列自体が当時値（その行の year/month 時点の等級）を保持する
+    # よう2026-09に修正された。ダッシュボードでは他の組織属性と同じく「現在の等級」で
+    # 集計したいため、対になる current_grade 列（無ければ None → 下の fillna で '未設定'）を読む。
+    signal_df['grade'] = get_signal_column('current_grade')
     signal_df['flag_constant_6m'] = get_signal_column('flag_constant_6m')
 
     # Fill missing values for organizational columns
