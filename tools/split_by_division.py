@@ -12,6 +12,11 @@ the WE-Dashboard checkbox "転属・退職メンバーを含む" can display the
 Rows with no division in either current_division or members.yaml are skipped.
 Each output file is encrypted with a password read from .streamlit/secrets.toml.
 
+Only the latest MONTHS_WINDOW (12) months are written out.  The window is
+derived from the newest (year, month) present in rating2 — not from the clock —
+so a standalone run produces the same result as one driven by monthly_update.py.
+The same window is applied to the comment sheet so both stay aligned.
+
 Output: EngagementData-{division}.xlsx
 """
 
@@ -34,6 +39,9 @@ _MEMBERS_YAML = Path(__file__).resolve().parent.parent / "config" / "members.yam
 SOURCE_FILE = Path(__file__).parent.parent / "Engagement Master.xlsx"
 OUTPUT_DIR = Path(__file__).parent.parent
 SHEETS = ["rating2", "comment"]
+
+# Number of trailing months kept in the per-division files.
+MONTHS_WINDOW = 12
 
 
 def _load_password() -> str:
@@ -78,6 +86,45 @@ def _normalize_str_col(series: pd.Series) -> pd.Series:
     return series.astype(str).str.strip().replace({"nan": pd.NA, "": pd.NA})
 
 
+def _month_index(year: pd.Series, month: pd.Series) -> pd.Series:
+    """Collapse (year, month) into one monotonically increasing integer.
+
+    Comparing on this index keeps the window correct across the year boundary
+    (2025-09 .. 2026-08) without any date parsing.  Non-numeric values become
+    NaN and are therefore excluded by the .between() test in _apply_window().
+    """
+    return pd.to_numeric(year, errors="coerce") * 12 + pd.to_numeric(month, errors="coerce")
+
+
+def _ym_label(index: float) -> str:
+    """Render a month index produced by _month_index() back as 'YYYY-MM'."""
+    year, month = divmod(int(index) - 1, 12)
+    return f"{year}-{month + 1:02d}"
+
+
+def _recent_window(df: pd.DataFrame, months: int = MONTHS_WINDOW):
+    """Return the (first, last) month index of the latest `months` months.
+
+    Returns None when the window cannot be determined (missing year/month
+    columns, or no numeric values), in which case no filtering is applied.
+    """
+    if not {"year", "month"} <= set(df.columns):
+        return None
+    index = _month_index(df["year"], df["month"]).dropna()
+    if index.empty:
+        return None
+    last = int(index.max())
+    return last - months + 1, last
+
+
+def _apply_window(df: pd.DataFrame, window) -> pd.DataFrame:
+    """Keep only rows whose (year, month) falls inside `window`."""
+    if window is None or not {"year", "month"} <= set(df.columns):
+        return df
+    first, last = window
+    return df[_month_index(df["year"], df["month"]).between(first, last)].copy()
+
+
 def split_by_division(source: Path = SOURCE_FILE) -> None:
     password = _load_password()
 
@@ -92,6 +139,21 @@ def split_by_division(source: Path = SOURCE_FILE) -> None:
         for col in ["current_division", "mail_address"]:
             if col in data[sheet].columns:
                 data[sheet][col] = _normalize_str_col(data[sheet][col])
+
+    # Keep only the latest MONTHS_WINDOW months.  The window is taken from
+    # rating2 and applied to comment as well, so the two sheets never end up
+    # covering different periods.
+    window = _recent_window(data["rating2"])
+    if window is None:
+        print("  Warning: rating2 に year/month が無いため期間の絞り込みを行いません。")
+    else:
+        first, last = window
+        print(f"Keeping the latest {MONTHS_WINDOW} months: "
+              f"{_ym_label(first)} 〜 {_ym_label(last)}")
+        for sheet in SHEETS:
+            before = len(data[sheet])
+            data[sheet] = _apply_window(data[sheet], window)
+            print(f"  {sheet}: {before} → {len(data[sheet])} 行")
 
     # Derive division list from active members in rating2 (drop nulls/empty)
     active_divisions = (
