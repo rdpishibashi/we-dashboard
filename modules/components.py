@@ -471,6 +471,53 @@ def render_comment_section(
             st.info("データがありません")
 
 
+# Sidebar axes that must narrow the 未記入者 list, paired with the members.yaml
+# column they map to.  Every axis the sidebar offers has to appear here: a
+# missing one does not raise, it silently widens the list to people the user
+# already filtered out (team did exactly that until 2026-09 — selecting
+# チーム=Management listed every non-Management member instead).
+_MEMBER_FILTER_COLUMNS = [
+    ('division', 'division'),
+    ('department', 'department'),
+    ('section', 'section'),
+    ('team', 'team'),
+    ('project', 'project'),
+    ('grade', 'grade'),
+]
+
+
+def _as_sidebar_vocabulary(series: pd.Series) -> pd.Series:
+    """Render a members.yaml column the way the sidebar labels the same value.
+
+    filter_helpers.get_filter_options() keeps '未設定' as a selectable option for
+    section/team/project/grade, but members.yaml stores those as empty strings.
+    Comparing the two directly makes '未設定' match nothing.
+    """
+    return series.fillna('').astype(str).str.strip().replace('', '未設定')
+
+
+def apply_member_filters(
+    members: pd.DataFrame,
+    selected_filters: Optional[dict]
+) -> pd.DataFrame:
+    """Narrow a members.yaml-derived frame by the sidebar filter selections."""
+    if not selected_filters or members.empty:
+        return members
+
+    filtered = members
+    for key, col in _MEMBER_FILTER_COLUMNS:
+        val = selected_filters.get(key, 'すべて')
+        if not val or val == 'すべて' or col not in filtered.columns:
+            continue
+        filtered = filtered[_as_sidebar_vocabulary(filtered[col]) == val]
+
+    individual = selected_filters.get('individual', 'すべて')
+    if individual and individual != 'すべて' and 'member_name' in filtered.columns:
+        filtered = filtered[filtered['member_name'] == individual]
+
+    return filtered
+
+
 def render_non_respondents(
     member_df: pd.DataFrame,
     df: pd.DataFrame,
@@ -529,14 +576,7 @@ def render_non_respondents(
         scoped_members = list_b.copy()  # admin: no restriction
 
     # Apply sidebar filter selections to member list
-    if selected_filters:
-        for key, col in [('division', 'division'), ('department', 'department'), ('section', 'section')]:
-            val = selected_filters.get(key, 'すべて')
-            if val and val != 'すべて':
-                scoped_members = scoped_members[scoped_members[col] == val]
-        individual = selected_filters.get('individual', 'すべて')
-        if individual and individual != 'すべて':
-            scoped_members = scoped_members[scoped_members['member_name'] == individual]
+    scoped_members = apply_member_filters(scoped_members, selected_filters)
 
     # Find non-respondents
     non_respondents = scoped_members[~scoped_members['mail_address'].isin(submitted)].copy()
