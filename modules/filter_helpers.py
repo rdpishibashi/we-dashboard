@@ -19,6 +19,7 @@ import urllib.parse
 
 from modules.utils import get_options, sort_names_by_grade
 from modules.privilege_manager import filter_dataframe_by_scope
+from modules.config import SCOPE_ORG_COLUMNS
 
 
 def get_sidebar_scope(privilege_mgr, current_privilege: str) -> Optional[list]:
@@ -73,9 +74,15 @@ def get_section_restriction(df: pd.DataFrame, privilege_mgr, current_privilege: 
     if not allowed_tabs:
         return None
 
-    # Determine which org level each scope value belongs to
-    dept_values = set(df['department'].dropna().unique()) if 'department' in df.columns else set()
-    div_values = set(df['division'].dropna().unique()) if 'division' in df.columns else set()
+    # Determine which org level each scope value belongs to. Scope values are
+    # always CURRENT organization names (from privileges.yaml), so classify
+    # against the pinned *_current columns — department/section now switch
+    # with the 組織・職位 toggle, and the raw column could hold an at-survey
+    # label that happens to collide with a different current department name.
+    dept_col = 'department_current' if 'department_current' in df.columns else 'department'
+    div_col = 'division_current' if 'division_current' in df.columns else 'division'
+    dept_values = set(df[dept_col].dropna().unique()) if dept_col in df.columns else set()
+    div_values = set(df[div_col].dropna().unique()) if div_col in df.columns else set()
     non_section_values = dept_values | div_values
 
     section_level_values = set()
@@ -270,8 +277,10 @@ def render_unified_sidebar_filters(
     # Pre-filter by broadest privilege scope (union of all tab scopes)
     # This excludes completely out-of-scope data from dropdown options
     # while still allowing per-tab scope to control chart data
+    # org_columns pins scoping to the current affiliation regardless of the
+    # 組織・職位 toggle (see docs/PRIVILEGE_SYSTEM.md — 権限は現在値固定).
     sidebar_scope = get_sidebar_scope(privilege_mgr, current_privilege)
-    scoped_df = filter_dataframe_by_scope(df.copy(), sidebar_scope)
+    scoped_df = filter_dataframe_by_scope(df.copy(), sidebar_scope, org_columns=SCOPE_ORG_COLUMNS)
 
     # Get section restriction for 課 dropdown (section managers only)
     section_restriction = get_section_restriction(df, privilege_mgr, current_privilege)
@@ -431,7 +440,10 @@ def render_unified_sidebar_filters(
             # Apply section restriction for individual filter (section managers see only their section's members)
             individual_source_df = current_df
             if section_restriction:
-                individual_source_df = current_df[current_df['section'].isin(section_restriction)]
+                # section_restriction lists section_manager's currently-managed
+                # sections — check the pinned current column, not the toggled
+                # working 'section' column (see docs/PRIVILEGE_SYSTEM.md).
+                individual_source_df = current_df[current_df['section_current'].isin(section_restriction)]
 
             individual_options = get_cascaded_options(
                 individual_source_df, 'name', privilege_mgr, current_privilege
@@ -457,7 +469,7 @@ def render_unified_sidebar_filters(
     current_df = apply_unified_filter(current_df, 'individual', selected_individual)
 
     # Pre-filter signal_df by the same broadest scope
-    scoped_signal_df = filter_dataframe_by_scope(signal_df, sidebar_scope)
+    scoped_signal_df = filter_dataframe_by_scope(signal_df, sidebar_scope, org_columns=SCOPE_ORG_COLUMNS)
 
     # Filter signal_df to match filtered main df
     if selected_individual != 'すべて':

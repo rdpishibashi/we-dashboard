@@ -33,6 +33,36 @@ ORG_EXCEL_COLUMNS = {
 # Columns to check for privilege-based filtering (in order of hierarchy)
 ORG_FILTER_COLUMNS = ['division', 'department', 'section']
 
+# =============================================================================
+# Organization Basis Toggle (現在／測定当時)
+# =============================================================================
+# rating2/comment hold two versions of division/department/section/team/
+# project/grade: the value at the time of the survey response (bare columns)
+# and the current value (current_* columns). Until 2026-09-06, rating2's bare
+# division/department were unusable — a past rebuildAllRating2() run in
+# WorkEngagementSystem/Admin had overwritten them with the current value for
+# every historical row (no per-person variation at all). That has since been
+# repaired at the source; see docs/ORG_BASIS_TOGGLE.md for how this was
+# verified before enabling the toggle for these two columns.
+ORG_BASIS_CURRENT = 'current'
+ORG_BASIS_AT_SURVEY = 'at_survey'
+ORG_BASIS_DEFAULT = ORG_BASIS_CURRENT
+
+ORG_BASIS_LABELS = {
+    ORG_BASIS_CURRENT: '現在',
+    ORG_BASIS_AT_SURVEY: '測定当時',
+}
+
+# Columns switched by the toggle. Populated in data_loader.py as {col}_at
+# (from the bare rating2 column) and {col}_current (from current_{col}).
+AT_SURVEY_TOGGLE_COLUMNS = ['division', 'department', 'section', 'team', 'project', 'grade']
+
+# Privilege scoping must never follow the toggle (see docs/PRIVILEGE_SYSTEM.md) —
+# every column here is now switchable, so scoping always reads the pinned
+# *_current copy, never the working column.
+SCOPE_ORG_COLUMNS = ['division_current', 'department_current', 'section_current']
+GRADE_SCOPE_COLUMN = 'grade_current'
+
 # Plotly chart configuration
 PLOTLY_CHART_KWARGS = {"width": "stretch"}
 

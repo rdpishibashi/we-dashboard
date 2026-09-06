@@ -142,6 +142,9 @@ def load_data(uploaded_file, file_fingerprint=None):
 
     # Organizational structure mapping (current_* = current affiliation)
     # Hierarchy: Division (部門) → Department (部署) → Section (課)
+    # These working columns always reflect the CURRENT affiliation — org_basis.py
+    # (applied post-cache, per the 組織・職位 toggle) is what may later overwrite
+    # them with their at-survey counterparts.
     signal_df['division'] = get_signal_column('current_division')     # 部門 (Division)
     signal_df['department'] = get_signal_column('current_department') # 部署 (Department)
     signal_df['section'] = get_signal_column('current_section')       # 課 (Section)
@@ -153,8 +156,35 @@ def load_data(uploaded_file, file_fingerprint=None):
     signal_df['grade'] = get_signal_column('current_grade')
     signal_df['flag_constant_6m'] = get_signal_column('flag_constant_6m')
 
+    # Pinned current-affiliation copies. org_basis.py only overwrites the working
+    # columns above; privilege scoping (division_current/department_current/
+    # section_current/grade_current — see docs/PRIVILEGE_SYSTEM.md "権限は現在値固定")
+    # and the 個人 tab profile (all six — see docs/ORG_BASIS_TOGGLE.md, profile
+    # always shows current) must keep reading the current affiliation regardless
+    # of the toggle.
+    signal_df['division_current'] = signal_df['division']
+    signal_df['department_current'] = signal_df['department']
+    signal_df['section_current'] = signal_df['section']
+    signal_df['team_current'] = signal_df['team']
+    signal_df['project_current'] = signal_df['project']
+    signal_df['grade_current'] = signal_df['grade']
+
+    # At-survey (measured-at-the-time) values, kept separate from the working
+    # columns above. Sourced from rating2's bare (non current_*) columns.
+    signal_df['division_at'] = get_signal_column('division')
+    signal_df['department_at'] = get_signal_column('department')
+    signal_df['section_at'] = get_signal_column('section')
+    signal_df['team_at'] = get_signal_column('team')
+    signal_df['project_at'] = get_signal_column('project')
+    signal_df['grade_at'] = get_signal_column('grade')
+
     # Fill missing values for organizational columns
-    fill_cols = ['division', 'department', 'section', 'team', 'project', 'grade']
+    fill_cols = [
+        'division', 'department', 'section', 'team', 'project', 'grade',
+        'division_current', 'department_current', 'section_current',
+        'team_current', 'project_current', 'grade_current',
+        'division_at', 'department_at', 'section_at', 'team_at', 'project_at', 'grade_at',
+    ]
     for col in fill_cols:
         if col not in signal_df.columns:
             signal_df[col] = pd.Series([None] * len(signal_df))
@@ -165,7 +195,10 @@ def load_data(uploaded_file, file_fingerprint=None):
     # dividing by the respective divisors produces the 0-10 scale.
     rating_cols = ['engagement_rating', 'vigor_rating', 'dedication_rating', 'absorption_rating']
     id_cols = ['year', 'month', 'name', 'division', 'department', 'section',
-               'team', 'project', 'grade']
+               'team', 'project', 'grade',
+               'division_current', 'department_current', 'section_current',
+               'team_current', 'project_current', 'grade_current',
+               'division_at', 'department_at', 'section_at', 'team_at', 'project_at', 'grade_at']
     if 'mail_address' in signal_df.columns:
         id_cols.insert(2, 'mail_address')
 
