@@ -1,11 +1,17 @@
-"""create_time_series_chart() が、カテゴリごとに実データ期間が重ならない場合でも
-hovermode='x unified' で隣接月の値を誤表示しないことを守る。
+"""create_time_series_chart() のカテゴリ別グルーピングが hovermode='closest' を
+使うことを守る。
 
-組織・職位の基準トグルで「測定当時」を選ぶと、組織改編を境に新旧の課の実データ
-期間が完全に分断されることがある（例: 旧課は2024-06まで、新課は2024-07から）。
-このとき、データの無い月を暗黙に欠落させたままだと、Plotly の unified hover が
-そのカテゴリの一番近いデータ点の値を誤ってその月の値として表示してしまう
-（2026-09-06、実データで報告された不具合）。
+2026-09-06、組織・職位の基準トグルで「測定当時」を選ぶと、組織改編を境に新旧の
+課の実データ期間が完全に分断されることがあり（例: 旧課は2024-06まで、新課は
+2024-07から）、hovermode='x unified' がそのカテゴリの一番近いデータ点の値を
+誤ってその月の値として表示する不具合が実データで報告された。
+
+'x unified' は複数系列を1つのツールチップで比較するモードで、hoverdistance
+（ホバーで反応する距離の上限）は 'closest' モードのときにしか効かない仕様の
+ため、データ側に NaN を補完しても直らないことを確認済み（最初の修正案は
+データ補完だったが実機で再現し、方針を hovermode の変更に切り替えた）。
+'closest' はカーソルに実際に一番近い1点だけを正確に示すため、この誤表示は
+原理的に起こらない。
 """
 
 import sys
@@ -27,48 +33,35 @@ def _df():
     })
 
 
-def test_categories_get_explicit_nan_outside_their_actual_data_range():
+def test_grouped_chart_uses_closest_hovermode():
     fig = create_time_series_chart(_df(), 'engagement_rating', 'test', 'section')
-
-    traces = {t.name: t for t in fig.data}
-    assert set(traces.keys()) == {'旧課', '新課'}
-
-    # 新課の 2024-06 は明示的に NaN であるべき（行自体が欠落してはいけない）
-    new_section = traces['新課']
-    row = dict(zip([pd.Timestamp(x).strftime('%Y-%m') for x in new_section.x], new_section.y))
-    assert '2024-06' in row, "データの無い月の行が欠落している（unified hoverが誤爆する）"
-    assert pd.isna(row['2024-06'])
-    assert row['2024-07'] == 7.5  # mean(7.0, 8.0)
-
-    # 旧課の 2024-07 も同様に NaN
-    old_section = traces['旧課']
-    row_old = dict(zip([pd.Timestamp(x).strftime('%Y-%m') for x in old_section.x], old_section.y))
-    assert '2024-07' in row_old
-    assert pd.isna(row_old['2024-07'])
+    assert fig.layout.hovermode == 'closest'
 
 
-def test_actual_values_are_still_the_group_mean():
-    fig = create_time_series_chart(_df(), 'engagement_rating', 'test', 'section')
-    traces = {t.name: t for t in fig.data}
-
-    old_section = traces['旧課']
-    row_old = dict(zip([pd.Timestamp(x).strftime('%Y-%m') for x in old_section.x], old_section.y))
-    assert row_old['2024-06'] == 5.5  # mean(5.0, 6.0)
-
-    new_section = traces['新課']
-    row_new = dict(zip([pd.Timestamp(x).strftime('%Y-%m') for x in new_section.x], new_section.y))
-    assert row_new['2024-07'] == 7.5  # mean(7.0, 8.0)
-
-
-def test_individual_name_grouping_is_not_reindexed():
-    """name グルーピングは対象外 — latest_vals ソートが NaN で不安定にならないよう
-    に、データの無い月の行を追加しない（従来どおり欠落させる）。"""
+def test_ungrouped_chart_keeps_unified_hovermode():
+    """単一系列のみの場合は 'x unified' のままで問題ない（比較対象が無いため）。"""
     df = pd.DataFrame({
         'year_month': ['2024-06', '2024-07'],
-        'name': ['山田', '鈴木'],
         'engagement_rating': [5.0, 7.0],
     })
-    fig = create_time_series_chart(df, 'engagement_rating', 'test', 'name')
+    fig = create_time_series_chart(df, 'engagement_rating', 'test', None)
+    assert fig.layout.hovermode == 'x unified'
+
+
+def test_categories_with_non_overlapping_periods_keep_correct_x_ranges():
+    """カテゴリごとの実データ期間（描画される線の位置）自体は正しいことを守る。"""
+    fig = create_time_series_chart(_df(), 'engagement_rating', 'test', 'section')
     traces = {t.name: t for t in fig.data}
-    assert len(traces['山田'].x) == 1
-    assert len(traces['鈴木'].x) == 1
+
+    old_section_months = {pd.Timestamp(x).strftime('%Y-%m') for x in traces['旧課'].x}
+    new_section_months = {pd.Timestamp(x).strftime('%Y-%m') for x in traces['新課'].x}
+
+    assert old_section_months == {'2024-06'}
+    assert new_section_months == {'2024-07'}
+
+
+def test_grouped_values_are_still_the_group_mean():
+    fig = create_time_series_chart(_df(), 'engagement_rating', 'test', 'section')
+    traces = {t.name: t for t in fig.data}
+    assert list(traces['旧課'].y) == [5.5]  # mean(5.0, 6.0)
+    assert list(traces['新課'].y) == [7.5]  # mean(7.0, 8.0)
