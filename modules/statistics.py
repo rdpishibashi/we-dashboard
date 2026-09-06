@@ -18,7 +18,8 @@ def format_measured_data(
     df: pd.DataFrame,
     metric_col: str,
     group_col: Optional[str] = None,
-    reference_df: Optional[pd.DataFrame] = None
+    reference_df: Optional[pd.DataFrame] = None,
+    year_month_first: bool = False
 ) -> pd.DataFrame:
     """
     Format measurement data for display in 計測値 section.
@@ -32,6 +33,12 @@ def format_measured_data(
         group_col: Optional grouping column (e.g., 'department', 'section', 'name').
                    Pass None or 'なし' for no grouping.
         reference_df: Optional reference DataFrame for category ordering (default: use df)
+        year_month_first: When group_col is set, order rows by 年月 then by the
+            grouping column (each month's categories grouped together) and put
+            年月 before the grouping column. Default False keeps the original
+            behavior (grouping column first, sorted by category then 年月) used
+            by カテゴリ比較. 時系列 passes True — a chronological read matches how
+            that tab's line chart is read, month by month.
 
     Returns:
         Formatted DataFrame ready for display with st.dataframe()
@@ -55,7 +62,9 @@ def format_measured_data(
         ).reset_index()
         measured_data = agg
 
-        # Sort by grouping value using category order, then by year_month
+        # Sort order: year_month_first groups rows by month (each month's
+        # categories together, in category order); the default groups rows by
+        # category (each category's months together).
         group_values = measured_data[group_col].unique().tolist()
         group_order = get_category_order_with_reference(group_col, group_values, reference_df)
         measured_data[group_col] = pd.Categorical(
@@ -63,7 +72,8 @@ def format_measured_data(
             categories=group_order,
             ordered=True
         )
-        measured_data = measured_data.sort_values([group_col, 'year_month'])
+        sort_cols = ['year_month', group_col] if year_month_first else [group_col, 'year_month']
+        measured_data = measured_data.sort_values(sort_cols)
         measured_data[group_col] = measured_data[group_col].astype(str)
 
         # Get grouping label and remove "別" suffix
@@ -84,8 +94,11 @@ def format_measured_data(
             metric_col: metric_label
         })
 
-        # Reorder: grouping column, then 年月, then metric, then 人数
-        measured_data = measured_data[[grouping_label, '年月', metric_label, '人数']]
+        # Column order matches the sort order above.
+        if year_month_first:
+            measured_data = measured_data[['年月', grouping_label, metric_label, '人数']]
+        else:
+            measured_data = measured_data[[grouping_label, '年月', metric_label, '人数']]
     else:
         # No grouping - show overall average by month
         agg = df.groupby('year_month').agg(

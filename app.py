@@ -52,9 +52,12 @@ from modules.config import (
     METRIC_LABELS, SIGNAL_LABELS, SIGNAL_TABLE_COLUMNS, RATING_AXIS_MAX,
     find_default_data_files, RATING_BAND_HIGH_THRESHOLD, RATING_BAND_LOW_THRESHOLD,
     COLOR_SCALE_START, COLOR_SCALE_END, GROUPING_LABEL_MAP,
+    ORG_BASIS_CURRENT, ORG_BASIS_AT_SURVEY, ORG_BASIS_DEFAULT, ORG_BASIS_LABELS,
+    SCOPE_ORG_COLUMNS,
 )
 from modules.utils import get_options
 from modules.data_loader import load_data
+from modules.org_basis import apply_org_basis
 from modules.member_loader import load_members
 from modules.signal_processing import (
     apply_signal_rating_calculations, format_individual_signal_data,
@@ -234,6 +237,7 @@ if uploaded_file is not None:
 - **期間**：表示期間の調整（デフォルトは直近６ヶ月）
 - **表示指標**：ワーク・エンゲージメント総合値、活力／熱意／没頭の構成要素値の選択
 - **表示カテゴリ**：表示をグルーピングするカテゴリの選択
+- **組織・職位の基準**：部門・部署・課・チーム・プロジェクト・職位を「現在」の値で見るか「測定当時」（回答した月時点）の値で見るかの切り替え
 - **フィルター設定**：表示データを部署などの属性でフィルターする
 - **データ**：工数データファイルのアップロード
 
@@ -346,6 +350,36 @@ if uploaded_file is not None:
             key=_grouping_key
         )
 
+        # ── 組織・職位の基準 (現在／測定当時 selectbox) ──
+        # 部門・部署・課・チーム・プロジェクト・職位を「現在の値」で見るか
+        # 「測定当時の値」で見るか。権限判定（誰の何が見えるか）は basis に関わらず
+        # 常に現在値で行う（docs/PRIVILEGE_SYSTEM.md）。個人タブのプロフィールと
+        # コメントの組織表示も常に現在値（docs/ORG_BASIS_TOGGLE.md）。
+        _org_basis_key = 'org_basis'
+        if _org_basis_key not in st.session_state:
+            st.session_state[_org_basis_key] = ORG_BASIS_DEFAULT
+        _prev_org_basis = st.session_state[_org_basis_key]
+        org_basis = st.sidebar.selectbox(
+            "組織・職位の基準",
+            [ORG_BASIS_CURRENT, ORG_BASIS_AT_SURVEY],
+            format_func=lambda x: ORG_BASIS_LABELS.get(x, x),
+            key=_org_basis_key,
+            help="「測定当時」は回答した月時点の部門・部署・課・チーム・プロジェクト・"
+                 "職位で表示します。個人タブのプロフィールとコメントの組織表示は、"
+                 "基準に関わらず常に現在の値です。"
+        )
+        if org_basis != _prev_org_basis:
+            # 課・チーム・プロジェクト・職位の値そのものが入れ替わるため、選択済みの
+            # サイドバーフィルターが新しい基準に存在しない値になりうる（LEAVE_MEMBER_TOGGLE.md
+            # と同様、子フィルターは全リセットする）。
+            from modules.filter_helpers import reset_child_filters
+            reset_child_filters('division')
+
+        # 期間フィルター直後・グルーピング/leave/カスケードフィルターより前に適用する
+        # （@st.cache_data の外＝キャッシュを basis で分岐させないため）。
+        filtered_df = apply_org_basis(filtered_df, org_basis)
+        filtered_signal_df = apply_org_basis(filtered_signal_df, org_basis)
+
         # ── 転属・退職メンバーを含む (checkbox) ──
         # Rendered here in app.py to guarantee execution order:
         # render → read value → filter DataFrames → call filter_helpers
@@ -360,37 +394,12 @@ if uploaded_file is not None:
             if not include_leave:
                 filtered_df = filtered_df[~filtered_df['mail_address'].isin(leave_addresses)]
                 filtered_signal_df = filtered_signal_df[~filtered_signal_df['mail_address'].isin(leave_addresses)]
-            else:
-                # Leave members have current_* fields cleared by Admin GAS (→ '' or '未設定').
-                # Restore their org info from members.yaml so they appear in the correct
-                # department/section dropdowns and charts.
-                if not member_df.empty:
-                    leave_member_info = member_df[member_df['leave'] == 'leave'][
-                        ['mail_address', 'division', 'department', 'section', 'team', 'project', 'grade']
-                    ].copy()
-                    if not leave_member_info.empty:
-                        _org_cols = ['division', 'department', 'section', 'team', 'project', 'grade']
-                        for col in _org_cols:
-                            if col not in leave_member_info.columns:
-                                continue
-                            addr_to_val = leave_member_info.set_index('mail_address')[col]
-                            for _fdf in [filtered_df, filtered_signal_df]:
-                                if col not in _fdf.columns:
-                                    continue
-                                # Match leave member rows where org field is empty/unset
-                                # (Admin GAS clears to '' which fillna converts to '未設定',
-                                #  but handle both '' and '未設定' for safety)
-                                _leave_mask = _fdf['mail_address'].isin(leave_addresses)
-                                _empty_mask = _fdf[col].isin(['', '未設定']) | _fdf[col].isna()
-                                _mask = _leave_mask & _empty_mask
-                                if not _mask.any():
-                                    continue
-                                # Map mail_address → org value; use index-aligned ops to avoid shape mismatch
-                                _mapped = _fdf.loc[_mask, 'mail_address'].map(addr_to_val)
-                                # Keep only rows where members.yaml has a valid (non-empty) value
-                                _valid = _mapped[_mapped.notna() & (_mapped != '')]
-                                if not _valid.empty:
-                                    _fdf.loc[_valid.index, col] = _valid
+            # Org info restoration from members.yaml was removed 2026-09-06: Admin GAS no
+            # longer clears current_* for leave/removed members (commit 6548c44), and the
+            # historical rows that were already cleared have since been repaired at the
+            # source (EngagementMasterSS/EngagementMasterAllSS). rating2's organization
+            # columns are therefore never empty for leave members anymore, so there is
+            # nothing left to restore. See docs/LEAVE_MEMBER_TOGGLE.md.
 
         # Unified organization filters (cascading dropdowns)
         # 表示カテゴリ and leave checkbox are already rendered above
@@ -430,7 +439,11 @@ if uploaded_file is not None:
             elif uploaded_file is not None:
                 st.success(f"✅ データ読み込み完了: {len(df):,}件")
 
-        st.sidebar.info(f"期間: {selected_period_label}\n\n有効データ: {len(filtered_df):,}件 / {len(df):,}件")
+        st.sidebar.info(
+            f"期間: {selected_period_label}\n\n"
+            f"組織・職位の基準: {ORG_BASIS_LABELS.get(org_basis, org_basis)}\n\n"
+            f"有効データ: {len(filtered_df):,}件 / {len(df):,}件"
+        )
 
         # =================================================================
         # COMMENT DATAFRAME FILTERING
@@ -528,8 +541,8 @@ if uploaded_file is not None:
 
             # Layer 1: Apply per-tab data scope filtering
             tab_scope = privilege_mgr.get_data_scope_for_tab(current_privilege, "時系列") if current_privilege else None
-            tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope)
-            tab_signal_df = filter_dataframe_by_scope(filtered_signal_df, tab_scope)
+            tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope, org_columns=SCOPE_ORG_COLUMNS)
+            tab_signal_df = filter_dataframe_by_scope(filtered_signal_df, tab_scope, org_columns=SCOPE_ORG_COLUMNS)
 
             # Use unified grouping from sidebar
             ts_group_choice = unified_grouping
@@ -557,7 +570,7 @@ if uploaded_file is not None:
                 # Display measured values section (collapsible)
                 with st.expander("計測値", expanded=False):
                     group_col = ts_group_choice if ts_group_choice != 'なし' else None
-                    measured_data = format_measured_data(ts_df, selected_metric, group_col)
+                    measured_data = format_measured_data(ts_df, selected_metric, group_col, year_month_first=True)
                     st.dataframe(measured_data, **DATAFRAME_KWARGS)
 
                 # Display key statistics (collapsible)
@@ -593,8 +606,8 @@ if uploaded_file is not None:
 
             # Apply per-tab data scope filtering
             tab_scope = privilege_mgr.get_data_scope_for_tab(current_privilege, "カテゴリ比較") if current_privilege else None
-            tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope)
-            tab_signal_df = filter_dataframe_by_scope(filtered_signal_df, tab_scope)
+            tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope, org_columns=SCOPE_ORG_COLUMNS)
+            tab_signal_df = filter_dataframe_by_scope(filtered_signal_df, tab_scope, org_columns=SCOPE_ORG_COLUMNS)
 
             # Use unified grouping from sidebar
             comparison_group = unified_grouping
@@ -730,7 +743,7 @@ if uploaded_file is not None:
 
             # Apply per-tab data scope filtering
             tab_scope = privilege_mgr.get_data_scope_for_tab(current_privilege, "評価") if current_privilege else None
-            tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope)
+            tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope, org_columns=SCOPE_ORG_COLUMNS)
 
             evaluation_group = unified_grouping
             evaluation_df = tab_filtered_df
@@ -938,8 +951,8 @@ if uploaded_file is not None:
 
             # Apply per-tab data scope filtering
             tab_scope = privilege_mgr.get_data_scope_for_tab(current_privilege, "個人") if current_privilege else None
-            tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope)
-            tab_signal_df = filter_dataframe_by_scope(filtered_signal_df, tab_scope)
+            tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope, org_columns=SCOPE_ORG_COLUMNS)
+            tab_signal_df = filter_dataframe_by_scope(filtered_signal_df, tab_scope, org_columns=SCOPE_ORG_COLUMNS)
 
             # Check if individual is already selected in sidebar
             sidebar_individual = st.session_state.get("unified_individual", "すべて")
@@ -1019,13 +1032,15 @@ if uploaded_file is not None:
 
                     if not profile_row.empty:
                         pr = profile_row.iloc[0]
+                        # プロフィールは常に現在の所属・職位を表示する（組織・職位の基準
+                        # トグルの対象外。docs/ORG_BASIS_TOGGLE.md 参照）。
                         profile_fields = [
-                            ('部門',       pr.get('division',   '')),
-                            ('部署',       pr.get('department', '')),
-                            ('課',         pr.get('section',    '')),
-                            ('チーム',     pr.get('team',       '')),
-                            ('プロジェクト', pr.get('project',   '')),
-                            ('職位',       pr.get('grade',      '')),
+                            ('部門',       pr.get('division_current',   '')),
+                            ('部署',       pr.get('department_current', '')),
+                            ('課',         pr.get('section_current',    '')),
+                            ('チーム',     pr.get('team_current',       '')),
+                            ('プロジェクト', pr.get('project_current',   '')),
+                            ('職位',       pr.get('grade_current',      '')),
                         ]
                         profile_df = pd.DataFrame(
                             [(k, str(v) if pd.notna(v) and v != '' else '-') for k, v in profile_fields],
@@ -1197,7 +1212,7 @@ if uploaded_file is not None:
 
             # Apply per-tab data scope filtering
             tab_scope = privilege_mgr.get_data_scope_for_tab(current_privilege, "分布") if current_privilege else None
-            tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope)
+            tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope, org_columns=SCOPE_ORG_COLUMNS)
 
             dist_group = unified_grouping
             dist_df = tab_filtered_df
@@ -1325,6 +1340,7 @@ else:
     - **期間**：表示期間の調整（デフォルトは直近６ヶ月）
     - **表示指標**：ワーク・エンゲージメント総合値、活力／熱意／没頭の構成要素値の選択
     - **表示カテゴリ**：表示をグルーピングするカテゴリの選択
+    - **組織・職位の基準**：部門・部署・課・チーム・プロジェクト・職位を「現在」の値で見るか「測定当時」（回答した月時点）の値で見るかの切り替え
     - **フィルター設定**：表示データを部署などの属性でフィルターする
     - **データ**：工数データファイルのアップロード
 
