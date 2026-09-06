@@ -33,10 +33,26 @@ def create_time_series_chart(df, y_col, title, color_by=None):
     if color_by and color_by != 'なし':
         # グループ別の月次平均
         grouped = df.groupby(['year_month', color_by])[y_col].mean().reset_index()
+
+        if color_by != 'name':
+            # 「年月 × カテゴリ」の完全な組み合わせに再インデックスし、データの無い
+            # 月には明示的に NaN を入れる。これをしないと、hovermode='x unified'
+            # がそのカテゴリの一番近いデータ点の値を誤って表示してしまう
+            # （組織・職位の基準トグルで「測定当時」を選ぶと、組織改編を境に
+            # 新旧の課の実データ期間が重ならなくなり、この Plotly の挙動が
+            # 顕在化する。実際に描画される線の位置自体は元々正しい）。
+            # 個人別（name）は対象外——latest_vals による並び替えが NaN で
+            # 不安定になるため、影響範囲を組織カテゴリ系グルーピングに限定する。
+            full_index = pd.MultiIndex.from_product(
+                [grouped['year_month'].unique(), grouped[color_by].unique()],
+                names=['year_month', color_by]
+            )
+            grouped = grouped.set_index(['year_month', color_by]).reindex(full_index).reset_index()
+
         grouped['year_month_dt'] = pd.to_datetime(grouped['year_month'], format='%Y-%m', errors='coerce')
 
         # カテゴリ順序の設定
-        color_values = grouped[color_by].unique().tolist()
+        color_values = grouped[color_by].dropna().unique().tolist()
         if color_by == 'name':
             # Sort by most recent value descending so the unified hover list
             # matches the top-to-bottom visual order of the lines at the latest date
