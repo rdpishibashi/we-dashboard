@@ -48,6 +48,18 @@ def test_ungrouped_chart_keeps_unified_hovermode():
     assert fig.layout.hovermode == 'x unified'
 
 
+def test_name_grouping_keeps_unified_hovermode():
+    """個人別（name）は組織改編のような実データ期間の分断が通常起きないため、
+    複数人を一括比較できる 'x unified' のまま維持する（'closest' に巻き込まない）。"""
+    df = pd.DataFrame({
+        'year_month': ['2024-06', '2024-07'],
+        'name': ['山田', '鈴木'],
+        'engagement_rating': [5.0, 7.0],
+    })
+    fig = create_time_series_chart(df, 'engagement_rating', 'test', 'name')
+    assert fig.layout.hovermode == 'x unified'
+
+
 def test_categories_with_non_overlapping_periods_keep_correct_x_ranges():
     """カテゴリごとの実データ期間（描画される線の位置）自体は正しいことを守る。"""
     fig = create_time_series_chart(_df(), 'engagement_rating', 'test', 'section')
