@@ -9,6 +9,8 @@ import yaml
 from pathlib import Path
 from typing import Optional, Union
 
+from .config import SCOPE_ORG_COLUMNS, GRADE_SCOPE_COLUMN
+
 # Path to privileges configuration
 PRIVILEGES_FILE = Path(__file__).parent.parent / 'config' / 'privileges.yaml'
 
@@ -521,7 +523,13 @@ def filter_dataframe_by_scope(df, scope_values: Optional[list], org_columns: lis
     Args:
         df: DataFrame to filter
         scope_values: None for all data, list of allowed org values, empty list for no access
-        org_columns: Organization columns to check (default: division, department, section)
+        org_columns: Organization columns to check. Defaults to
+            config.SCOPE_ORG_COLUMNS (the *_current columns) — privilege
+            scoping must stay pinned to the current affiliation regardless of
+            the 組織・職位 toggle (see docs/PRIVILEGE_SYSTEM.md「権限は現在値固定」).
+            Pass config.ORG_FILTER_COLUMNS explicitly for a DataFrame that
+            doesn't carry the *_current columns (e.g. comment_df, already
+            mapped to its own current-affiliation columns).
 
     Returns:
         Filtered DataFrame
@@ -535,7 +543,7 @@ def filter_dataframe_by_scope(df, scope_values: Optional[list], org_columns: lis
         return df.iloc[0:0]
 
     if org_columns is None:
-        org_columns = ['division', 'department', 'section']
+        org_columns = SCOPE_ORG_COLUMNS
 
     # Filter by matching any org column
     mask = None
@@ -611,14 +619,17 @@ def apply_section_aliases(df, alias_mapping: dict, section_column: str = 'sectio
     return result
 
 
-def filter_dataframe_by_grade(df, allowed_grades: Optional[list], grade_column: str = 'grade'):
+def filter_dataframe_by_grade(df, allowed_grades: Optional[list], grade_column: str = GRADE_SCOPE_COLUMN):
     """
     Filter a DataFrame to only include rows with allowed grades.
 
     Args:
         df: DataFrame to filter
         allowed_grades: None for all grades, list of allowed grade values
-        grade_column: Name of the grade column (default: 'grade')
+        grade_column: Name of the grade column. Defaults to
+            config.GRADE_SCOPE_COLUMN ('grade_current') — privilege scoping
+            must stay pinned to the current grade regardless of the
+            組織・職位 toggle (see docs/PRIVILEGE_SYSTEM.md「権限は現在値固定」).
 
     Returns:
         Filtered DataFrame

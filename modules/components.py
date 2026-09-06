@@ -13,7 +13,7 @@ from typing import Optional, List, Dict, Any
 
 from streamlit.components.v1 import html as st_components_html
 from modules.signal_processing import get_signal_data, render_signal_table, render_signal_popovers
-from modules.config import SIGNAL_TABLE_COLUMNS, SCOPE_ORG_COLUMNS, GRADE_SCOPE_COLUMN
+from modules.config import SIGNAL_TABLE_COLUMNS, ORG_FILTER_COLUMNS
 from modules.privilege_manager import filter_dataframe_by_scope
 from modules.utils import GROUP_ORDER_MAP
 import sys
@@ -103,9 +103,13 @@ def prepare_comment_data(
     if 'section' in graph_comments.columns:
         graph_comments['section'] = graph_comments['section'].fillna('部門長')
 
-    # Apply section scope filtering using comment's own organization columns
-    # filter_dataframe_by_scope checks division, department, AND section columns
-    graph_comments = filter_dataframe_by_scope(graph_comments, scope)
+    # Apply section scope filtering using comment's own organization columns.
+    # comment_df is mapped from current_* just above (not toggled by 組織・職位
+    # の基準 — comment always shows current, see docs/ORG_BASIS_TOGGLE.md) and
+    # has no *_current pinned columns, so this is the one caller that must
+    # override filter_dataframe_by_scope()'s default (SCOPE_ORG_COLUMNS) with
+    # the plain division/department/section column names.
+    graph_comments = filter_dataframe_by_scope(graph_comments, scope, org_columns=ORG_FILTER_COLUMNS)
 
     return graph_comments
 
@@ -148,10 +152,8 @@ def render_action_candidates(
         key_prefix: Unique prefix for widget keys (must differ across tabs)
     """
     # Apply section scope filtering for アクション対象候補
-    # org_columns pins scoping to the current affiliation regardless of the
-    # 組織・職位 toggle (see docs/PRIVILEGE_SYSTEM.md — 権限は現在値固定).
     action_scope = privilege_mgr.get_section_scope(current_privilege, "アクション対象候補")
-    action_signal_df = filter_dataframe_by_scope(signal_df, action_scope, org_columns=SCOPE_ORG_COLUMNS)
+    action_signal_df = filter_dataframe_by_scope(signal_df, action_scope)
 
     if action_scope is None or len(action_scope) > 0:
         st.subheader("アクション対象候補")
@@ -750,21 +752,18 @@ def apply_grouping_filters(
     )
 
     # Layer 1: Grouping scope (restricts data based on grouping type)
-    # org_columns pins scoping to the current affiliation regardless of the
-    # 組織・職位 toggle (see docs/PRIVILEGE_SYSTEM.md — 権限は現在値固定).
     grouping_scope = privilege_mgr.get_grouping_scope(current_privilege, grouping_choice, dimension_filtered)
-    df = filter_dataframe_by_scope(df, grouping_scope, org_columns=SCOPE_ORG_COLUMNS)
+    df = filter_dataframe_by_scope(df, grouping_scope)
     if signal_df is not None:
-        signal_df = filter_dataframe_by_scope(signal_df, grouping_scope, org_columns=SCOPE_ORG_COLUMNS)
+        signal_df = filter_dataframe_by_scope(signal_df, grouping_scope)
 
     # Layer 2: Grade filtering (only for grade grouping)
-    # grade_column pins this to the current grade for the same reason.
     if grouping_choice == 'grade':
         grade_filter = privilege_mgr.get_grade_filter_for_grouping(current_privilege, grouping_choice, dimension_filtered)
         if grade_filter:
-            df = filter_dataframe_by_grade(df, grade_filter, grade_column=GRADE_SCOPE_COLUMN)
+            df = filter_dataframe_by_grade(df, grade_filter)
             if signal_df is not None:
-                signal_df = filter_dataframe_by_grade(signal_df, grade_filter, grade_column=GRADE_SCOPE_COLUMN)
+                signal_df = filter_dataframe_by_grade(signal_df, grade_filter)
 
     # Layer 3: Section aliases (only for section grouping)
     if grouping_choice == 'section':

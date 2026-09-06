@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 
-from .config import ENGAGEMENT_DIVISOR, COMPONENT_DIVISOR
+from .config import ENGAGEMENT_DIVISOR, COMPONENT_DIVISOR, AT_SURVEY_TOGGLE_COLUMNS
 
 
 def get_excel_password():
@@ -140,65 +140,44 @@ def load_data(uploaded_file, file_fingerprint=None):
             return signal_raw_df[col_name]
         return pd.Series([None] * len(signal_raw_df))
 
-    # Organizational structure mapping (current_* = current affiliation)
-    # Hierarchy: Division (部門) → Department (部署) → Section (課)
-    # These working columns always reflect the CURRENT affiliation — org_basis.py
-    # (applied post-cache, per the 組織・職位 toggle) is what may later overwrite
-    # them with their at-survey counterparts.
-    signal_df['division'] = get_signal_column('current_division')     # 部門 (Division)
-    signal_df['department'] = get_signal_column('current_department') # 部署 (Department)
-    signal_df['section'] = get_signal_column('current_section')       # 課 (Section)
-    signal_df['team'] = get_signal_column('current_team')
-    signal_df['project'] = get_signal_column('current_project')
-    # grade は rating2 の 'grade' 列自体が当時値（その行の year/month 時点の等級）を保持する
-    # よう2026-09に修正された。ダッシュボードでは他の組織属性と同じく「現在の等級」で
-    # 集計したいため、対になる current_grade 列（無ければ None → 下の fillna で '未設定'）を読む。
-    signal_df['grade'] = get_signal_column('current_grade')
+    # Organizational structure mapping. Hierarchy: Division (部門) →
+    # Department (部署) → Section (課). For each column in
+    # config.AT_SURVEY_TOGGLE_COLUMNS, rating2 holds two versions: current_{col}
+    # (current affiliation) and the bare {col} column (the at-survey value —
+    # for grade this was fixed 2026-09 to hold the grade as of that row's
+    # year/month, rather than today's).
+    #
+    # Three variants are derived below, all driven by that one column list so
+    # adding a 7th column only requires updating it there:
+    #   - the working column ({col}): always current-sourced at load time.
+    #     org_basis.py (applied post-cache, per the 組織・職位 toggle) is what
+    #     may later overwrite it with the at-survey value.
+    #   - {col}_current: a pinned copy of the working column above. Read by
+    #     privilege scoping (see docs/PRIVILEGE_SYSTEM.md「権限は現在値固定」)
+    #     and the 個人 tab profile (docs/ORG_BASIS_TOGGLE.md — profile always
+    #     shows current), so both stay correct even after org_basis.py runs.
+    #   - {col}_at: the at-survey value, sourced from the bare column.
+    for col in AT_SURVEY_TOGGLE_COLUMNS:
+        signal_df[col] = get_signal_column(f'current_{col}')
+        signal_df[f'{col}_current'] = signal_df[col]
+        signal_df[f'{col}_at'] = get_signal_column(col)
     signal_df['flag_constant_6m'] = get_signal_column('flag_constant_6m')
 
-    # Pinned current-affiliation copies. org_basis.py only overwrites the working
-    # columns above; privilege scoping (division_current/department_current/
-    # section_current/grade_current — see docs/PRIVILEGE_SYSTEM.md "権限は現在値固定")
-    # and the 個人 tab profile (all six — see docs/ORG_BASIS_TOGGLE.md, profile
-    # always shows current) must keep reading the current affiliation regardless
-    # of the toggle.
-    signal_df['division_current'] = signal_df['division']
-    signal_df['department_current'] = signal_df['department']
-    signal_df['section_current'] = signal_df['section']
-    signal_df['team_current'] = signal_df['team']
-    signal_df['project_current'] = signal_df['project']
-    signal_df['grade_current'] = signal_df['grade']
-
-    # At-survey (measured-at-the-time) values, kept separate from the working
-    # columns above. Sourced from rating2's bare (non current_*) columns.
-    signal_df['division_at'] = get_signal_column('division')
-    signal_df['department_at'] = get_signal_column('department')
-    signal_df['section_at'] = get_signal_column('section')
-    signal_df['team_at'] = get_signal_column('team')
-    signal_df['project_at'] = get_signal_column('project')
-    signal_df['grade_at'] = get_signal_column('grade')
-
-    # Fill missing values for organizational columns
-    fill_cols = [
-        'division', 'department', 'section', 'team', 'project', 'grade',
-        'division_current', 'department_current', 'section_current',
-        'team_current', 'project_current', 'grade_current',
-        'division_at', 'department_at', 'section_at', 'team_at', 'project_at', 'grade_at',
+    # Fill missing values for organizational columns. Every column below was
+    # just assigned above via get_signal_column(), which always returns a
+    # same-length Series even when the source column is absent from rating2 —
+    # so they're guaranteed to exist here.
+    org_cols = [
+        c for base in AT_SURVEY_TOGGLE_COLUMNS for c in (base, f'{base}_current', f'{base}_at')
     ]
-    for col in fill_cols:
-        if col not in signal_df.columns:
-            signal_df[col] = pd.Series([None] * len(signal_df))
+    for col in org_cols:
         signal_df[col] = signal_df[col].fillna('未設定')
 
     # Derive pivot_df from signal_df by normalizing raw ratings
     # rating2 stores raw scores (0-54 for engagement, 0-18 for components);
     # dividing by the respective divisors produces the 0-10 scale.
     rating_cols = ['engagement_rating', 'vigor_rating', 'dedication_rating', 'absorption_rating']
-    id_cols = ['year', 'month', 'name', 'division', 'department', 'section',
-               'team', 'project', 'grade',
-               'division_current', 'department_current', 'section_current',
-               'team_current', 'project_current', 'grade_current',
-               'division_at', 'department_at', 'section_at', 'team_at', 'project_at', 'grade_at']
+    id_cols = ['year', 'month', 'name'] + org_cols
     if 'mail_address' in signal_df.columns:
         id_cols.insert(2, 'mail_address')
 

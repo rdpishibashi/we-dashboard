@@ -19,7 +19,6 @@ import urllib.parse
 
 from modules.utils import get_options, sort_names_by_grade
 from modules.privilege_manager import filter_dataframe_by_scope
-from modules.config import SCOPE_ORG_COLUMNS
 
 
 def get_sidebar_scope(privilege_mgr, current_privilege: str) -> Optional[list]:
@@ -277,10 +276,8 @@ def render_unified_sidebar_filters(
     # Pre-filter by broadest privilege scope (union of all tab scopes)
     # This excludes completely out-of-scope data from dropdown options
     # while still allowing per-tab scope to control chart data
-    # org_columns pins scoping to the current affiliation regardless of the
-    # 組織・職位 toggle (see docs/PRIVILEGE_SYSTEM.md — 権限は現在値固定).
     sidebar_scope = get_sidebar_scope(privilege_mgr, current_privilege)
-    scoped_df = filter_dataframe_by_scope(df.copy(), sidebar_scope, org_columns=SCOPE_ORG_COLUMNS)
+    scoped_df = filter_dataframe_by_scope(df.copy(), sidebar_scope)
 
     # Get section restriction for 課 dropdown (section managers only)
     section_restriction = get_section_restriction(df, privilege_mgr, current_privilege)
@@ -469,7 +466,7 @@ def render_unified_sidebar_filters(
     current_df = apply_unified_filter(current_df, 'individual', selected_individual)
 
     # Pre-filter signal_df by the same broadest scope
-    scoped_signal_df = filter_dataframe_by_scope(signal_df, sidebar_scope, org_columns=SCOPE_ORG_COLUMNS)
+    scoped_signal_df = filter_dataframe_by_scope(signal_df, sidebar_scope)
 
     # Filter signal_df to match filtered main df
     if selected_individual != 'すべて':
