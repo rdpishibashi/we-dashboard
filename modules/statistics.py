@@ -214,13 +214,21 @@ def calculate_group_statistics(df, metric_col, group_col=None, signal_df=None, e
 
             # 人数: count members present in the latest month (end_dt) so that
             # transferred/retired members in earlier months are not counted.
-            # Returns 0 when the group has no members in the latest month.
             if end_dt is not None and 'year_month_dt' in group_data.columns and 'name' in group_data.columns:
                 n_people = group_data[group_data['year_month_dt'] == end_dt]['name'].nunique()
             elif 'name' in group_data.columns:
                 n_people = group_data['name'].nunique()
             else:
                 n_people = len(group_data)
+
+            # A group with nobody in the latest month is a dissolved / emptied
+            # organization — its 平均・傾き are period-wide history while 人数
+            # would read 0, which looks like a data error. Drop the row.
+            # 個人別 (group_col == 'name') is exempt: 人数 is not displayed
+            # there, and a member who simply did not answer in the latest month
+            # must still appear with their history.
+            if group_col != 'name' and n_people == 0:
+                continue
 
             stats_list.append({
                 column_name: str(group_name),
