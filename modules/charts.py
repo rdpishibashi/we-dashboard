@@ -68,10 +68,21 @@ def create_time_series_chart(df, y_col, title, color_by=None):
         if legend_title != 'なし':
             legend_title = legend_title.replace('別', '')
 
+        # 'x unified'（複数系列を1つのツールチップで比較表示）は、カテゴリに実
+        # データの無い月でも一番近いデータ点の値を必ず拾ってきてしまう
+        # （hoverdistance は 'closest' モードのときにしか効かないため、データ側で
+        # NaN を補完しても直らない）。組織・職位の基準トグルで「測定当時」を選ぶと、
+        # 組織改編で新旧カテゴリの実データ期間が完全に分断されることがあり、この
+        # Plotly の挙動が誤表示として顕在化する。'closest' は実際にカーソルに
+        # 一番近い1点だけを正確に示すため、この誤表示が原理的に起こらない
+        # （トレードオフ: 複数カテゴリを1箇所で一括比較する機能は失われる）。
+        # 個人別（name）は組織改編のような実データ期間の分断が通常起きないため、
+        # 複数人を一括比較できる 'x unified' のまま維持する。
+        hover_mode = 'x unified' if color_by == 'name' else 'closest'
         fig.update_layout(
             xaxis_title='年月',
             yaxis_title=axis_title,
-            hovermode='x unified',
+            hovermode=hover_mode,
             height=480,
             legend_title=legend_title
         )
