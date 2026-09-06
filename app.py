@@ -394,50 +394,12 @@ if uploaded_file is not None:
             if not include_leave:
                 filtered_df = filtered_df[~filtered_df['mail_address'].isin(leave_addresses)]
                 filtered_signal_df = filtered_signal_df[~filtered_signal_df['mail_address'].isin(leave_addresses)]
-            elif org_basis == ORG_BASIS_CURRENT:
-                # Leave members can have current_* fields empty for rows recorded before
-                # 2026-09-06 (Admin GAS used to clear them; it no longer does — see
-                # WorkEngagementSystem commit 6548c44). Restore their org info from
-                # members.yaml so they appear in the correct department/section dropdowns
-                # and charts. Only meaningful under the current-affiliation basis — under
-                # 測定当時 the working columns already hold the (non-empty) at-survey
-                # values, and members.yaml only knows the CURRENT org, so restoring here
-                # would overwrite correct historical data with today's affiliation.
-                if not member_df.empty:
-                    leave_member_info = member_df[member_df['leave'] == 'leave'][
-                        ['mail_address', 'division', 'department', 'section', 'team', 'project', 'grade']
-                    ].copy()
-                    if not leave_member_info.empty:
-                        _org_cols = ['division', 'department', 'section', 'team', 'project', 'grade']
-                        for col in _org_cols:
-                            if col not in leave_member_info.columns:
-                                continue
-                            addr_to_val = leave_member_info.set_index('mail_address')[col]
-                            # Also keep the pinned *_current column (section_current/
-                            # team_current/project_current/grade_current) in sync — it was
-                            # copied from the working column at load time, before this
-                            # restoration runs. Privilege scoping reads section_current/
-                            # grade_current (SCOPE_ORG_COLUMNS) and the 個人 profile reads
-                            # all four regardless of the 組織・職位 toggle.
-                            _target_cols = [col, f'{col}_current']
-                            for _fdf in [filtered_df, filtered_signal_df]:
-                                for _target_col in _target_cols:
-                                    if _target_col not in _fdf.columns:
-                                        continue
-                                    # Match leave member rows where org field is empty/unset
-                                    # (Admin GAS clears to '' which fillna converts to '未設定',
-                                    #  but handle both '' and '未設定' for safety)
-                                    _leave_mask = _fdf['mail_address'].isin(leave_addresses)
-                                    _empty_mask = _fdf[_target_col].isin(['', '未設定']) | _fdf[_target_col].isna()
-                                    _mask = _leave_mask & _empty_mask
-                                    if not _mask.any():
-                                        continue
-                                    # Map mail_address → org value; use index-aligned ops to avoid shape mismatch
-                                    _mapped = _fdf.loc[_mask, 'mail_address'].map(addr_to_val)
-                                    # Keep only rows where members.yaml has a valid (non-empty) value
-                                    _valid = _mapped[_mapped.notna() & (_mapped != '')]
-                                    if not _valid.empty:
-                                        _fdf.loc[_valid.index, _target_col] = _valid
+            # Org info restoration from members.yaml was removed 2026-09-06: Admin GAS no
+            # longer clears current_* for leave/removed members (commit 6548c44), and the
+            # historical rows that were already cleared have since been repaired at the
+            # source (EngagementMasterSS/EngagementMasterAllSS). rating2's organization
+            # columns are therefore never empty for leave members anymore, so there is
+            # nothing left to restore. See docs/LEAVE_MEMBER_TOGGLE.md.
 
         # Unified organization filters (cascading dropdowns)
         # 表示カテゴリ and leave checkbox are already rendered above
