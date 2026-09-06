@@ -261,21 +261,3 @@ def find_default_data_files():
         # Path(__file__) is modules/config.py → .parent.parent is project root
         data_dir = Path(__file__).resolve().parent.parent
     return glob.glob(str(data_dir / 'EngagementData-*.xlsx'))
-
-# Privilege-based access control for 共有したいこと section
-# Maps privilege to allowed groups (None = all groups allowed)
-PRIVILEGE_GROUP_ACCESS = {
-    'admin': None,                   # Admin - all groups
-    'sd': ['システム開発部', '機電設計部'],
-    'me': ['システム開発部', '機電設計部'],
-    'sw': ['ソフトウェア開発課'],
-    'pd': ['製品技術課'],
-    'me1': ['第一設計課'],
-    'me2': ['第二設計課'],
-    'me3': ['第三設計課'],
-    'dev': ['開発部'],
-    'dev1': ['開発部'],
-    'dev2': ['開発部'],
-    'uti': ['開発部'],
-    'uks': ['開発部']
-}
