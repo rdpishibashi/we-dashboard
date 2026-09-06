@@ -13,7 +13,7 @@ from typing import Optional, List, Dict, Any
 
 from streamlit.components.v1 import html as st_components_html
 from modules.signal_processing import get_signal_data, render_signal_table, render_signal_popovers
-from modules.config import SIGNAL_TABLE_COLUMNS
+from modules.config import SIGNAL_TABLE_COLUMNS, SCOPE_ORG_COLUMNS, GRADE_SCOPE_COLUMN
 from modules.privilege_manager import filter_dataframe_by_scope
 from modules.utils import GROUP_ORDER_MAP
 import sys
@@ -148,8 +148,10 @@ def render_action_candidates(
         key_prefix: Unique prefix for widget keys (must differ across tabs)
     """
     # Apply section scope filtering for アクション対象候補
+    # org_columns pins scoping to the current affiliation regardless of the
+    # 組織・職位 toggle (see docs/PRIVILEGE_SYSTEM.md — 権限は現在値固定).
     action_scope = privilege_mgr.get_section_scope(current_privilege, "アクション対象候補")
-    action_signal_df = filter_dataframe_by_scope(signal_df, action_scope)
+    action_signal_df = filter_dataframe_by_scope(signal_df, action_scope, org_columns=SCOPE_ORG_COLUMNS)
 
     if action_scope is None or len(action_scope) > 0:
         st.subheader("アクション対象候補")
@@ -555,8 +557,11 @@ def render_non_respondents(
     # Mail addresses of members who submitted data in the latest period
     submitted = set(df[df['year_month'] == latest_ym]['mail_address'].dropna().unique())
 
-    # List A: divisions present in the uploaded data file
-    data_divisions = set(df['division'].dropna().unique())
+    # List A: divisions present in the uploaded data file. 未記入者 is unaffected
+    # by the 組織・職位 toggle (members.yaml only knows the current org), so pin
+    # to division_current — df['division'] may hold an at-survey label.
+    division_col = 'division_current' if 'division_current' in df.columns else 'division'
+    data_divisions = set(df[division_col].dropna().unique())
 
     # List B: members in members.yaml whose division is in List A
     list_b = member_df[member_df['division'].isin(data_divisions)].copy()
@@ -745,18 +750,21 @@ def apply_grouping_filters(
     )
 
     # Layer 1: Grouping scope (restricts data based on grouping type)
+    # org_columns pins scoping to the current affiliation regardless of the
+    # 組織・職位 toggle (see docs/PRIVILEGE_SYSTEM.md — 権限は現在値固定).
     grouping_scope = privilege_mgr.get_grouping_scope(current_privilege, grouping_choice, dimension_filtered)
-    df = filter_dataframe_by_scope(df, grouping_scope)
+    df = filter_dataframe_by_scope(df, grouping_scope, org_columns=SCOPE_ORG_COLUMNS)
     if signal_df is not None:
-        signal_df = filter_dataframe_by_scope(signal_df, grouping_scope)
+        signal_df = filter_dataframe_by_scope(signal_df, grouping_scope, org_columns=SCOPE_ORG_COLUMNS)
 
     # Layer 2: Grade filtering (only for grade grouping)
+    # grade_column pins this to the current grade for the same reason.
     if grouping_choice == 'grade':
         grade_filter = privilege_mgr.get_grade_filter_for_grouping(current_privilege, grouping_choice, dimension_filtered)
         if grade_filter:
-            df = filter_dataframe_by_grade(df, grade_filter)
+            df = filter_dataframe_by_grade(df, grade_filter, grade_column=GRADE_SCOPE_COLUMN)
             if signal_df is not None:
-                signal_df = filter_dataframe_by_grade(signal_df, grade_filter)
+                signal_df = filter_dataframe_by_grade(signal_df, grade_filter, grade_column=GRADE_SCOPE_COLUMN)
 
     # Layer 3: Section aliases (only for section grouping)
     if grouping_choice == 'section':
