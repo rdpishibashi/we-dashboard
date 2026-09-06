@@ -33,26 +33,10 @@ def create_time_series_chart(df, y_col, title, color_by=None):
     if color_by and color_by != 'なし':
         # グループ別の月次平均
         grouped = df.groupby(['year_month', color_by])[y_col].mean().reset_index()
-
-        if color_by != 'name':
-            # 「年月 × カテゴリ」の完全な組み合わせに再インデックスし、データの無い
-            # 月には明示的に NaN を入れる。これをしないと、hovermode='x unified'
-            # がそのカテゴリの一番近いデータ点の値を誤って表示してしまう
-            # （組織・職位の基準トグルで「測定当時」を選ぶと、組織改編を境に
-            # 新旧の課の実データ期間が重ならなくなり、この Plotly の挙動が
-            # 顕在化する。実際に描画される線の位置自体は元々正しい）。
-            # 個人別（name）は対象外——latest_vals による並び替えが NaN で
-            # 不安定になるため、影響範囲を組織カテゴリ系グルーピングに限定する。
-            full_index = pd.MultiIndex.from_product(
-                [grouped['year_month'].unique(), grouped[color_by].unique()],
-                names=['year_month', color_by]
-            )
-            grouped = grouped.set_index(['year_month', color_by]).reindex(full_index).reset_index()
-
         grouped['year_month_dt'] = pd.to_datetime(grouped['year_month'], format='%Y-%m', errors='coerce')
 
         # カテゴリ順序の設定
-        color_values = grouped[color_by].dropna().unique().tolist()
+        color_values = grouped[color_by].unique().tolist()
         if color_by == 'name':
             # Sort by most recent value descending so the unified hover list
             # matches the top-to-bottom visual order of the lines at the latest date
@@ -87,7 +71,16 @@ def create_time_series_chart(df, y_col, title, color_by=None):
         fig.update_layout(
             xaxis_title='年月',
             yaxis_title=axis_title,
-            hovermode='x unified',
+            # 'x unified'（複数系列を1つのツールチップで比較表示）は、カテゴリに実
+            # データの無い月でも一番近いデータ点の値を必ず拾ってきてしまう
+            # （hoverdistance は 'closest' モードのときにしか効かないため、
+            # データ側で NaN を補完しても直らない）。組織・職位の基準トグルで
+            # 「測定当時」を選ぶと、組織改編で新旧カテゴリの実データ期間が
+            # 完全に分断されることがあり、この Plotly の挙動が誤表示として
+            # 顕在化する。'closest' は実際にカーソルに一番近い1点だけを正確に
+            # 示すため、この誤表示が原理的に起こらない
+            # （トレードオフ: 複数カテゴリを1箇所で一括比較する機能は失われる）
+            hovermode='closest',
             height=480,
             legend_title=legend_title
         )
