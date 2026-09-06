@@ -53,7 +53,6 @@ from modules.config import (
     find_default_data_files, RATING_BAND_HIGH_THRESHOLD, RATING_BAND_LOW_THRESHOLD,
     COLOR_SCALE_START, COLOR_SCALE_END, GROUPING_LABEL_MAP,
     ORG_BASIS_CURRENT, ORG_BASIS_AT_SURVEY, ORG_BASIS_DEFAULT, ORG_BASIS_LABELS,
-    SCOPE_ORG_COLUMNS,
 )
 from modules.utils import get_options
 from modules.data_loader import load_data
@@ -541,8 +540,8 @@ if uploaded_file is not None:
 
             # Layer 1: Apply per-tab data scope filtering
             tab_scope = privilege_mgr.get_data_scope_for_tab(current_privilege, "時系列") if current_privilege else None
-            tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope, org_columns=SCOPE_ORG_COLUMNS)
-            tab_signal_df = filter_dataframe_by_scope(filtered_signal_df, tab_scope, org_columns=SCOPE_ORG_COLUMNS)
+            tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope)
+            tab_signal_df = filter_dataframe_by_scope(filtered_signal_df, tab_scope)
 
             # Use unified grouping from sidebar
             ts_group_choice = unified_grouping
@@ -606,8 +605,8 @@ if uploaded_file is not None:
 
             # Apply per-tab data scope filtering
             tab_scope = privilege_mgr.get_data_scope_for_tab(current_privilege, "カテゴリ比較") if current_privilege else None
-            tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope, org_columns=SCOPE_ORG_COLUMNS)
-            tab_signal_df = filter_dataframe_by_scope(filtered_signal_df, tab_scope, org_columns=SCOPE_ORG_COLUMNS)
+            tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope)
+            tab_signal_df = filter_dataframe_by_scope(filtered_signal_df, tab_scope)
 
             # Use unified grouping from sidebar
             comparison_group = unified_grouping
@@ -743,7 +742,7 @@ if uploaded_file is not None:
 
             # Apply per-tab data scope filtering
             tab_scope = privilege_mgr.get_data_scope_for_tab(current_privilege, "評価") if current_privilege else None
-            tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope, org_columns=SCOPE_ORG_COLUMNS)
+            tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope)
 
             evaluation_group = unified_grouping
             evaluation_df = tab_filtered_df
@@ -951,8 +950,8 @@ if uploaded_file is not None:
 
             # Apply per-tab data scope filtering
             tab_scope = privilege_mgr.get_data_scope_for_tab(current_privilege, "個人") if current_privilege else None
-            tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope, org_columns=SCOPE_ORG_COLUMNS)
-            tab_signal_df = filter_dataframe_by_scope(filtered_signal_df, tab_scope, org_columns=SCOPE_ORG_COLUMNS)
+            tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope)
+            tab_signal_df = filter_dataframe_by_scope(filtered_signal_df, tab_scope)
 
             # Check if individual is already selected in sidebar
             sidebar_individual = st.session_state.get("unified_individual", "すべて")
@@ -1212,7 +1211,7 @@ if uploaded_file is not None:
 
             # Apply per-tab data scope filtering
             tab_scope = privilege_mgr.get_data_scope_for_tab(current_privilege, "分布") if current_privilege else None
-            tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope, org_columns=SCOPE_ORG_COLUMNS)
+            tab_filtered_df = filter_dataframe_by_scope(filtered_df, tab_scope)
 
             dist_group = unified_grouping
             dist_df = tab_filtered_df
