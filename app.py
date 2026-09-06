@@ -570,7 +570,7 @@ if uploaded_file is not None:
                 # Display measured values section (collapsible)
                 with st.expander("計測値", expanded=False):
                     group_col = ts_group_choice if ts_group_choice != 'なし' else None
-                    measured_data = format_measured_data(ts_df, selected_metric, group_col)
+                    measured_data = format_measured_data(ts_df, selected_metric, group_col, year_month_first=True)
                     st.dataframe(measured_data, **DATAFRAME_KWARGS)
 
                 # Display key statistics (collapsible)
