@@ -2,9 +2,12 @@
 """
 Generate config/members.yaml from MemberSS.xlsx
 
-Reads the member master spreadsheet exported from Google Sheets (MemberSS),
-filters out members on leave, and writes a YAML file embedded in the project.
-This YAML is the runtime data source for the 未記入者 feature.
+Reads the member master spreadsheet exported from Google Sheets (MemberSS) and
+writes a YAML file embedded in the project. Every member is written with a `leave`
+status ('' / 'absence' / 'leave'); the dashboard filters on it at display time.
+Leavers that operators have removed from the 'members' sheet are carried over from
+'members_history' (see _history_leavers). This YAML is the runtime data source for
+the 未記入者 feature and for the 転属・退職メンバー toggle.
 
 Usage:
     python tools/generate_member_yaml.py
@@ -38,6 +41,7 @@ SCRIPT_DIR = Path(__file__).parent
 PROJECT_ROOT = SCRIPT_DIR.parent
 YAML_FILE = PROJECT_ROOT / 'config' / 'members.yaml'
 SHEET_NAME = 'members'
+HISTORY_SHEET_NAME = 'members_history'
 
 # Candidate source paths, in priority order (excluding an explicit --source).
 DEFAULT_SOURCE_CANDIDATES = [
@@ -69,13 +73,65 @@ def resolve_source(explicit: str = None) -> Path:
     )
 
 
+def _history_leavers(source_path: Path, members: pd.DataFrame) -> pd.DataFrame:
+    """
+    Retirees/transferees who are in 'members_history' but no longer in 'members'.
+
+    Operators delete a leaver from 'members' once 'members_history' holds the row
+    (Admin MAINTENANCE_GUIDE). members.yaml is built from 'members' only, so those
+    people would vanish from it — and the dashboard's 転属・退職メンバー toggle, which
+    keys off `leave: leave` in members.yaml, would lose them (or disappear entirely).
+
+    A history row is carried over only when ALL of these hold:
+      - leave is 'Y' or 'leave' (history uses 'Y'; the dashboard checks == 'leave', so
+        the value is written as 'leave');
+      - the address is not in 'members' (members' own row wins — no duplicates);
+      - its division is one that currently has members who have NOT left. Abolished
+        divisions are skipped on purpose: split_by_division.py would otherwise create
+        an empty EngagementData-<division>.xlsx for them. Rows with no division are
+        skipped too — their division cannot be determined;
+      - first occurrence per address only.
+
+    Returns a DataFrame with OUTPUT_COLUMNS (empty if the sheet is absent, as in
+    legacy Member.xlsx files).
+    """
+    try:
+        hist = pd.read_excel(source_path, sheet_name=HISTORY_SHEET_NAME, engine='openpyxl')
+    except ValueError:  # sheet not found
+        return members.iloc[0:0].copy()
+
+    missing = [c for c in OUTPUT_COLUMNS if c not in hist.columns]
+    if missing:
+        raise ValueError(
+            f"missing columns in '{HISTORY_SHEET_NAME}' sheet of {source_path}: {missing}")
+
+    hist = hist[OUTPUT_COLUMNS].fillna('').copy()
+    hist['leave'] = hist['leave'].replace({'Y': 'leave'})
+    for col in ('mail_address', 'division'):
+        hist[col] = hist[col].astype(str).str.strip()
+
+    current_divisions = set(members.loc[members['leave'] != 'leave', 'division'].astype(str).str.strip())
+    current_divisions.discard('')
+
+    keep = (
+        (hist['leave'] == 'leave')
+        & (hist['mail_address'] != '')
+        & ~hist['mail_address'].isin(set(members['mail_address'].astype(str).str.strip()))
+        & hist['division'].isin(current_divisions)
+    )
+    return hist[keep].drop_duplicates(subset='mail_address', keep='first').reset_index(drop=True)
+
+
 def build(source_path: Path) -> tuple[str, dict]:
     """
-    Read source_path's 'members' sheet and build the members.yaml content
-    in memory, without writing anything.
+    Read source_path's 'members' sheet (plus leavers from 'members_history', see
+    _history_leavers) and build the members.yaml content in memory, without
+    writing anything.
 
     Returns:
-        (yaml_text, summary) — summary is {total, on_leave, active, by_division}.
+        (yaml_text, summary) — summary is
+        {total, on_leave, active, from_history, by_division}; `from_history` is how
+        many of `total` came from 'members_history'.
     """
     df = pd.read_excel(source_path, sheet_name=SHEET_NAME, engine='openpyxl')
 
@@ -88,8 +144,17 @@ def build(source_path: Path) -> tuple[str, dict]:
     #               'leave' = retired/transferred
     # Filtering is done at display time in the dashboard, not here.
     result = df[OUTPUT_COLUMNS].fillna('').copy()
+    result['leave'] = result['leave'].replace({'Y': 'leave'})
+
+    # Retirees whom operators have removed from the 'members' sheet live on only in
+    # 'members_history'. Without them the dashboard has no leave members at all.
+    history = _history_leavers(source_path, result)
+    from_history = len(history)
+    if from_history:
+        result = pd.concat([result, history], ignore_index=True)
+
     members = result.to_dict(orient='records')
-    leave_count = len(df[df['leave'].fillna('').isin(['leave', 'Y'])])
+    leave_count = int((result['leave'] == 'leave').sum())
 
     header = (
         "# Member list for WE-Dashboard\n"
@@ -108,6 +173,7 @@ def build(source_path: Path) -> tuple[str, dict]:
         'total': len(members),
         'on_leave': leave_count,
         'active': len(members) - leave_count,
+        'from_history': from_history,
         'by_division': by_division,
     }
     return yaml_text, summary
@@ -146,7 +212,7 @@ def main():
 
     print(f"Generated {YAML_FILE}")
     print(f"  Total members  : {summary['total']}")
-    print(f"  On leave       : {summary['on_leave']}")
+    print(f"  On leave       : {summary['on_leave']}  (from members_history: {summary['from_history']})")
     print(f"  Active+absence : {summary['active']}")
     print()
     for division, count in summary['by_division'].items():

@@ -330,9 +330,11 @@ def step_members(member_ss: Path, write: bool) -> tuple:
     if write:
         gmy.YAML_FILE.parent.mkdir(parents=True, exist_ok=True)
         gmy.YAML_FILE.write_text(yaml_text, encoding='utf-8')
-        print(f"  更新: {gmy.YAML_FILE}  ({summary['total']} 名 / leave {summary['on_leave']} 名)")
+        print(f"  更新: {gmy.YAML_FILE}  ({summary['total']} 名 / leave {summary['on_leave']} 名"
+              f"、うち members_history から {summary['from_history']} 名)")
     elif changed:
-        print(f"  [--check] 更新が必要です: {gmy.YAML_FILE} ({summary['total']} 名)")
+        print(f"  [--check] 更新が必要です: {gmy.YAML_FILE} ({summary['total']} 名 / "
+              f"leave {summary['on_leave']} 名、うち members_history から {summary['from_history']} 名)")
     else:
         print("  変更なし")
 
