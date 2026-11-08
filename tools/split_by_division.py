@@ -125,6 +125,31 @@ def _apply_window(df: pd.DataFrame, window) -> pd.DataFrame:
     return df[_month_index(df["year"], df["month"]).between(first, last)].copy()
 
 
+def _active_divisions(rating2: pd.DataFrame) -> list[str]:
+    """Divisions that have rating2 rows, in first-seen order (blank/NaN dropped).
+
+    Expects a frame whose current_division was already normalized and windowed.
+    """
+    return rating2["current_division"].dropna().unique().tolist()
+
+
+def list_active_divisions(source: Path = SOURCE_FILE, months: int = MONTHS_WINDOW) -> list[str]:
+    """The divisions split_by_division() writes an EngagementData-<division>.xlsx for.
+
+    Reads only rating2's year/month/current_division and applies the same
+    normalization and the same MONTHS_WINDOW as split_by_division(). Other tools
+    (generate_member_yaml.py: which divisions' members.yaml entries are kept) call
+    this so that "a division that gets a data file" has a single definition.
+    """
+    df = pd.read_excel(source, sheet_name="rating2",
+                       usecols=lambda c: c in ("year", "month", "current_division"))
+    if "current_division" not in df.columns:
+        return []
+    df["current_division"] = _normalize_str_col(df["current_division"])
+    df = _apply_window(df, _recent_window(df, months))
+    return _active_divisions(df)
+
+
 def split_by_division(source: Path = SOURCE_FILE) -> None:
     password = _load_password()
 
@@ -156,12 +181,7 @@ def split_by_division(source: Path = SOURCE_FILE) -> None:
             print(f"  {sheet}: {before} → {len(data[sheet])} 行")
 
     # Derive division list from active members in rating2 (drop nulls/empty)
-    active_divisions = (
-        data["rating2"]["current_division"]
-        .dropna()
-        .unique()
-        .tolist()
-    )
+    active_divisions = _active_divisions(data["rating2"])
 
     # Load leave member → division mapping from members.yaml
     leave_div_map = _load_leave_division_map()
@@ -180,20 +200,32 @@ def split_by_division(source: Path = SOURCE_FILE) -> None:
         # Addresses of leave members belonging to this division
         leave_addrs = {addr for addr, div in leave_div_map.items() if div == division}
 
+        # Rows of this division, per sheet
+        per_sheet: dict[str, pd.DataFrame] = {}
+        for sheet in SHEETS:
+            df = data[sheet]
+            # Active members in this division
+            active_mask = df["current_division"] == division
+            # Leave members whose division (per members.yaml) is this division
+            leave_mask = df["mail_address"].isin(leave_addrs) if "mail_address" in df.columns else pd.Series(False, index=df.index)
+            filtered = df[active_mask | leave_mask].copy()
+            # Sort chronologically so the latest row is always last
+            sort_cols = [c for c in ["year", "month"] if c in filtered.columns]
+            if sort_cols:
+                filtered = filtered.sort_values(sort_cols, kind="stable").reset_index(drop=True)
+            per_sheet[sheet] = filtered
+
+        # A division that only survives through members.yaml (no rows in the window)
+        # must not produce an empty data file (e.g. an abolished division's leavers).
+        if all(len(frame) == 0 for frame in per_sheet.values()):
+            print(f"  Skipped: {division} (no rows in the latest {MONTHS_WINDOW} months — "
+                  f"no EngagementData file written)")
+            continue
+
         buf = io.BytesIO()
         with pd.ExcelWriter(buf, engine="openpyxl") as writer:
             for sheet in SHEETS:
-                df = data[sheet]
-                # Active members in this division
-                active_mask = df["current_division"] == division
-                # Leave members whose division (per members.yaml) is this division
-                leave_mask = df["mail_address"].isin(leave_addrs) if "mail_address" in df.columns else pd.Series(False, index=df.index)
-                filtered = df[active_mask | leave_mask].copy()
-                # Sort chronologically so the latest row is always last
-                sort_cols = [c for c in ["year", "month"] if c in filtered.columns]
-                if sort_cols:
-                    filtered = filtered.sort_values(sort_cols, kind="stable").reset_index(drop=True)
-                filtered.to_excel(writer, sheet_name=sheet, index=False)
+                per_sheet[sheet].to_excel(writer, sheet_name=sheet, index=False)
 
         buf.seek(0)
         with open(out_path, "wb") as f:

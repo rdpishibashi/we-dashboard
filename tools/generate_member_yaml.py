@@ -5,9 +5,13 @@ Generate config/members.yaml from MemberSS.xlsx
 Reads the member master spreadsheet exported from Google Sheets (MemberSS) and
 writes a YAML file embedded in the project. Every member is written with a `leave`
 status ('' / 'absence' / 'leave'); the dashboard filters on it at display time.
-Leavers that operators have removed from the 'members' sheet are carried over from
-'members_history' (see _history_leavers). This YAML is the runtime data source for
-the 未記入者 feature and for the 転属・退職メンバー toggle.
+members.yaml is CUMULATIVE: sheet additions/changes are applied, but people already in
+members.yaml are never deleted just because they left the 'members' sheet (operators remove
+leavers from it). That retention — and the carry-over of leavers from 'members_history' —
+applies only to divisions that get an EngagementData-<division>.xlsx (see
+split_by_division.list_active_divisions), so abolished divisions do not pile up.
+This YAML is the runtime data source for the 未記入者 feature and for the
+転属・退職メンバー toggle.
 
 Usage:
     python tools/generate_member_yaml.py
@@ -36,6 +40,8 @@ import sys
 import yaml
 import pandas as pd
 from pathlib import Path
+
+import split_by_division as sbd  # single definition of "a division that gets a data file"
 
 SCRIPT_DIR = Path(__file__).parent
 PROJECT_ROOT = SCRIPT_DIR.parent
@@ -73,32 +79,15 @@ def resolve_source(explicit: str = None) -> Path:
     )
 
 
-def _history_leavers(source_path: Path, members: pd.DataFrame) -> pd.DataFrame:
+def _read_history(source_path: Path) -> pd.DataFrame:
     """
-    Retirees/transferees who are in 'members_history' but no longer in 'members'.
-
-    Operators delete a leaver from 'members' once 'members_history' holds the row
-    (Admin MAINTENANCE_GUIDE). members.yaml is built from 'members' only, so those
-    people would vanish from it — and the dashboard's 転属・退職メンバー toggle, which
-    keys off `leave: leave` in members.yaml, would lose them (or disappear entirely).
-
-    A history row is carried over only when ALL of these hold:
-      - leave is 'Y' or 'leave' (history uses 'Y'; the dashboard checks == 'leave', so
-        the value is written as 'leave');
-      - the address is not in 'members' (members' own row wins — no duplicates);
-      - its division is one that currently has members who have NOT left. Abolished
-        divisions are skipped on purpose: split_by_division.py would otherwise create
-        an empty EngagementData-<division>.xlsx for them. Rows with no division are
-        skipped too — their division cannot be determined;
-      - first occurrence per address only.
-
-    Returns a DataFrame with OUTPUT_COLUMNS (empty if the sheet is absent, as in
-    legacy Member.xlsx files).
+    'members_history' rows normalized to OUTPUT_COLUMNS ('Y' -> 'leave'; address and
+    division stripped). Empty if the sheet is absent (legacy Member.xlsx files).
     """
     try:
         hist = pd.read_excel(source_path, sheet_name=HISTORY_SHEET_NAME, engine='openpyxl')
     except ValueError:  # sheet not found
-        return members.iloc[0:0].copy()
+        return pd.DataFrame(columns=OUTPUT_COLUMNS)
 
     missing = [c for c in OUTPUT_COLUMNS if c not in hist.columns]
     if missing:
@@ -109,29 +98,77 @@ def _history_leavers(source_path: Path, members: pd.DataFrame) -> pd.DataFrame:
     hist['leave'] = hist['leave'].replace({'Y': 'leave'})
     for col in ('mail_address', 'division'):
         hist[col] = hist[col].astype(str).str.strip()
+    return hist
 
-    current_divisions = set(members.loc[members['leave'] != 'leave', 'division'].astype(str).str.strip())
-    current_divisions.discard('')
 
+def _history_leavers(hist: pd.DataFrame, exclude_addresses: set, target_divisions: set) -> pd.DataFrame:
+    """
+    Leavers in 'members_history' that members.yaml should carry. A row qualifies only
+    when ALL of these hold:
+      - leave is 'leave' (history's 'Y' was normalized; the dashboard checks == 'leave');
+      - the address is not already covered (in the sheet or retained from the old yaml);
+      - its division is a target division (one that gets an EngagementData file).
+        Abolished divisions are skipped on purpose (split_by_division would otherwise
+        have a division with nothing to write); rows with no division are skipped too —
+        their division cannot be determined;
+      - first occurrence per address only.
+    """
     keep = (
         (hist['leave'] == 'leave')
         & (hist['mail_address'] != '')
-        & ~hist['mail_address'].isin(set(members['mail_address'].astype(str).str.strip()))
-        & hist['division'].isin(current_divisions)
+        & ~hist['mail_address'].isin(exclude_addresses)
+        & hist['division'].isin(target_divisions)
     )
     return hist[keep].drop_duplicates(subset='mail_address', keep='first').reset_index(drop=True)
 
 
-def build(source_path: Path) -> tuple[str, dict]:
+def load_existing(path: Path = YAML_FILE):
+    """The current members.yaml entries (list of dicts), or None if the file does not exist."""
+    if not Path(path).exists():
+        return None
+    data = yaml.safe_load(Path(path).read_text(encoding='utf-8')) or {}
+    return data.get('members') or []
+
+
+def resolve_target_divisions(master_path: Path = sbd.SOURCE_FILE):
     """
-    Read source_path's 'members' sheet (plus leavers from 'members_history', see
-    _history_leavers) and build the members.yaml content in memory, without
-    writing anything.
+    Divisions that get an EngagementData-<division>.xlsx, per split_by_division
+    (rating2 rows inside its MONTHS_WINDOW). None when Engagement Master.xlsx is absent or
+    unreadable — build() then falls back to the divisions of the sheet's current members.
+    """
+    master_path = Path(master_path)
+    if not master_path.exists():
+        print(f"  Note: {master_path.name} not found — target divisions are taken from the sheet's current members only.")
+        return None
+    try:
+        return set(sbd.list_active_divisions(master_path))
+    except Exception as e:  # noqa: BLE001 - never block member generation on the data file
+        print(f"  Warning: could not read {master_path.name} ({e}) — "
+              f"target divisions are taken from the sheet's current members only.")
+        return None
+
+
+def build(source_path: Path, existing=None, extra_target_divisions=None) -> tuple[str, dict]:
+    """
+    Build the members.yaml content in memory, without writing anything.
+
+    Rows, in this order:
+      1. every row of the 'members' sheet (any division) — the sheet's values win, so
+         changes and re-hires are applied;
+      2. `existing` entries (the current members.yaml) that are no longer in the sheet,
+         if their division is a target division — retained, i.e. never deleted. If
+         'members_history' marks one as a leaver it is set to 'leave'; an entry that is
+         still not a leaver is kept as is and listed in `vanished_active` so the operator
+         can fix the source (nothing is guessed);
+      3. 'members_history' leavers not covered above, target divisions only.
+    Existing entries of non-target divisions that left the sheet are dropped (`dropped`).
+
+    Target divisions = divisions of the sheet's current (not-left) members, plus
+    `extra_target_divisions` (the divisions split_by_division writes files for).
 
     Returns:
-        (yaml_text, summary) — summary is
-        {total, on_leave, active, from_history, by_division}; `from_history` is how
-        many of `total` came from 'members_history'.
+        (yaml_text, summary) — summary is {total, on_leave, active, from_history,
+        retained, dropped, vanished_active (list of addresses), by_division}.
     """
     df = pd.read_excel(source_path, sheet_name=SHEET_NAME, engine='openpyxl')
 
@@ -146,12 +183,42 @@ def build(source_path: Path) -> tuple[str, dict]:
     result = df[OUTPUT_COLUMNS].fillna('').copy()
     result['leave'] = result['leave'].replace({'Y': 'leave'})
 
-    # Retirees whom operators have removed from the 'members' sheet live on only in
-    # 'members_history'. Without them the dashboard has no leave members at all.
-    history = _history_leavers(source_path, result)
-    from_history = len(history)
-    if from_history:
-        result = pd.concat([result, history], ignore_index=True)
+    sheet_addresses = set(result['mail_address'].astype(str).str.strip())
+    target_divisions = (
+        set(result.loc[result['leave'] != 'leave', 'division'].astype(str).str.strip())
+        | {str(d).strip() for d in (extra_target_divisions or ())}
+    )
+    target_divisions.discard('')
+
+    history = _read_history(source_path)
+    history_leave_addresses = set(history.loc[history['leave'] == 'leave', 'mail_address'])
+
+    # 2. retain existing entries that left the sheet (target divisions only)
+    retained_rows, vanished_active, dropped = [], [], 0
+    covered = set(sheet_addresses)
+    for entry in existing or []:
+        address = str(entry.get('mail_address') or '').strip()
+        if not address or address in covered:
+            continue  # blank, in the sheet (the sheet wins), or a duplicate of one handled
+        covered.add(address)
+        row = {c: ('' if entry.get(c) is None else entry.get(c)) for c in OUTPUT_COLUMNS}
+        if row['leave'] == 'Y':
+            row['leave'] = 'leave'
+        if str(row['division']).strip() not in target_divisions:
+            dropped += 1
+            continue
+        if row['leave'] != 'leave' and address in history_leave_addresses:
+            row['leave'] = 'leave'
+        if row['leave'] != 'leave':
+            vanished_active.append(address)
+        retained_rows.append(row)
+    retained = pd.DataFrame(retained_rows, columns=OUTPUT_COLUMNS)
+
+    # 3. leavers only 'members_history' still knows about
+    additions = _history_leavers(history, covered, target_divisions)
+
+    parts = [result] + [p for p in (retained, additions) if len(p)]
+    result = pd.concat(parts, ignore_index=True) if len(parts) > 1 else result
 
     members = result.to_dict(orient='records')
     leave_count = int((result['leave'] == 'leave').sum())
@@ -173,19 +240,37 @@ def build(source_path: Path) -> tuple[str, dict]:
         'total': len(members),
         'on_leave': leave_count,
         'active': len(members) - leave_count,
-        'from_history': from_history,
+        'from_history': len(additions),
+        'retained': len(retained),
+        'dropped': dropped,
+        'vanished_active': vanished_active,
         'by_division': by_division,
     }
     return yaml_text, summary
 
 
+def summary_notes(summary: dict) -> list[str]:
+    """Human-readable lines about how the cumulative rules were applied (shared by CLIs)."""
+    notes = [f"既存の members.yaml から残した人: {summary['retained']} 名 / "
+             f"members_history から補った人: {summary['from_history']} 名"]
+    if summary['dropped']:
+        notes.append(f"EngagementData を作成していない部門のため残さなかった人: {summary['dropped']} 名")
+    if summary['vanished_active']:
+        notes.append(
+            f"⚠ MemberSS の members シートに無いのに在籍扱い（leave でない）のまま残っている人: "
+            f"{len(summary['vanished_active'])} 名 — 退職・転属なら MemberSS 側で leave を設定してください "
+            f"（未記入者リストに残り続けます）: {', '.join(summary['vanished_active'])}")
+    return notes
+
+
 def generate(source_path: Path) -> dict:
     """
-    Read source_path's 'members' sheet and write config/members.yaml.
+    Build members.yaml from source_path (cumulatively, see build) and write config/members.yaml.
 
-    Returns a summary dict: {total, on_leave, active, by_division}.
+    Returns the summary dict from build().
     """
-    yaml_text, summary = build(source_path)
+    yaml_text, summary = build(
+        source_path, existing=load_existing(), extra_target_divisions=resolve_target_divisions())
     YAML_FILE.parent.mkdir(parents=True, exist_ok=True)
     YAML_FILE.write_text(yaml_text, encoding='utf-8')
     return summary
@@ -212,8 +297,10 @@ def main():
 
     print(f"Generated {YAML_FILE}")
     print(f"  Total members  : {summary['total']}")
-    print(f"  On leave       : {summary['on_leave']}  (from members_history: {summary['from_history']})")
+    print(f"  On leave       : {summary['on_leave']}")
     print(f"  Active+absence : {summary['active']}")
+    for note in summary_notes(summary):
+        print(f"  {note}")
     print()
     for division, count in summary['by_division'].items():
         print(f"  {division}: {count}")

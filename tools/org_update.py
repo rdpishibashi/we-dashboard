@@ -320,7 +320,11 @@ def step_members(member_ss: Path, write: bool) -> tuple:
     """
     print("\n[2/4] members.yaml")
     try:
-        yaml_text, summary = gmy.build(member_ss)
+        yaml_text, summary = gmy.build(
+            member_ss,
+            existing=gmy.load_existing(),
+            extra_target_divisions=gmy.resolve_target_divisions(),
+        )
     except ValueError as e:
         print(f"  Error: {e}")
         sys.exit(1)
@@ -330,13 +334,14 @@ def step_members(member_ss: Path, write: bool) -> tuple:
     if write:
         gmy.YAML_FILE.parent.mkdir(parents=True, exist_ok=True)
         gmy.YAML_FILE.write_text(yaml_text, encoding='utf-8')
-        print(f"  更新: {gmy.YAML_FILE}  ({summary['total']} 名 / leave {summary['on_leave']} 名"
-              f"、うち members_history から {summary['from_history']} 名)")
+        print(f"  更新: {gmy.YAML_FILE}  ({summary['total']} 名 / leave {summary['on_leave']} 名)")
     elif changed:
         print(f"  [--check] 更新が必要です: {gmy.YAML_FILE} ({summary['total']} 名 / "
-              f"leave {summary['on_leave']} 名、うち members_history から {summary['from_history']} 名)")
+              f"leave {summary['on_leave']} 名)")
     else:
         print("  変更なし")
+    for note in gmy.summary_notes(summary):
+        print(f"  {note}")
 
     members = yaml.safe_load(yaml_text)['members']
     return changed, members
