@@ -38,7 +38,6 @@ See CLAUDE.md and docs/TECHNICAL_ARCHITECTURE.md for detailed documentation.
 """
 
 import streamlit as st
-from streamlit.components.v1 import html as st_components_html
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
@@ -505,10 +504,16 @@ if uploaded_file is not None:
         # （ボタン再実行時にはテーブル選択がリセットされボタン自体が消えるため、
         # 戻り値ではなく on_click + セッションフラグで受け渡す）。
         if st.session_state.pop("_jump_individual", False):
-            st_components_html(
+            # st.components.v1.html は廃止予定（Streamlit 1.67 で警告）。
+            # st.html(unsafe_allow_javascript=True) はスクリプトを iframe ではなく
+            # アプリ本体の document で実行する（1.52.0 以降）。
+            st.html(
                 """
                 <script>
-                const doc = window.parent.document;
+                // アプリ本体の document で動くので、トップレベルの const は2回目の
+                // 実行で「宣言済み」エラーになる。IIFE でスコープを閉じる。
+                (() => {
+                const doc = document;
                 const tabs = doc.querySelectorAll('[data-testid="stTab"]');
                 for (const t of tabs) {
                     if (t.innerText.trim() === "個人") { t.click(); break; }
@@ -524,11 +529,12 @@ if uploaded_file is not None:
                     for (const c of containers) {
                         if (c) { c.scrollTo({top: 0, behavior: "instant"}); }
                     }
-                    window.parent.scrollTo({top: 0, behavior: "instant"});
+                    window.scrollTo({top: 0, behavior: "instant"});
                 }, 100);
+                })();
                 </script>
                 """,
-                height=0,
+                unsafe_allow_javascript=True,
             )
 
         # =============================================================

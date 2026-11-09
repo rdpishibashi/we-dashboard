@@ -11,7 +11,6 @@ import streamlit as st
 import pandas as pd
 from typing import Optional, List, Dict, Any
 
-from streamlit.components.v1 import html as st_components_html
 from modules.signal_processing import get_signal_data, render_signal_table, render_signal_popovers
 from modules.config import SIGNAL_TABLE_COLUMNS, ORG_FILTER_COLUMNS
 from modules.privilege_manager import filter_dataframe_by_scope
@@ -207,18 +206,27 @@ def render_action_candidates(
 
                 # 選択直後の再実行でのみ、メッセージ＋ボタン位置までスクロールする。
                 # テーブルが長いとメッセージに気づきにくいための対応。
-                # この高さ0の iframe はメッセージ行の直下に配置されるため、
-                # iframe 自身（frameElement）を scrollIntoView すればよい。
+                # st.html(unsafe_allow_javascript=True) はスクリプトを iframe ではなく
+                # アプリ本体の document で、この要素自身のコンテナ内に挿入して実行する。
+                # そのコンテナ（currentScript の親）はメッセージ行の直下にあるので、
+                # それを scrollIntoView すればよい。currentScript は同期実行中しか
+                # 取れないため、setTimeout の前に捕まえておく。
+                # script 要素自体は display:none で scrollIntoView が効かないので親を使う。
                 if selection_changed:
-                    st_components_html(
+                    st.html(
                         """
                         <script>
-                        setTimeout(() => {
-                            window.frameElement.scrollIntoView({behavior: "smooth", block: "center"});
-                        }, 100);
+                        (() => {  // 本体 document で動くため const の再宣言エラーを避ける
+                            const anchor = document.currentScript && document.currentScript.parentElement;
+                            setTimeout(() => {
+                                if (anchor) {
+                                    anchor.scrollIntoView({behavior: "smooth", block: "center"});
+                                }
+                            }, 100);
+                        })();
                         </script>
                         """,
-                        height=0,
+                        unsafe_allow_javascript=True,
                     )
 
         render_signal_popovers()
