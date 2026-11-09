@@ -278,7 +278,7 @@ members:
   member_name: 阿部 紘央
   division: 設計部門
   department: 機電設計部
-  section: 第二設計課
+  section: 第一設計課
   team: ''
   project: 現行機
   grade: 主事補
@@ -570,7 +570,7 @@ members:
   team: ''
   project: 現行機
   grade: 主管
-  leave: ''
+  leave: leave
 - mail_address: masaya_arai@ulvac.com
   member_name: 新井 雅哉
   division: 設計部門
